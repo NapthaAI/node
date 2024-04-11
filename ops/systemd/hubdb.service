@@ -1,0 +1,14 @@
+[Unit]
+Description=Hub DB 
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/node
+ExecStart=/home/ubuntu/node/.venv/bin/poetry run python node/storage/hub/init_hub.py
+Restart=always
+RestartSec=3
+EnvironmentFile=/home/ubuntu/node/.env
+
+[Install]
+WantedBy=multi-user.target

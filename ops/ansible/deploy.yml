@@ -1,0 +1,347 @@
+---
+
+- hosts: naptha
+  become: yes
+  become_method: sudo
+
+  vars:
+    user_name: naptha
+    daimon_base_dir: /home/{{ user_name }}
+    miniforge_installer_url: "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+    poetry_installer_url: "https://install.python-poetry.org"
+    daimon_repo_url: "git@github.com:AlgoveraAI/daimon.git"
+    template_repo_url: "git@github.com:AlgoveraAI/daimon-templates.git"
+    hub_project_directory: "{{ daimon_base_dir }}/daimon/hub"
+    hub_service_file_source: "{{ daimon_base_dir }}/daimon/ops/systemd/hubapp.service}}"
+    hub_service_file_dest: "/etc/systemd/system/hubapp.service"
+    node_project_directory: "{{ daimon_base_dir }}/daimon/node"
+    node_service_file_source: "{{ daimon_base_dir }}/daimon/ops/systemd/nodeapp.service}}"
+    node_service_file_dest: "/etc/systemd/system/nodeapp.service"
+    celery_service_file_source: "{{ daimon_base_dir }}/daimon/ops/systemd/celeryworker.service}}"
+    celery_service_file_dest: "/etc/systemd/system/celeryworker.service"
+    celery_worker_script: "{{ node_project_directory }}/node/node/celery_worker/celery_worker_start.sh"
+
+  roles:
+    - geerlingguy.docker
+
+  tasks:
+  # Create user
+  - name: Create user_name user
+    ansible.builtin.user:
+      name: "{{ user_name }}"
+      state: present
+      shell: /bin/bash
+      groups: docker,sudo
+      createhome: yes
+      home: /home/{{ user_name }}
+
+  - name: Give user_name sudo access
+    lineinfile:
+      path: /etc/sudoers
+      state: present
+      regexp: '^{{ user_name }}'
+      line: '{{ user_name }} ALL=(ALL) NOPASSWD:ALL'
+      validate: 'visudo -cf %s'
+
+  # Install miniforge
+  - name: Download Miniforge installer
+    get_url:
+      url: "{{ miniforge_installer_url }}"
+      dest: "/tmp/Miniforge3-Linux-x86_64.sh"
+      mode: '0755'
+
+  - name: Install Miniforge
+    shell: /tmp/Miniforge3-Linux-x86_64.sh -b -p /home/{{ new_user_name }}/miniforge3
+    args:
+      creates: "/home/{{ new_user_name }}/miniforge3"
+
+  - name: Initialize Miniforge for all users
+    shell: /home/{{ new_user_name }}/miniforge3/bin/conda init
+    become_user: "{{ new_user_name }}"
+
+  - name: Install Python 3.12 using Conda
+    shell: /home/{{ new_user_name }}/miniforge3/bin/conda install python=3.12 -y
+    become_user: "{{ new_user_name }}"
+
+  # echo which python
+  - name: Check which python
+    shell: which python | echo
+    become_user: "{{ new_user_name }}"
+
+  # Install Poetry
+  - name: Install Poetry
+    shell: curl -sSL "{{ poetry_installer_url }}" | python -
+    become_user: "{{ new_user_name }}"
+    environment:
+      HOME: "/home/{{ new_user_name }}"
+
+  - name: Remove Miniforge installer
+    file:
+      path: "/tmp/Miniforge3-Linux-x86_64.sh"
+      state: absent
+
+  # Install SurrealDB
+  - name: Install SurrealDB
+    shell: curl -sSf https://install.surrealdb.com | sh
+
+  # Install Ollama
+  - name: Check if Ollama is installed
+    command: command -v ollama
+    register: ollama_installed
+    failed_when: false
+    changed_when: false
+
+  - block:
+      - name: Installing Ollama
+        command: echo "Installing Ollama..."
+        tags:
+          - ollama_install
+
+      - name: Download Ollama
+        get_url:
+          url: https://ollama.ai/download/ollama-linux-amd64
+          dest: /usr/bin/ollama
+          mode: '0755'
+
+      - name: Create ollama user
+        user:
+          name: ollama
+          system: yes
+          shell: /bin/false
+          home: /usr/share/ollama
+          create_home: yes
+
+      - name: Copy Ollama service file
+        copy:
+          src: ./ops/systemd/ollama.service
+          dest: /etc/systemd/system/
+
+      - name: Reload systemd daemon
+        systemd:
+          daemon_reload: yes
+
+      - name: Enable Ollama service
+        systemd:
+          name: ollama
+          enabled: yes
+
+      - name: Ollama installed successfully
+        command: echo "Ollama installed successfully."
+    when: ollama_installed.rc != 0
+
+  # Pull git repo
+  - name: Clone git repo
+    git:
+      repo: "{{ daimon_repo_url }}"
+      dest: "{{ daimon_base_dir }}"
+      clone: yes
+      force: yes
+      recursive: yes
+    register: git_clone
+
+  # Copy .env.hub file to daimon/hub/.env
+  - name: Copy .env.hub file to daimon/hub/.env
+    copy:
+      src: .env.hub
+      dest: "{{ daimon_base_dir }}/daimon/hub/.env"
+
+  # Copy .env.node file to daimon/node/.env
+  - name: Copy .env.node file to daimon/node/.env
+    copy:
+      src: .env.node
+      dest: "{{ daimon_base_dir }}/daimon/node/.env"
+
+  # Prepare submodules
+  - name: Get current working directory
+    command: pwd
+    register: pwd_result
+
+  - name: Display current working directory
+    debug:
+      msg: "{{ pwd_result.stdout }}"
+
+  - name: Load .env file
+    shell: |
+      set -a
+      [ -f node/.env ] && . node/.env
+      set +a
+    args:
+      executable: /bin/bash
+    register: env_file
+
+  - name: Initialize and update submodule
+    git:
+      repo: "{{ template_repo_url }}"
+      dest: 'node/templates'
+      update: yes
+      recursive: yes
+      track_submodules: yes
+    register: submodule_update
+
+  - name: Check out specific tag in submodule
+    git:
+      repo: "{{ template_repo_url }}"
+      dest: 'node/templates'
+      version: "{{ lookup('env', 'TEMPLATE_REPO_TAG') }}"
+      force: yes
+    when: lookup('env', 'TEMPLATE_REPO_TAG') | length > 0
+
+  # Install hub
+  - name: Check if Poetry is installed
+    command: command -v poetry
+    register: poetry_installed
+    failed_when: false
+    changed_when: false
+
+  - name: Install Poetry
+    shell: curl -sSL https://install.python-poetry.org | python
+    when: poetry_installed.rc != 0
+
+  - name: Load .env file for Hub
+    shell: |
+      set -a
+      [ -f "{{ hub_project_directory }}/.env" ] && . "{{ hub_project_directory }}/.env"
+      set +a
+    args:
+      executable: /bin/bash
+    register: env_file
+
+  - name: Get HUB_PORT from .env file
+    shell: echo $HUB_PORT
+    register: hub_port
+    when: env_file.stdout != ""
+
+  - name: Check if port is in use
+    shell: lsof -i :{{ hub_port.stdout }}
+    failed_when: true
+    changed_when: false
+    when: hub_port.stdout != ""
+
+  - name: Change to project directory
+    command: cd "{{ hub_project_directory }}"
+
+  - name: Configure Poetry to create a virtual environment in the project directory
+    command: poetry config virtualenvs.in-project true
+    args:
+      chdir: "{{ hub_project_directory }}"
+
+  - name: Update Poetry
+    command: poetry update
+    args:
+      chdir: "{{ hub_project_directory }}"
+
+  - name: Install dependencies using Poetry
+    command: poetry install
+    args:
+      chdir: "{{ hub_project_directory }}"
+
+  - name: Replace paths in hubapp.service
+    shell: |
+      sed -i "s|ExecStart=.*|ExecStart={{ hub_project_directory }}/.venv/bin/poetry run python hub/main.py|" "{{ hub_service_file_source }}"
+      sed -i "s|WorkingDirectory=.*|WorkingDirectory={{ hub_project_directory }}|" "{{ hub_service_file_source }}"
+      sed -i "s|EnvironmentFile=.*|EnvironmentFile={{ hub_project_directory }}/.env|" "{{ hub_service_file_source }}"
+    become: yes
+
+  - name: Deploy hubapp.service to systemd
+    copy:
+      src: "{{ hub_service_file_source }}"
+      dest: "{{ hub_service_file_dest }}"
+    become: yes
+
+  - name: Reload systemd and start hubapp service
+    systemd:
+      name: hubapp
+      state: started
+      enabled: yes
+      daemon_reload: yes
+
+  # Install node
+  - name: Check if Poetry is installed
+    command: command -v poetry
+    register: poetry_installed
+    failed_when: false
+    changed_when: false
+
+  - name: Install Poetry
+    shell: curl -sSL https://install.python-poetry.org | python
+    when: poetry_installed.rc != 0
+
+  - name: Load .env file for Node
+    shell: |
+      set -a
+      [ -f "{{ node_project_directory }}/.env" ] && . "{{ node_project_directory }}/.env"
+      set +a
+    args:
+      executable: /bin/bash
+    register: env_file
+
+  - name: Get NODE_PORT from .env file
+    shell: echo $NODE_PORT
+    register: node_port
+    when: env_file.stdout != ""
+
+  - name: Check if port is in use
+    shell: lsof -i :{{ node_port.stdout }}
+    failed_when: true
+    changed_when: false
+    when: node_port.stdout != ""
+
+  - name: Configure Poetry to create a virtual environment in the project directory
+    command: poetry config virtualenvs.in-project true
+    args:
+      chdir: "{{ node_project_directory }}"
+
+  - name: Install dependencies using Poetry
+    command: poetry install
+    args:
+      chdir: "{{ node_project_directory }}"
+
+  - name: Replace paths in nodeapp.service
+    shell: |
+      sed -i "s|ExecStart=.*|ExecStart={{ node_project_directory }}/.venv/bin/poetry run python node/main.py|" "{{ node_service_file_source }}"
+      sed -i "s|WorkingDirectory=.*|WorkingDirectory={{ node_project_directory }}|" "{{ node_service_file_source }}"
+      sed -i "s|EnvironmentFile=.*|EnvironmentFile={{ node_project_directory }}/.env|" "{{ node_service_file_source }}"
+    become: yes
+
+  - name: Deploy nodeapp.service to systemd
+    copy:
+      src: "{{ node_service_file_source }}"
+      dest: "{{ node_service_file_dest }}"
+    become: yes
+
+  - name: Reload systemd and start nodeapp service
+    systemd:
+      name: nodeapp
+      state: started
+      enabled: yes
+      daemon_reload: yes
+
+  # Install celery
+  - name: Replace paths in celeryworker.service
+    shell: |
+      sed -i "s|ExecStart=.*|ExecStart={{ celery_worker_script }}|" "{{ celery_service_file_source }}"
+      sed -i "s|WorkingDirectory=.*|WorkingDirectory={{ node_project_directory }}|" "{{ celery_service_file_source }}"
+      sed -i "s|EnvironmentFile=.*|EnvironmentFile={{ node_project_directory }}/.env|" "{{ celery_service_file_source }}"
+    become: yes
+
+  - name: Create Celery worker start script
+    copy:
+      dest: "{{ celery_worker_script }}"
+      content: |
+        #!/bin/bash
+        source {{ node_project_directory }}/.venv/bin/activate
+        exec celery -A node.celery_worker.celery_worker.app worker --loglevel=info
+      mode: '0755'
+
+  - name: Deploy celeryworker.service to systemd
+    copy:
+      src: "{{ celery_service_file_source }}"
+      dest: "{{ celery_service_file_dest }}"
+    become: yes
+
+  - name: Reload systemd and start celeryworker service
+    systemd:
+      name: celeryworker
+      state: started
+      enabled: yes
+      daemon_reload: yes

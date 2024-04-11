@@ -1,0 +1,9 @@
+{
+    "NapthaAI/hello_world/0.5": "https://github.com/AlgoveraAI/hello_world_daimon_template",
+    "NapthaAI/chat/0.1": "https://huggingface.co/NapthaAI/chat",
+    "NapthaAI/create_summary/0.6": "https://github.com/AlgoveraAI/summary_daimon_template",
+    "NapthaAI/create_profile_description/0.2": "https://github.com/AlgoveraAI/describe_daimon_template",
+    "NapthaAI/generate_image/0.3": "https://github.com/AlgoveraAI/sd_daimon_template",
+    "NapthaAI/image_to_image/0.2": "https://github.com/AlgoveraAI/sdi2i_daimon_template",
+    "NapthaAI/make_prediction/0.1": "https://huggingface.co/NapthaAI/make_prediction"
+}

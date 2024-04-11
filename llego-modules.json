@@ -1,0 +1,27 @@
+{
+    "algoveraflow/hello_world_daimon_template": {
+            "template_name": "hello_world_daimon_template",
+            "url": "https://github.com/AlgoveraAI/hello_world_daimon_template",
+            "tag": "v0.5"
+        },
+    "algoveraflow/summary_daimon_template": {
+            "template_name": "summary_daimon_template",
+            "url": "https://github.com/AlgoveraAI/summary_daimon_template",
+            "tag": "v0.6"
+        },
+    "algoveraflow/sd_daimon_template": {
+            "template_name": "sd_daimon_template",
+            "url": "https://github.com/AlgoveraAI/sd_daimon_template",
+            "tag": "v0.3"
+        },
+    "algoveraflow/describe_daimon_template": {
+            "template_name": "describe_daimon_template",
+            "url": "https://github.com/AlgoveraAI/describe_daimon_template",
+            "tag": "v0.2"
+        },
+    "algoveraflow/sdi2i_daimon_template": {
+            "template_name": "sdi2i_daimon_template",
+            "url": "https://github.com/AlgoveraAI/sdi2i_daimon_template",
+            "tag": "v0.2"
+        }
+}
