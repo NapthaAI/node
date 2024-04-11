@@ -29,9 +29,18 @@ cd node
 bash launch.sh
 ```
 
-This will install all of the required components. After a few minutes you should see,```[System] Setup complete. Applications are running.```
+This will install all of the components, including:
+- Python 3.12 (pre-Requirement)
+- Poetry (manages dependencies)
+- SurrealDB (Naptha Protocol info is stored here)
+- RabbitMQ (message-broker for the Naptha Protocol)
+- Ollama (used to run LLMs)
+- Docker (isolates Modules from the system)
+- Naptha node (orchestrates ML workflows)
 
-Then, in a new window run:
+ After a few minutes you should see,```[System] Setup complete. Applications are running.```
+
+Then, in a new terminal window run:
 
 ```bash
 journalctl -u nodeapp -n 100 -f
@@ -39,14 +48,13 @@ journalctl -u nodeapp -n 100 -f
 
 That's it! You're now running a local AI node.
 
-# Set up your payment settings
-
-Coming soon.
-
 # Run AI modules on your node
 
 To run modules, keep your node running and follow the the instructions using the [Naptha SDK](https://github.com/NapthaAI/naptha-sdk). 
 
+# Set up your payment settings
+
+Coming soon.
 
 ## Stop
 
