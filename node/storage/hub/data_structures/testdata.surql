@@ -105,8 +105,7 @@ CREATE user:naptha1 SET
 CREATE user:seller1 SET
     name = "Test Seller 1",
     username = "seller1",
-    password = crypto::argon2::generate("great-password"),
-    credits = 1000
+    password = crypto::argon2::generate("great-password")
 ;
 CREATE user:creator1 SET
     name = "Test Creator 1",
@@ -116,8 +115,7 @@ CREATE user:creator1 SET
 CREATE user:buyer1 SET
     name="Test Buyer 1",
     username="buyer1",
-    password=crypto::argon2::generate("buyer1pass"),
-    credits = 1000
+    password=crypto::argon2::generate("buyer1pass")
 ;
 CREATE user:aiconsumer1 SET
     name = "AI Consumer 1",
@@ -240,11 +238,7 @@ CREATE auction:rfp10 SET
     buy_it_now_price=50.0,    
     listing=lot:developer
 ;
-CREATE auction:auction1 SET
-    consigner=user:seller1,
-    buy_it_now_price=10.0,    
-    listing=lot:worldsim
-;
+CREATE auction:auction1 SET consigner=user:seller1, buy_it_now_price=10.0, listing=lot:worldsim;
 RELATE user:seller1->requests_to_publish->auction:auction1;
 
 -- MODULEs

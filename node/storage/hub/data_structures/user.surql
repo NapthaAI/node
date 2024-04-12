@@ -8,7 +8,6 @@ DEFINE FIELD username ON user TYPE string VALUE string::lowercase($value);
 DEFINE FIELD password ON user TYPE string PERMISSIONS FOR select NONE
     PERMISSIONS
         FOR select, update, delete WHERE id = $auth.id;
-DEFINE FIELD credits ON user TYPE float;
 
 DEFINE FIELD created ON user 
     VALUE $before OR time::now()
