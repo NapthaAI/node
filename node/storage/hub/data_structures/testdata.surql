@@ -244,7 +244,7 @@ RELATE user:seller1->requests_to_publish->auction:auction1;
 -- MODULEs
 CREATE module:chat SET name="Chat App", description="Multiplayer chat app for chatting with other nodes", author=user:aideveloper1, url="https://huggingface.co/NapthaAI/chat", type="template";
 CREATE module:qa SET name="Question Answering RAG Workflow", description="Workflow for performing question answering with retrieval-augmented generation", author=user:naptha1, url="https://huggingface.co/NapthaAI/rag", type="template";
-CREATE module:make_prediction SET name="Prediction Researcher Agent", description="Prediction researcher agent for making predictions about events", author=user:naptha1, url="https://huggingface.co/NapthaAI/make_prediction", type="template";
+CREATE module:olas_prediction SET name="Prediction Workflow", description="Workflow for making predictions about events", author=user:naptha1, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
 CREATE module:hello_world_daimon_template SET name="Hello World Daimon Template", description="A simple hello world app", author=user:creator1, url="", type="template";
 CREATE module:docker_hello_world SET name="Docker Hello World", description="A simple hello world app", author=user:creator1, url="https://github.com/AlgoveraAI/hello_world_daimon_template", type="docker";
 CREATE module:docker_cv2_image SET name="Docker CV2 Image", description="A simple app for image processing", author=user:creator1, url="", type="docker";

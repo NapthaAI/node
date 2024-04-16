@@ -287,7 +287,7 @@ def run_template(job: Dict) -> None:
         validated_data = InputSchema(**template_args)
 
         # Execute the job
-        results = main_func(validated_data)
+        results = main_func(validated_data, cfg)
 
         return results
 
