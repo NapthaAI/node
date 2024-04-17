@@ -20,6 +20,7 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+logger.info(os.getenv("STABILITY_API_KEY"))
 # Get file path
 BASE_ROOT_DIR = os.getcwd()
 FILE_PATH = Path(__file__).resolve()

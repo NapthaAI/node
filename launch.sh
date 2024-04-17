@@ -269,7 +269,7 @@ install_python312() {
 }
 
 start_hub_surrealdb() {
-    cp .env.example .env
+    # cp .env.example .env
 
     # Echo start SurrealDB
     echo "Starting SurrealDB..." | log_with_service_name "SurrealDB" $RED

@@ -1,4 +1,6 @@
 {
-    "NapthaAI/chat/0.1": "https://huggingface.co/NapthaAI/chat",
-    "NapthaAI/olas_prediction/0.1": "https://huggingface.co/NapthaAI/olas_prediction"
+    "NapthaAI/hello_world/0.6": "https://github.com/AlgoveraAI/hello_world_daimon_template",
+    "NapthaAI/create_summary/0.9": "https://github.com/AlgoveraAI/summary_daimon_template",
+    "NapthaAI/generate_image/0.4": "https://github.com/AlgoveraAI/sd_daimon_template",
+    "NapthaAI/image_to_image/0.3": "https://github.com/AlgoveraAI/sdi2i_daimon_template"
 }
