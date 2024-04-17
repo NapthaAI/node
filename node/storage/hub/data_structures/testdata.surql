@@ -249,7 +249,7 @@ CREATE module:hello_world_daimon_template SET name="Hello World Daimon Template"
 CREATE module:docker_hello_world SET name="Docker Hello World", description="A simple hello world app", author=user:creator1, url="https://github.com/AlgoveraAI/hello_world_daimon_template", type="docker";
 CREATE module:docker_cv2_image SET name="Docker CV2 Image", description="A simple app for image processing", author=user:creator1, url="", type="docker";
 CREATE module:summary_daimon_template SET name="Summary Daimon Template", description="A simple app for summarizing text", author=user:creator1, url="https://github.com/AlgoveraAI/summary_daimon_template", type="template";
-CREATE module:sd_daimon_template SET name="SD Daimon Template", description="A simple app text to image", author=user:creator1, url="https://github.com/AlgoveraAI/sd_daimon_template", type="template";
+CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple module for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template";
 CREATE module:describe_daimon_template SET name="Describe Daimon Template", description="A simple app for writing description based on key points", author=user:creator1, url="https://github.com/AlgoveraAI/describe_daimon_template", type="template";
 CREATE module:sdi2i_daimon_template SET name="SDI2I Daimon Template", description="A simple app for image to image", author=user:creator1, url="https://github.com/AlgoveraAI/sdi2i_daimon_template", type="template";
 

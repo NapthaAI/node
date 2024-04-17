@@ -275,8 +275,7 @@ def run_template(job: Dict) -> None:
         InputSchema = getattr(schemas_module, "InputSchema")
 
         # add output_path to the template_args if save is True
-        save = template_args.get("save", False)
-        if save:
+        if cfg["outputs"]["save"]:
             output_path = f"{BASE_OUTPUT_DIR}/{job['id'].split(':')[1]}"
             template_args["output_path"] = output_path
 
