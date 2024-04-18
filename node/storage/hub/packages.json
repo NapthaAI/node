@@ -3,5 +3,6 @@
     "NapthaAI/create_summary/0.9": "https://github.com/AlgoveraAI/summary_daimon_template",
     "NapthaAI/generate_image/0.5": "https://github.com/NapthaAI/module_generate_image",
     "NapthaAI/image_to_image/0.4": "https://github.com/AlgoveraAI/sdi2i_daimon_template",
-    "NapthaAI/create_profile_description/0.6": "https://github.com/AlgoveraAI/describe_daimon_template"
+    "NapthaAI/create_profile_description/0.6": "https://github.com/AlgoveraAI/describe_daimon_template",
+    "NapthaAI/run_ollama/0.1": "https://github.com/AlgoveraAI/run_ollama"
 }

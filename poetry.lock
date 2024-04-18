@@ -2495,6 +2495,23 @@ files = [
 ]
 
 [[package]]
+name = "run-ollama"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "^3.10"
+files = []
+develop = false
+
+[package.dependencies]
+pydantic = "^2.7.0"
+requests = "^2.31.0"
+
+[package.source]
+type = "directory"
+url = "node/storage/hub/modules/run_ollama"
+
+[[package]]
 name = "secretstorage"
 version = "3.3.3"
 description = "Python bindings to FreeDesktop.org Secret Service API"
@@ -2962,4 +2979,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "67dffde3fb8ce933d667b564de14ea27a350c62bf791e44a1bc14f2d8100a510"
+content-hash = "936169e80238d98aefb4df60f612daeb0c7728ae10d41824342c11102fafdbcf"
