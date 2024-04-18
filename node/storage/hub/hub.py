@@ -137,7 +137,10 @@ class Hub:
             module = await self.surrealdb.query(
                 "SELECT * FROM module WHERE id=$module_id;", {"module_id": module_id}
             )
-            return module[0]["result"][0]
+            try:
+                return module[0]["result"][0]
+            except:
+                return None
 
     async def create_plan(self, plan_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("auction", plan_config)

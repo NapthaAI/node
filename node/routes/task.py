@@ -28,6 +28,9 @@ async def create_task(job_input: JobInput) -> Dict:
     module = await hub.list_modules(f"module:{job_input.module_id}")
     logger.info(f"Found module: {module}")
 
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+
     job = dict(job_input)
     job["job_type"] = module["type"]
     job["consumer"] = job["user_id"]
