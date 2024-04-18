@@ -273,7 +273,7 @@ def run_template(job: Dict) -> None:
         # Dynamically load InputSchema from the corresponding template's schemas.py
         schemas_module = importlib.import_module(f"{tn}.schemas")
         InputSchema = getattr(schemas_module, "InputSchema")
-
+    
         # add output_path to the template_args if save is True
         if cfg["outputs"]["save"]:
             output_path = f"{BASE_OUTPUT_DIR}/{job['id'].split(':')[1]}"
@@ -287,7 +287,7 @@ def run_template(job: Dict) -> None:
         validated_data = InputSchema(**template_args)
 
         # Execute the job
-        results = main_func(validated_data, cfg)
+        results = main_func(validated_data, cfg=cfg)
 
         return results
 

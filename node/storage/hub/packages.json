@@ -1,6 +1,7 @@
 {
-    "NapthaAI/hello_world/0.6": "https://github.com/AlgoveraAI/hello_world_daimon_template",
+    "NapthaAI/hello_world/0.9": "https://github.com/AlgoveraAI/hello_world_daimon_template",
     "NapthaAI/create_summary/0.9": "https://github.com/AlgoveraAI/summary_daimon_template",
     "NapthaAI/generate_image/0.5": "https://github.com/NapthaAI/module_generate_image",
-    "NapthaAI/image_to_image/0.3": "https://github.com/AlgoveraAI/sdi2i_daimon_template"
+    "NapthaAI/image_to_image/0.4": "https://github.com/AlgoveraAI/sdi2i_daimon_template",
+    "NapthaAI/create_profile_description/0.6": "https://github.com/AlgoveraAI/describe_daimon_template"
 }
