@@ -67,8 +67,10 @@ install_ollama() {
     fi
     ollama serve &
     sleep 1
-    echo "Pulling Phi LLM." | log_with_service_name "Ollama" $RED
-    ollama pull phi
+    echo "Pulling ollama models." | log_with_service_name "Ollama" $RED
+    ollama pull mistral
+    ollama pull qwen
+    ollama pull gemma
 }
 
 # Function to install Miniforge
