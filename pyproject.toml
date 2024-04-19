@@ -36,12 +36,6 @@ click = "^8.1.7"
 setuptools = "^69.0.3"
 pyyaml = "^6.0.1"
 protobuf = "^4.25.2"
-hello-world = {path = "/home/ubuntu/node/node/storage/hub/modules/hello_world"}
-create-summary = {path = "/home/ubuntu/node/node/storage/hub/modules/create_summary"}
-generate-image = {path = "/home/ubuntu/node/node/storage/hub/modules/generate_image"}
-image-to-image = {path = "/home/ubuntu/node/node/storage/hub/modules/image_to_image"}
-create-profile-description = {path = "/home/ubuntu/node/node/storage/hub/modules/create_profile_description"}
-run-ollama = {path = "/home/ubuntu/node/node/storage/hub/modules/run_ollama"}
 
 [tool.poetry.scripts]
 naptha = "cli:cli"

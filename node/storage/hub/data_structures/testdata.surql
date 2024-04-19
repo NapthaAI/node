@@ -242,16 +242,15 @@ CREATE auction:auction1 SET consigner=user:seller1, buy_it_now_price=10.0, listi
 RELATE user:seller1->requests_to_publish->auction:auction1;
 
 -- MODULEs
-CREATE module:chat SET name="Chat App", description="Multiplayer chat app for chatting with other nodes", author=user:aideveloper1, url="https://huggingface.co/NapthaAI/chat", type="template";
-CREATE module:qa SET name="Question Answering RAG Workflow", description="Workflow for performing question answering with retrieval-augmented generation", author=user:naptha1, url="https://huggingface.co/NapthaAI/rag", type="template";
-CREATE module:olas_prediction SET name="Prediction Workflow", description="Workflow for making predictions about events", author=user:naptha1, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
-CREATE module:hello_world_daimon_template SET name="Hello World Daimon Template", description="A simple hello world app", author=user:creator1, url="", type="template";
-CREATE module:docker_hello_world SET name="Docker Hello World", description="A simple hello world app", author=user:creator1, url="https://github.com/AlgoveraAI/hello_world_daimon_template", type="docker";
-CREATE module:docker_cv2_image SET name="Docker CV2 Image", description="A simple app for image processing", author=user:creator1, url="", type="docker";
-CREATE module:summary_daimon_template SET name="Summary Daimon Template", description="A simple app for summarizing text", author=user:creator1, url="https://github.com/AlgoveraAI/summary_daimon_template", type="template";
-CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple module for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template";
-CREATE module:create_profile_description SET name="Describe Daimon Template", description="A simple app for writing description based on key points", author=user:creator1, url="https://github.com/AlgoveraAI/describe_daimon_template", type="template";
-CREATE module:sdi2i_daimon_template SET name="SDI2I Daimon Template", description="A simple app for image to image", author=user:creator1, url="https://github.com/AlgoveraAI/sdi2i_daimon_template", type="template";
-CREATE module:run_ollama SET name="Run Ollama", description="A simple app to run ollama", author=user:creator1, url="https://github.com/AlgoveraAI/run_ollama", type="template";
+CREATE module:chat_aiflows SET name="Chat using AI Flows", description="A simple chat workflow using the AI Flows library", author=user:aideveloper1, url="https://huggingface.co/NapthaAI/chat_aiflows", type="template";
+CREATE module:qa SET name="Question Answering RAG", description="Workflow for performing question answering with retrieval-augmented generation", author=user:naptha1, url="https://huggingface.co/NapthaAI/rag", type="template";
+CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha1, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
+CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:creator1, url="https://github.com/NapthaAI/module_hello_world", type="template";
+CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="", type="docker";
+CREATE module:docker_cv2_image SET name="Image Processing CV2 Docker", description="A simple workflow for image processing", author=user:creator1, url="", type="docker";
+CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple workflow for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template";
+CREATE module:create_profile_description SET name="Generate Profile Description", description="A simple workflow for writing a profile description based on key points", author=user:creator1, url="https://github.com/NapthaAI/module_create_profile_description", type="template";
+CREATE module:image_to_image SET name="Image to Image Stable Diffusion", description="A simple workflow for generating an image from another image", author=user:creator1, url="https://github.com/NapthaAI/module_image2image", type="template";
+CREATE module:chat SET name="Chat", description="A simple chat workflow", author=user:creator1, url="https://github.com/NapthaAI/chat", type="template";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
