@@ -3,7 +3,7 @@
     "NapthaAI/chat_aiflows/0.1": "https://huggingface.co/NapthaAI/chat_aiflows",
     "NapthaAI/create_profile_description/0.7": "https://github.com/NapthaAI/module_create_profile_description",
     "NapthaAI/generate_image/0.5": "https://github.com/NapthaAI/module_generate_image",
-    "NapthaAI/hello_world/0.9": "https://github.com/NapthaAI/module_hello_world",
+    "NapthaAI/hello_world/0.10": "https://github.com/NapthaAI/module_hello_world",
     "NapthaAI/image_to_image/0.4": "https://github.com/NapthaAI/module_image2image",
-    "NapthaAI/make_prediction/0.1": "https://huggingface.co/NapthaAI/make_prediction"
+    "NapthaAI/olas_prediction/0.1": "https://huggingface.co/NapthaAI/olas_prediction"
 }

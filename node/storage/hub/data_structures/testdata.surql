@@ -243,11 +243,9 @@ RELATE user:seller1->requests_to_publish->auction:auction1;
 
 -- MODULEs
 CREATE module:chat_aiflows SET name="Chat using AI Flows", description="A simple chat workflow using the AI Flows library", author=user:aideveloper1, url="https://huggingface.co/NapthaAI/chat_aiflows", type="template";
-CREATE module:qa SET name="Question Answering RAG", description="Workflow for performing question answering with retrieval-augmented generation", author=user:naptha1, url="https://huggingface.co/NapthaAI/rag", type="template";
 CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha1, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
 CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:creator1, url="https://github.com/NapthaAI/module_hello_world", type="template";
-CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="", type="docker";
-CREATE module:docker_cv2_image SET name="Image Processing CV2 Docker", description="A simple workflow for image processing", author=user:creator1, url="", type="docker";
+CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="https://hub.docker.com/_/hello-world", type="docker";
 CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple workflow for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template";
 CREATE module:create_profile_description SET name="Generate Profile Description", description="A simple workflow for writing a profile description based on key points", author=user:creator1, url="https://github.com/NapthaAI/module_create_profile_description", type="template";
 CREATE module:image_to_image SET name="Image to Image Stable Diffusion", description="A simple workflow for generating an image from another image", author=user:creator1, url="https://github.com/NapthaAI/module_image2image", type="template";
