@@ -13,10 +13,13 @@ logger.info(f"MODULES_PATH: {MODULES_PATH}")
 
 
 def clone_repo(
-    tag, url="https://github.com/moarshy/daimon-templates", clone_dir=MODULES_PATH
+    tag, 
+    module_name,
+    url="https://github.com/moarshy/daimon-templates", 
+    clone_dir=MODULES_PATH
 ):
     logger.info(f"Cloning repo {url} with tag {tag} to {clone_dir}")
-    repo_path = Path(clone_dir) / Path(url).name
+    repo_path = Path(clone_dir) / module_name
     repo = Repo.clone_from(url, repo_path)
     logger.info(f"Checking out tag {tag}")
     repo.git.checkout(tag)
@@ -52,7 +55,11 @@ def setup_modules_from_config(module_config_path):
         package_name = parts[1]
         tag = "v" + package.split('/')[-1]
         try:
-            clone_repo(tag, url)
+            clone_repo(
+                tag=tag, 
+                url=url,
+                module_name=package_name
+            )
         except Exception as e:
             logger.error(f"Failed to clone repo: {e}")
             raise e

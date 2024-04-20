@@ -26,6 +26,17 @@ From source:
 ```bash
 git clone https://github.com/NapthaAI/node.git
 cd node
+```
+
+Copy the env file (and add a valid Stability platform API key, if you would like to use the image modules):
+
+```bash
+cp .env.example .env
+```
+
+Then run the node:
+
+```bash
 bash launch.sh
 ```
 
@@ -60,4 +71,10 @@ Coming soon.
 
 ```
 bash stop-service.sh
+```
+
+## To cleanup
+
+```
+make remove
 ```

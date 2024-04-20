@@ -20,6 +20,7 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+logger.info(os.getenv("STABILITY_API_KEY"))
 # Get file path
 BASE_ROOT_DIR = os.getcwd()
 FILE_PATH = Path(__file__).resolve()
@@ -272,10 +273,9 @@ def run_template(job: Dict) -> None:
         # Dynamically load InputSchema from the corresponding template's schemas.py
         schemas_module = importlib.import_module(f"{tn}.schemas")
         InputSchema = getattr(schemas_module, "InputSchema")
-
+    
         # add output_path to the template_args if save is True
-        save = template_args.get("save", False)
-        if save:
+        if cfg["outputs"]["save"]:
             output_path = f"{BASE_OUTPUT_DIR}/{job['id'].split(':')[1]}"
             template_args["output_path"] = output_path
 
@@ -287,7 +287,7 @@ def run_template(job: Dict) -> None:
         validated_data = InputSchema(**template_args)
 
         # Execute the job
-        results = main_func(validated_data, cfg)
+        results = main_func(validated_data, cfg=cfg)
 
         return results
 

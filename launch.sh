@@ -67,7 +67,7 @@ install_ollama() {
     fi
     ollama serve &
     sleep 1
-    echo "Pulling Phi LLM." | log_with_service_name "Ollama" $RED
+    echo "Pulling ollama models." | log_with_service_name "Ollama" $RED
     ollama pull phi
 }
 
@@ -269,7 +269,7 @@ install_python312() {
 }
 
 start_hub_surrealdb() {
-    cp .env.example .env
+    # cp .env.example .env
 
     # Echo start SurrealDB
     echo "Starting SurrealDB..." | log_with_service_name "SurrealDB" $RED
