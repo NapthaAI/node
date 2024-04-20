@@ -164,6 +164,8 @@ install_docker() {
 
         sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+        sudo chmod 666 /var/run/docker.sock
+
         echo "Docker installed." | log_with_service_name "Docker" $RED
         echo "Starting Docker." | log_with_service_name "Docker" $RED
     fi
