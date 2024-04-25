@@ -1,6 +1,7 @@
 """
 Clean pyproject.toml file from path dependencies
 """
+
 import toml
 import sys
 
