@@ -60,6 +60,14 @@ async def write_storage(file: UploadFile = File(...)):
         content={"message": "Files written to storage", "folder_id": folder_name},
     )
 
+def zip_directory(file_path, zip_path):
+    """Utility function to zip the content of a directory while preserving the folder structure."""
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(file_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, start=os.path.abspath(file_path).split(os.sep)[0])
+                zipf.write(file_path, arcname)
 
 @router.get("/read_storage/{job_id}")
 async def read_storage(job_id: str):
@@ -79,22 +87,15 @@ async def read_storage(job_id: str):
 
     # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmpfile:
-        with zipfile.ZipFile(tmpfile.name, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for item in output_path.iterdir():
-                if item.is_file():
-                    zipf.write(item, arcname=item.name)
-                elif item.is_dir():
-                    for root, dirs, files in os.walk(item):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            zipf.write(file_path, arcname=os.path.relpath(file_path, start=output_path))
+        zip_directory(output_path, tmpfile.name)
+        tmpfile.close()
 
-    return FileResponse(
-        path=tmpfile.name,
-        media_type="application/zip",
-        filename=f"{job_id}.zip",
-        headers={"Content-Disposition": f"attachment; filename={job_id}.zip"},
-    )
+        return FileResponse(
+            path=tmpfile.name,
+            media_type="application/zip",
+            filename=f"{job_id}.zip",
+            headers={"Content-Disposition": f"attachment; filename={job_id}.zip"}
+        )
 
 
 @router.post("/write_ipfs")
