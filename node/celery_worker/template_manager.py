@@ -87,13 +87,17 @@ def run_template_job(job: Dict):
         validated_data = load_and_validate_input_schema(template_name, template_args)
         results = dynamic_import_and_run(template_name, validated_data, cfg)
 
+        save_location = template_args.get("save_location", None)
+        if save_location: # save_location is a new key in the template_args; ipfs or node
+            cfg["outputs"]["location"] = save_location
+
         if cfg["outputs"]["save"]:
             if cfg["outputs"]["location"] == "node":
                 out_msg = {
                     "output": results
                 }
             elif cfg["outputs"]["location"] == "ipfs":
-                out_msg = upload_to_ipfs(results)
+                out_msg = upload_to_ipfs(template_args["output_path"])
                 out_msg = f"IPFS Hash: {out_msg}"
                 out_msg = {
                     "output": out_msg
