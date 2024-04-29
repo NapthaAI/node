@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union
+from typing import Union, Dict, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -12,11 +12,14 @@ class JobType(str, Enum):
 
 class DockerJob(BaseModel):
     docker_image: str
-    docker_command: str
-    docker_num_gpus: int = 0
-    docker_input_dir: Union[str, None] = None
-    docker_output_dir: Union[str, None] = None
-    docker_env_vars: Union[dict, None] = None
+    docker_command: Optional[str] = ""
+    docker_num_gpus: Optional[int] = 0
+    docker_env_vars: Optional[Dict] = None
+    input_dir: Optional[str] = None
+    input_ipfs_hash: Optional[str] = None
+    docker_input_dir: Optional[str] = None
+    docker_output_dir: Optional[str] = None
+    save_location: Optional[str] = None
 
     class Config:
         allow_mutation = True
@@ -25,7 +28,8 @@ class DockerJob(BaseModel):
 class JobInput(BaseModel):
     user_id: str
     module_id: str
-    module_params: dict
+    module_params: Optional[Dict] = None
+    docker_params: Optional[DockerJob] = None
 
 
 class Job(BaseModel):

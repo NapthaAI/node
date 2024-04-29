@@ -61,13 +61,16 @@ async def write_storage(file: UploadFile = File(...)):
     )
 
 def zip_directory(file_path, zip_path):
-    """Utility function to zip the content of a directory while preserving the folder structure."""
+    """Utility function to recursively zip the content of a directory and its subdirectories, 
+    placing the contents in the zip as if the provided file_path was the root."""
+    base_path_len = len(Path(file_path).parts)  # Number of path segments in the base path
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(file_path):
             for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, start=os.path.abspath(file_path).split(os.sep)[0])
-                zipf.write(file_path, arcname)
+                full_path = os.path.join(root, file)
+                # Generate the archive name by stripping the base_path part
+                arcname = os.path.join(*Path(full_path).parts[base_path_len:])
+                zipf.write(full_path, arcname)
 
 @router.get("/read_storage/{job_id}")
 async def read_storage(job_id: str):

@@ -52,9 +52,10 @@ def handle_ipfs_input(ipfs_hash: str) -> str:
         logger.info(f"Unzipped file: {downloaded_path}")
     except Exception as e:
         logger.info(f"File is not a zip file: {downloaded_path}")
-
-    return temp_dir
-
+    if os.path.isdir(os.path.join(temp_dir, ipfs_hash)):
+        return os.path.join(temp_dir, ipfs_hash)
+    else:
+        return temp_dir
 
 def upload_to_ipfs(input_dir: str) -> str:
     """Upload a file or directory to IPFS. And pin it."""

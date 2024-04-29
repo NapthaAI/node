@@ -4,13 +4,14 @@ import time
 from typing import Dict, Optional
 from datetime import datetime
 import pytz
+import json
 import docker
 from docker.types import DeviceRequest
 from docker.models.containers import Container
 from docker.errors import ContainerError, ImageNotFound, APIError
 from node.utils import get_logger
 from node.storage.db.db import update_db_with_status_sync
-from node.celery_worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR
+from node.celery_worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, upload_to_ipfs
 
 logger = get_logger(__name__)
 
@@ -43,7 +44,11 @@ def prepare_volume_directory(
         return {}
 
 
-def monitor_container_logs(container: Container, job: Dict) -> str:
+def monitor_container_logs(
+        container: Container, 
+        job: Dict, 
+        save_location: Optional[str] = None
+    ) -> str:
     """Monitor container logs"""
     output = ""
     for line in container.logs(stream=True, follow=True):
@@ -51,8 +56,20 @@ def monitor_container_logs(container: Container, job: Dict) -> str:
         job["status"] = "running"
         asyncio.run(update_db_with_status_sync(job_data=job))
 
+    if save_location == "node":
+            out_msg = {
+                "output": str(output),
+                "node_storage_path": job["id"]
+            }
+    elif save_location == "ipfs":
+        out_msg = upload_to_ipfs(f"{BASE_OUTPUT_DIR}/{job['id'].split(':')[1]}")
+        out_msg = {
+            "output": str(output),
+            "output_ipfs_hash": out_msg
+        }
+
     job["status"] = "completed"
-    job["reply"] = {"output": output}
+    job["reply"] = {"output": json.dumps(out_msg)}
     job["error"] = False
     job["error_message"] = ""
     job["completed_time"] = datetime.now(pytz.utc).isoformat()
@@ -94,10 +111,15 @@ def run_container_job(job: Dict = None, **kwargs) -> None:
     command = docker_params["docker_command"]  # str
     input_dir = docker_params.get("input_dir", None)
     input_ipfs_hash = docker_params.get("input_ipfs_hash", None)
-    bind_input_dir = docker_params.get("bind_input_dir", None)
-    bind_output_dir = docker_params.get("bind_output_dir", None)
+    bind_input_dir = docker_params.get("docker_input_dir", None)
+    bind_output_dir = docker_params.get("docker_output_dir", None)
     num_gpus = docker_params.get("docker_num_gpus", 0)  # int 0 for none -1 for all
     env_vars = docker_params.get("docker_env_vars", None)  # Union[Dict, None]
+    save_location = docker_params.get("save_location", None)
+
+    if save_location:
+        if save_location not in ["node", "ipfs"]:
+            raise ValueError("save_location must be either 'node' or 'ipfs'")
 
     volumes = {}
     if input_dir or input_ipfs_hash:
@@ -150,22 +172,10 @@ def run_container_job(job: Dict = None, **kwargs) -> None:
             **kwargs
         )
 
-        output = monitor_container_logs(container, job)
-
+        output = monitor_container_logs(container, job, save_location=save_location)
+    
         # Update the job status to completed
         logger.info(f"Container finished running: {container}")
-
-        job["status"] = "completed"
-        job["reply"] = {"output": str(output)}
-        job["error"] = False
-        job["error_message"] = ""
-        job["completed_time"] = datetime.now(pytz.utc).isoformat()
-
-        asyncio.run(
-            update_db_with_status_sync(
-                job_data=job,
-            )
-        )
         logger.info(f"Container job completed: {job}")
 
     except (ContainerError, ImageNotFound, APIError) as e:
