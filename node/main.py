@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from pathlib import Path
@@ -9,7 +9,6 @@ from node.storage.hub.hub import Hub
 
 # from node.storage.hub.init_hub import init_hub
 from node.module_manager import setup_modules_from_config
-from node.payments import setup_payments_from_config
 from node.ollama.init_ollama import setup_ollama
 from node.routes.task import router as task_router
 from node.routes.storage import router as storage_router
@@ -76,7 +75,6 @@ async def on_startup():
 
     logger.info(f"Node: {node}")
     logger.info(f"Node config: {hub.node_config}")
-
 
 
 # Unregister the node with the hub on shutdown
