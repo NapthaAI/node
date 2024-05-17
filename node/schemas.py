@@ -59,17 +59,16 @@ class Job(BaseModel):
 
 
 class NodeConfigSchema(BaseModel):
-    user_id: str
-    ip: str
-    port: int
-    routing: str
+    public_key: str
     num_gpus: int
     vram: int
     os: str
     arch: str
     ram: int
     id: Union[str, None] = Field(default=None)
-    token: str
+    ip: Union[str, None] = Field(default=None)
+    port: Union[int, None] = Field(default=None)
+    routing: Union[str, None] = Field(default=None)
 
     class Config:
         allow_mutation = True

@@ -254,25 +254,27 @@ CREATE module:chat SET name="Chat", description="A simple chat workflow", author
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
 
 CREATE node:naptha0 SET
-    user_id=user:naptha,
+    public_key="18837f9faec9a02744d308f935f1b05e8ff2fc355172e875c24366491625d932f36b34a4fa80bac58db635d5eddc87659c2b3fa700a1775eb4c43da6b0ec270d",
     ip="http://node.naptha.ai",
     port=7001,
-    routing="",
+    routing=null,
     arch="x86_64",
     os="Linux",
     num_gpus=0,
     vram=0,
     ram=16758378496
 ;
+--private_key="71565da40d9df9f9a19dec069bcf01e561395cdd792a5c3f59be734962247017"
 
 CREATE node:naptha1 SET
-    user_id=user:naptha,
+    public_key="2c594f6e0de0633df89c0a231e17e886f0b79802fd611166333dc1bcb87e5f585bb13a41d2451521ac2a57d83b45dd8430970526b4ba718d6963b2f28c8f18d7",
     ip="http://node1.naptha.ai",
     port=7001,
-    routing="",
+    routing=null,
     arch="x86_64",
     os="Linux",
     num_gpus=0,
     vram=0,
     ram=16758378496
 ;
+--private_key="53a24990e661e48093502413b7926e80f5b577f809dd218759573815c9dc51e3"

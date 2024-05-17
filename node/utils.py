@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import logging
 from node.schemas import NodeConfigSchema
+from node.user import get_public_key
 import os
 import platform
 import psutil
@@ -56,9 +57,19 @@ def get_config():
     base_output_dir = base_output_dir.resolve()
 
     config = {}
-    config["NODE_IP"] = ip
-    config["NODE_PORT"] = int(os.getenv("NODE_PORT"))
-    config["NODE_ROUTING"] = os.getenv("NODE_ROUTING")
+    config["PUBLIC_KEY"] = get_public_key(os.getenv("PRIVATE_KEY"))
+    config["NODE_TYPE"] = os.getenv("NODE_TYPE")
+    if config["NODE_TYPE"] == "direct":
+        config["NODE_IP"] = ip
+        config["NODE_PORT"] = int(os.getenv("NODE_PORT"))
+        config["NODE_ROUTING"] = None
+    elif config["NODE_TYPE"] == "indirect":
+        config["NODE_IP"] = None
+        config["NODE_PORT"] = None
+        config["NODE_ROUTING"] = os.getenv("NODE_ROUTING")
+    else:
+        raise Exception("Unknown node type specified in environment.")
+
     config["NUM_GPUS"] = os.getenv("NUM_GPUS", 0)
     config["VRAM"] = os.getenv("VRAM", 0)
     config["OS_INFO"] = platform.system()
@@ -71,10 +82,10 @@ def get_config():
     return config
 
 
-def get_node_config(config, token, user_id):
+def get_node_config(config):
     """Get the node configuration."""
     node_config = NodeConfigSchema(
-        user_id=user_id,
+        public_key=config["PUBLIC_KEY"],
         ip=config["NODE_IP"],
         port=config["NODE_PORT"],
         routing=config["NODE_ROUTING"],
@@ -83,7 +94,6 @@ def get_node_config(config, token, user_id):
         os=config["OS_INFO"],
         arch=config["ARCH_INFO"],
         ram=config["RAM_INFO"],
-        token=token,
         id=None,
     )
     return node_config
