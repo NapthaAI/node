@@ -68,7 +68,7 @@ def setup_modules_from_config(module_config_path):
         try:
             install_module(package_name)
         except Exception as e:
-            logger.error(f"Failed to clone repo: {e}")
+            logger.error(f"Failed to install module: {e}")
             raise e
 
     logger.info(

@@ -38,15 +38,15 @@ def get_external_ip():
 
 def get_config():
     """Get the configuration for the node."""
-    address = os.getenv("ADDRESS")
+    ip = os.getenv("NODE_IP")
     dev_mode = os.getenv("DEV_MODE")
     dev_mode = True if dev_mode == "true" else False
 
     if not dev_mode:
-        if address is None or address == "" or "localhost" in address:
-            address = get_external_ip()
-            # add http:// to the address
-            address = f"http://{address}"
+        if ip is None or ip == "" or "localhost" in ip:
+            ip = get_external_ip()
+            # add http:// to the ip
+            ip = f"http://{ip}"
 
     base_output_dir = os.getenv("BASE_OUTPUT_DIR")
     if base_output_dir is None:
@@ -56,13 +56,11 @@ def get_config():
     base_output_dir = base_output_dir.resolve()
 
     config = {}
-    config["NODE_TYPE"] = os.getenv("NODE_TYPE")
-    config["NODE_PORT"] = os.getenv("NODE_PORT")
-    config["ADDRESS"] = address
-    config["NODE_URL"] = f"{address}:{config["NODE_PORT"]}"
+    config["NODE_IP"] = ip
+    config["NODE_PORT"] = int(os.getenv("NODE_PORT"))
+    config["NODE_ROUTING"] = os.getenv("NODE_ROUTING")
     config["NUM_GPUS"] = os.getenv("NUM_GPUS", 0)
     config["VRAM"] = os.getenv("VRAM", 0)
-    config["TEMPLATE_REPO_TAG"] = os.getenv("TEMPLATE_REPO_TAG")
     config["OS_INFO"] = platform.system()
     config["ARCH_INFO"] = platform.machine()
     config["RAM_INFO"] = psutil.virtual_memory().total
@@ -70,12 +68,6 @@ def get_config():
     config["MODULES_PATH"] = os.getenv("MODULES_PATH", None)
     config["HUB_USERNAME"] = os.getenv("HUB_USERNAME")
     config["HUB_PASSWORD"] = os.getenv("HUB_PASSWORD")
-
-    config["WORKFLOW_TYPES"] = os.getenv("WORKFLOW_TYPES")
-    if config["WORKFLOW_TYPES"] is not None:
-        config["WORKFLOW_TYPES"] = config["WORKFLOW_TYPES"].split(",")
-    else:
-        config["WORKFLOW_TYPES"] = ["docker"]
     return config
 
 
@@ -83,16 +75,16 @@ def get_node_config(config, token, user_id):
     """Get the node configuration."""
     node_config = NodeConfigSchema(
         user_id=user_id,
-        address=f"{config["ADDRESS"]}:{config["NODE_PORT"]}",
+        ip=config["NODE_IP"],
+        port=config["NODE_PORT"],
+        routing=config["NODE_ROUTING"],
         num_gpus=config["NUM_GPUS"],
         vram=config["VRAM"],
         os=config["OS_INFO"],
         arch=config["ARCH_INFO"],
         ram=config["RAM_INFO"],
-        workflow_type=config["WORKFLOW_TYPES"],
         token=token,
         id=None,
-        template_repo_tag=config["TEMPLATE_REPO_TAG"],
     )
     return node_config
 

@@ -97,7 +97,7 @@ CREATE tag:retrieval_augmented_generation SET name="Retrieval Augmented Generati
 CREATE tag:schema_based_tabular_data SET name="Schema-Based Tabular Data";
 
 -- USERS
-CREATE user:naptha1 SET 
+CREATE user:naptha SET 
     name="Naptha", 
     username="naptha1", 
     password=crypto::argon2::generate("great-password")
@@ -169,7 +169,7 @@ CREATE lot:governance SET name="Governance Agents", description="Read governance
 CREATE lot:predictoor SET name="Predictoor", description="Forecast prices of cryptocurrencies.", author=user:ocean1;
 CREATE lot:developer SET name="Developer Assistant", description="Solve coding query with Chainlink libraries.", author=user:chainlink1;
 
-CREATE lot:worldsim SET name="Virtual World Simulation", description="Run agents that simulate believable human behavior", author=user:naptha1,
+CREATE lot:worldsim SET name="Virtual World Simulation", description="Run agents that simulate believable human behavior", author=user:naptha,
   request="syntax = \"proto3\";
   
   message Request {
@@ -243,7 +243,7 @@ RELATE user:seller1->requests_to_publish->auction:auction1;
 
 -- MODULEs
 CREATE module:chat_aiflows SET name="Chat using AI Flows", description="A simple chat workflow using the AI Flows library", author=user:aideveloper1, url="https://huggingface.co/NapthaAI/chat_aiflows", type="template";
-CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha1, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
+CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
 CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:creator1, url="https://github.com/NapthaAI/module_hello_world", type="template";
 CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="https://hub.docker.com/_/hello-world", type="docker";
 CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple workflow for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template";
@@ -252,3 +252,27 @@ CREATE module:image_to_image SET name="Image to Image Stable Diffusion", descrip
 CREATE module:chat SET name="Chat", description="A simple chat workflow", author=user:creator1, url="https://github.com/NapthaAI/chat", type="template";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
+
+CREATE node:naptha0 SET
+    user_id=user:naptha,
+    ip="http://node.naptha.ai",
+    port=7001,
+    routing="",
+    arch="x86_64",
+    os="Linux",
+    num_gpus=0,
+    vram=0,
+    ram=16758378496
+;
+
+CREATE node:naptha1 SET
+    user_id=user:naptha,
+    ip="http://node1.naptha.ai",
+    port=7001,
+    routing="",
+    arch="x86_64",
+    os="Linux",
+    num_gpus=0,
+    vram=0,
+    ram=16758378496
+;
