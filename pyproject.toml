@@ -36,13 +36,8 @@ click = "^8.1.7"
 setuptools = "^69.0.3"
 pyyaml = "^6.0.1"
 protobuf = "^4.25.2"
+ecdsa = "^0.19.0"
 ipfshttpclient = "^0.7.0"
-chat = {path = "/home/ubuntu/node/node/storage/hub/modules/chat"}
-create-profile-description = {path = "/home/ubuntu/node/node/storage/hub/modules/create_profile_description"}
-generate-image = {path = "/home/ubuntu/node/node/storage/hub/modules/generate_image"}
-hello-world = {path = "/home/ubuntu/node/node/storage/hub/modules/hello_world"}
-image-to-image = {path = "/home/ubuntu/node/node/storage/hub/modules/image_to_image"}
-olas-prediction = {path = "/home/ubuntu/node/node/storage/hub/modules/olas_prediction"}
 
 [tool.poetry.scripts]
 naptha = "cli:cli"

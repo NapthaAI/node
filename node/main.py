@@ -55,7 +55,7 @@ async def on_startup():
     logger.info(f"Token: {hub.token}")
     logger.info(f"User ID: {hub.user_id}")
 
-    hub.node_config = get_node_config(config, hub.token, hub.user_id)
+    hub.node_config = get_node_config(config)
     logger.info(f"Node Config: {hub.node_config}")
     create_output_dir(config["BASE_OUTPUT_DIR"])
 
