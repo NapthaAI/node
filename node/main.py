@@ -12,6 +12,7 @@ from node.module_manager import setup_modules_from_config
 from node.ollama.init_ollama import setup_ollama
 from node.routes.task import router as task_router
 from node.routes.storage import router as storage_router
+from node.routes.user import router as user_router
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
 
 logger = get_logger(__name__)
@@ -25,6 +26,7 @@ PARENT_DIR = FILE_PATH.parent
 app = FastAPI()
 app.include_router(task_router)
 app.include_router(storage_router)
+app.include_router(user_router)
 
 # Setup CORS
 origins = [
