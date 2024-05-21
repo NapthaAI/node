@@ -6,11 +6,9 @@ from celery import Celery
 from datetime import datetime
 from dotenv import load_dotenv
 from node.utils import get_logger
-from node.celery_worker.celery_utils import (
-    run_container,
-    run_template,
-)
 from node.storage.db.db import update_db_with_status_sync
+from node.celery_worker.docker_manager import run_container_job
+from node.celery_worker.template_manager import run_template_job
 
 logger = get_logger(__name__)
 
@@ -67,24 +65,12 @@ def execute_docker_job(job: Dict) -> None:
         )
     )
     try:
-        run_container(
+        run_container_job(
             job=job,
         )
 
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
-
-        job["status"] = "error"
-        job["reply"] = {"output": ""}
-        job["error"] = True
-        job["error_message"] = str(e)
-        job["completed_time"] = datetime.now(pytz.utc).isoformat()
-
-        asyncio.run(
-            update_db_with_status_sync(
-                job_data=job,
-            )
-        )
 
 
 # Function to execute a template job
@@ -112,34 +98,9 @@ def execute_template_job(job: Dict) -> None:
     )
 
     try:
-        output = run_template(
+        run_template_job(
             job=job,
-        )
-        logger.info(f"Template output: {output}")
-        logger.info(f"Output type: {type(output)}")
-
-        job["reply"] = {"output": output}
-        job["status"] = "completed"
-        job["completed_time"] = datetime.now(pytz.utc).isoformat()
-
-        # Update the job status to completed
-        asyncio.run(
-            update_db_with_status_sync(
-                job_data=job,
-            )
         )
 
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
-
-        job["status"] = "error"
-        job["reply"] = {"output": ""}
-        job["error"] = True
-        job["error_message"] = str(e)
-        job["completed_time"] = datetime.now(pytz.utc).isoformat()
-
-        asyncio.run(
-            update_db_with_status_sync(
-                job_data=job,
-            )
-        )

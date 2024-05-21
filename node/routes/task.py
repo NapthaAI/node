@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from node.celery_worker.celery_worker import execute_docker_job, execute_template_job
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
-from node.schemas import Job, JobInput
+from node.schemas import Job, JobInput, DockerJob
 from node.utils import get_logger, get_config
 from typing import Dict
 
@@ -21,53 +21,47 @@ async def create_task(job_input: JobInput) -> Dict:
     :param job: Job details
     :return: Status
     """
-    # try:
-    logger.info(f"Received task: {job_input}")
+    try:
+        logger.info(f"Received task: {job_input}")
 
-    hub = await Hub()
-    module = await hub.list_modules(f"module:{job_input.module_id}")
-    logger.info(f"Found module: {module}")
+        hub = await Hub()
+        module = await hub.list_modules(f"module:{job_input.module_id}")
+        logger.info(f"Found module: {module}")
 
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
 
-    job = dict(job_input)
-    job["job_type"] = module["type"]
-    job["consumer"] = job["user_id"]
+        job = dict(job_input)
+        job["job_type"] = module["type"]
+        job["consumer"] = job["user_id"]
+        job = Job(**job)
 
-    if job["job_type"] == "docker":
-        docker_params = job.pop("module_params")
-        job["docker_params"] = docker_params
+        db = await DB("buyer1", "buyer1pass")
+        job = await db.create_job(job)
+        job = job[0]
+        logger.info(f"Created job: {job}")
 
-    job = Job(**job)
+        updated_job = await db.update_job(job["id"], job)
+        logger.info(f"Updated job: {updated_job}")
 
-    db = await DB("buyer1", "buyer1pass")
-    job = await db.create_job(job)
-    job = job[0]
+        # Validate the job type
+        if job["job_type"] not in ["template", "docker"]:
+            raise HTTPException(status_code=400, detail="Invalid job type")
 
-    logger.info(f"Created job: {job}")
+        # Enqueue the job in Celery
+        if job["job_type"] == "template":
+            execute_template_job.delay(job)
 
-    updated_job = await db.update_job(job["id"], job)
-    logger.info(f"Updated job: {updated_job}")
+        elif job["job_type"] == "docker":
+            execute_docker_job.delay(job)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid job type")
 
-    # Validate the job type
-    if job["job_type"] not in ["template", "docker"]:
-        raise HTTPException(status_code=400, detail="Invalid job type")
+        return job
 
-    # Enqueue the job in Celery
-    if job["job_type"] == "template":
-        execute_template_job.delay(job)
-
-    elif job["job_type"] == "docker":
-        execute_docker_job.delay(job)
-    # else:
-    #     raise HTTPException(status_code=400, detail="Invalid job type")
-
-    return job
-
-    # except Exception as e:
-    #     logger.error(f"Failed to execute job: {job} - {str(e)}")
-    #     raise HTTPException(status_code=500, detail=f"Failed to execute job: {job}")
+    except Exception as e:
+        logger.error(f"Failed to execute job: {job} - {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to execute job: {job}")
 
 
 @router.post("/CheckTask")
