@@ -18,7 +18,6 @@ def import_surql():
         f"{surql_path}/user.surql",
         f"{surql_path}/consume.surql",
         f"{surql_path}/auth.surql",
-        f"{surql_path}/testdata.surql",
     ]
 
     for file in import_files:

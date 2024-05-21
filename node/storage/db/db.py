@@ -13,12 +13,12 @@ load_dotenv()
 class DB:
     """Database class to handle all database operations"""
 
-    def __init__(self, username, password, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         self.endpoint = os.getenv("DB_ENDPOINT")
         self.ns = os.getenv("DB_NS")
         self.db = os.getenv("DB_DB")
-        self.username = username
-        self.password = password
+        self.username = os.getenv("DB_ROOT_USER")
+        self.password = os.getenv("DB_ROOT_PASS")
         self.surrealdb = Surreal(self.endpoint)
 
         self.__storedargs = args, kwargs
@@ -40,22 +40,6 @@ class DB:
     def __await__(self):
         return self.__initobj().__await__()
 
-    async def signup(self) -> Tuple[bool, Optional[str], Optional[str]]:
-        user = await self.surrealdb.signup(
-            {
-                # "name": self.username
-                "NS": self.ns,
-                "DB": self.db,
-                "SC": "user",
-                "username": self.username,
-                "password": self.password,
-            }
-        )
-        if not user:
-            return False, None, None
-        user_id = self._decode_token(user)
-        return True, user, user_id
-
     async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
             logger.info(
@@ -65,9 +49,9 @@ class DB:
                 {
                     "NS": self.ns,
                     "DB": self.db,
-                    "SC": "user",
-                    "username": self.username,
-                    "password": self.password,
+                    # "SC": "user",
+                    "user": self.username,
+                    "pass": self.password,
                 }
             )
         except Exception as e:
@@ -75,22 +59,6 @@ class DB:
             return False, None, None
         user_id = self._decode_token(user)
         return True, user, user_id
-
-    async def signin_or_signup(self):
-        logger.info("Attempting to sign in...")
-        success, token, user_id = await self.signin()
-        if success:
-            logger.info("Sign in successful!")
-            return token, user_id
-        else:
-            logger.info("Sign in failed. Attempting to sign up...")
-            success, token, user_id = await self.signup()
-            if success:
-                logger.info("Sign up successful!")
-                return token, user_id
-            else:
-                logger.error("Sign up failed.")
-                raise Exception("Sign up failed.")
 
     async def _authenticated_db(self):
         try:
@@ -116,9 +84,14 @@ class DB:
             return False, None
         return True, user_id
 
-    async def get_user(self, user_id: str) -> Dict:
-        user = await self._perform_db_operation(self.surrealdb.select, user_id)
-        return user
+    async def create_user(self, user_input: Dict) -> Tuple[bool, Optional[Dict]]:
+        user = await self.surrealdb.create("user", user_input)
+        return user[0]
+
+    async def get_user(self, user_input: Dict) -> Optional[Dict]:
+        user_id = "user:" + user_input['public_key']
+        logger.info(f"Getting user: {user_id}")
+        return await self.surrealdb.select(user_id)
 
     async def create_job(self, job: Dict) -> Tuple[bool, Optional[Dict]]:
         logger.info(f"Creating job: {job}")
