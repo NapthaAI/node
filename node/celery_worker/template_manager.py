@@ -1,11 +1,12 @@
+import asyncio
+from datetime import datetime
 import importlib
-import yaml
+import inspect
 import os
 import pytz
-import asyncio
 import traceback
 from typing import Dict, Optional
-from datetime import datetime
+import yaml
 from node.utils import get_logger
 from node.storage.db.db import update_db_with_status_sync
 from node.celery_worker.utils import (
@@ -14,6 +15,8 @@ from node.celery_worker.utils import (
     handle_ipfs_input,
     upload_to_ipfs,
 )
+from node.nodes import Node
+from node.schemas import Job
 
 
 logger = get_logger(__name__)
@@ -24,12 +27,16 @@ def load_yaml_config(cfg_path):
         return yaml.load(file, Loader=yaml.FullLoader)
 
 
-def dynamic_import_and_run(template_name, validated_data, cfg):
-    tn = template_name.replace("-", "_")
+def dynamic_import_and_run(validated_data, nodes, job, cfg):
+    tn = job["module_id"].replace("-", "_")
     entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
     main_module = importlib.import_module(f"{tn}.run")
     main_func = getattr(main_module, entrypoint)
-    return main_func(validated_data, cfg=cfg)
+
+    if inspect.iscoroutinefunction(main_func):
+        return asyncio.run(main_func(validated_data, nodes, job, cfg=cfg))
+    else:
+        return main_func(validated_data, nodes, job, cfg=cfg)
 
 
 def load_and_validate_input_schema(template_name, template_args):
@@ -59,12 +66,17 @@ def prepare_input_dir(template_args: Dict, input_dir: Optional[str] = None, inpu
     return template_args
 
 
-def run_template_job(job: Dict):
+def run_template_job(job: Job):
     """Run a template job"""
     try:
         logger.info(f"Running template job: {job}")
         job["status"] = "running"
         asyncio.run(update_db_with_status_sync(job_data=job))
+
+        if job['coworkers']:
+            nodes = [Node(coworker) for coworker in job['coworkers']]
+        else:
+            nodes = None
 
         template_name = job["module_id"]
         template_args = job["module_params"]
@@ -86,7 +98,7 @@ def run_template_job(job: Dict):
                 os.makedirs(output_path)
 
         validated_data = load_and_validate_input_schema(template_name, template_args)
-        results = dynamic_import_and_run(template_name, validated_data, cfg)
+        results = dynamic_import_and_run(validated_data, nodes, job, cfg)
 
         save_location = template_args.get("save_location", None)
         if save_location: # save_location is a new key in the template_args; ipfs or node

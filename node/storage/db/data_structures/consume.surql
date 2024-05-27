@@ -30,3 +30,4 @@ DEFINE FIELD status ON consume TYPE string DEFAULT "created";
 DEFINE FIELD job_type ON consume TYPE string DEFAULT "docker"; -- Can be 'docker' or 'template'
 DEFINE FIELD error ON consume TYPE option<bool> DEFAULT false;
 DEFINE FIELD error_message ON consume TYPE option<string | null>;
+DEFINE FIELD coworkers ON consume FLEXIBLE TYPE option<array | null>;
