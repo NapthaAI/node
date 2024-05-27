@@ -26,7 +26,7 @@ class DockerJob(BaseModel):
 
 
 class JobInput(BaseModel):
-    user_id: str
+    consumer_id: str
     module_id: str
     module_params: Optional[Dict] = None
     docker_params: Optional[DockerJob] = None
@@ -35,7 +35,7 @@ class JobInput(BaseModel):
 class Job(BaseModel):
     # node_id: str
     job_type: JobType
-    consumer: str
+    consumer_id: str
     module_id: str
     # id: Union[str, None] = None
     status: str = "pending"

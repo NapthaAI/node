@@ -33,7 +33,6 @@ async def create_task(job_input: JobInput) -> Dict:
 
         job = dict(job_input)
         job["job_type"] = module["type"]
-        job["consumer"] = job["user_id"]
         job = Job(**job)
 
         db = await DB("buyer1", "buyer1pass")

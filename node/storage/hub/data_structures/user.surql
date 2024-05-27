@@ -23,7 +23,7 @@ DEFINE FIELD updated ON user
 DEFINE INDEX unique_username ON user FIELDS username UNIQUE;
 
 DEFINE EVENT removal ON user WHEN $event = "DELETE" THEN {
-    DELETE job WHERE consumer = $before.id;
+    DELETE job WHERE consumer_id = $before.id;
 };
 DEFINE TABLE invite SCHEMAFULL
     PERMISSIONS FOR CREATE, SELECT, UPDATE, DELETE NONE

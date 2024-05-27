@@ -1,17 +1,17 @@
 DEFINE TABLE consume SCHEMAFULL
     PERMISSIONS
         FOR CREATE
-            WHERE $auth.id=consumer
+            WHERE $auth.id=consumer_id
         FOR SELECT
-            WHERE $auth.id=consumer
+            WHERE $auth.id=consumer_id
         FOR UPDATE
-            WHERE $auth.id=consumer
+            WHERE $auth.id=consumer_id
         FOR DELETE
-            WHERE $auth.id=consumer
+            WHERE $auth.id=consumer_id
             AND reply=NONE
 ;
 
-DEFINE FIELD consumer ON TABLE consume TYPE record<user>
+DEFINE FIELD consumer_id ON TABLE consume TYPE record<user>
     VALUE $auth.id or $value
     DEFAULT $auth.id
     PERMISSIONS FOR UPDATE NONE
