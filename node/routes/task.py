@@ -4,6 +4,7 @@ from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.schemas import Job, JobInput, DockerJob
 from node.utils import get_logger, get_config
+import traceback
 from typing import Dict
 
 logger = get_logger(__name__)
@@ -33,10 +34,9 @@ async def create_task(job_input: JobInput) -> Dict:
 
         job = dict(job_input)
         job["job_type"] = module["type"]
-        job["consumer"] = job["user_id"]
         job = Job(**job)
 
-        db = await DB("buyer1", "buyer1pass")
+        db = await DB()
         job = await db.create_job(job)
         job = job[0]
         logger.info(f"Created job: {job}")
@@ -60,7 +60,9 @@ async def create_task(job_input: JobInput) -> Dict:
         return job
 
     except Exception as e:
-        logger.error(f"Failed to execute job: {job} - {str(e)}")
+        logger.error(f"Failed to execute job: {str(e)}")
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
         raise HTTPException(status_code=500, detail=f"Failed to execute job: {job}")
 
 
@@ -71,10 +73,9 @@ async def check_task(job: Dict) -> Dict:
     :param job: Job details
     :return: Status
     """
-    # try:
     logger.info(f"Checking task: {job}")
 
-    db = await DB("buyer1", "buyer1pass")
+    db = await DB()
     job = await db.list_tasks(job["id"])
 
     logger.info(f"Found task: {job}")

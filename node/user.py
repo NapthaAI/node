@@ -1,5 +1,4 @@
 from ecdsa import SigningKey, SECP256k1
-from web3 import Web3
 
 def get_public_key(private_key_hex):
     private_key = SigningKey.from_string(bytes.fromhex(private_key_hex), curve=SECP256k1)

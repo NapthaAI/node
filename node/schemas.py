@@ -26,8 +26,9 @@ class DockerJob(BaseModel):
 
 
 class JobInput(BaseModel):
-    user_id: str
+    consumer_id: str
     module_id: str
+    coworkers: Optional[list[str]] = None
     module_params: Optional[Dict] = None
     docker_params: Optional[DockerJob] = None
 
@@ -35,12 +36,13 @@ class JobInput(BaseModel):
 class Job(BaseModel):
     # node_id: str
     job_type: JobType
-    consumer: str
+    consumer_id: str
     module_id: str
     # id: Union[str, None] = None
     status: str = "pending"
     reply: Union[str, None] = None
     error: bool = False
+    coworkers: Optional[list[str]] = None
     error_message: Union[str, None] = None
     created_time: Union[str, None] = None
     start_processing_time: Union[datetime, None] = None
