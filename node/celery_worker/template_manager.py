@@ -3,6 +3,7 @@ import yaml
 import os
 import pytz
 import asyncio
+import traceback
 from typing import Dict, Optional
 from datetime import datetime
 from node.utils import get_logger
@@ -120,8 +121,10 @@ def run_template_job(job: Dict):
 
     except Exception as e:
         logger.error(f"Error running template job: {e}")
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
         job["status"] = "error"
         job["error"] = True
-        job["error_message"] = str(e)
+        job["error_message"] = str(e) + error_details
         job["completed_time"] = datetime.now(pytz.timezone("UTC")).isoformat()
         asyncio.run(update_db_with_status_sync(job_data=job))

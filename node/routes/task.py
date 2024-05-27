@@ -4,6 +4,7 @@ from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.schemas import Job, JobInput, DockerJob
 from node.utils import get_logger, get_config
+import traceback
 from typing import Dict
 
 logger = get_logger(__name__)
@@ -59,7 +60,9 @@ async def create_task(job_input: JobInput) -> Dict:
         return job
 
     except Exception as e:
-        logger.error(f"Failed to execute job: {job} - {str(e)}")
+        logger.error(f"Failed to execute job: {str(e)}")
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
         raise HTTPException(status_code=500, detail=f"Failed to execute job: {job}")
 
 
