@@ -73,7 +73,7 @@ def run_template_job(job: Job):
         job["status"] = "running"
         asyncio.run(update_db_with_status_sync(job_data=job))
 
-        if job['coworkers']:
+        if hasattr(job, 'coworkers') and job['coworkers'] is not None:
             nodes = [Node(coworker) for coworker in job['coworkers']]
         else:
             nodes = None
