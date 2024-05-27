@@ -1,12 +1,13 @@
-import os
-import jwt
-from surrealdb import Surreal
+
 from dotenv import load_dotenv
+import jwt
+from node.schemas import Job
 from node.utils import get_logger
+import os
+from surrealdb import Surreal
 from typing import Dict, List, Tuple, Optional
 
 logger = get_logger(__name__)
-
 load_dotenv()
 
 
@@ -120,14 +121,13 @@ class DB:
         return result
 
 
-async def update_db_with_status_sync(job_data: Dict) -> None:
+async def update_db_with_status_sync(job_data: Job) -> None:
     """
     Update the hub with the job status synchronously
     param job_data: Job data to update
     """
     logger.info(f"Updating hub with job status: {job_data}")
-
-    db = await DB("buyer1", "buyer1pass")
+    db = await DB()
 
     try:
         updated_job = await db.update_job(job_data["id"], job_data)

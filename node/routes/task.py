@@ -35,7 +35,7 @@ async def create_task(job_input: JobInput) -> Dict:
         job["job_type"] = module["type"]
         job = Job(**job)
 
-        db = await DB("buyer1", "buyer1pass")
+        db = await DB()
         job = await db.create_job(job)
         job = job[0]
         logger.info(f"Created job: {job}")
@@ -70,10 +70,9 @@ async def check_task(job: Dict) -> Dict:
     :param job: Job details
     :return: Status
     """
-    # try:
     logger.info(f"Checking task: {job}")
 
-    db = await DB("buyer1", "buyer1pass")
+    db = await DB()
     job = await db.list_tasks(job["id"])
 
     logger.info(f"Found task: {job}")
