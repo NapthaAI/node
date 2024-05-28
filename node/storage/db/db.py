@@ -120,18 +120,3 @@ class DB:
         result = await self._perform_db_operation(self.surrealdb.query, query)
         return result
 
-
-async def update_db_with_status_sync(job_data: Job) -> None:
-    """
-    Update the hub with the job status synchronously
-    param job_data: Job data to update
-    """
-    logger.info(f"Updating hub with job status: {job_data}")
-    db = await DB()
-
-    try:
-        updated_job = await db.update_job(job_data["id"], job_data)
-        logger.info(f"Updated job: {updated_job}")
-    except Exception as e:
-        logger.error(f"Failed to update hub with job status: {e}")
-        raise e

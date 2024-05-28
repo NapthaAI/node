@@ -8,11 +8,11 @@ import traceback
 from typing import Dict, Optional
 import yaml
 from node.utils import get_logger
-from node.storage.db.db import update_db_with_status_sync
 from node.celery_worker.utils import (
     BASE_OUTPUT_DIR,
     MODULES_PATH,
     handle_ipfs_input,
+    update_db_with_status_sync,
     upload_to_ipfs,
 )
 from node.nodes import Node

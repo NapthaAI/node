@@ -10,8 +10,7 @@ from docker.types import DeviceRequest
 from docker.models.containers import Container
 from docker.errors import ContainerError, ImageNotFound, APIError
 from node.utils import get_logger
-from node.storage.db.db import update_db_with_status_sync
-from node.celery_worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, upload_to_ipfs
+from node.celery_worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, update_db_with_status_sync, upload_to_ipfs
 
 logger = get_logger(__name__)
 

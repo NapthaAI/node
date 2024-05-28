@@ -6,9 +6,9 @@ from celery import Celery
 from datetime import datetime
 from dotenv import load_dotenv
 from node.utils import get_logger
-from node.storage.db.db import update_db_with_status_sync
 from node.celery_worker.docker_manager import run_container_job
 from node.celery_worker.template_manager import run_template_job
+from node.celery_worker.utils import update_db_with_status_sync
 
 logger = get_logger(__name__)
 
