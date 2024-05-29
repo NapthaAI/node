@@ -1,7 +1,6 @@
 
 from dotenv import load_dotenv
 import jwt
-from node.schemas import Job
 from node.utils import get_logger
 import os
 from surrealdb import Surreal

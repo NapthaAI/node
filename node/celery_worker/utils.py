@@ -4,8 +4,11 @@ import tempfile
 import ipfshttpclient
 from dotenv import load_dotenv
 from pathlib import Path
+from node.schemas import Job
+from node.storage.db.db import DB
 from node.utils import get_logger
-
+from typing import Dict, Optional
+import yaml
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -84,3 +87,26 @@ async def update_db_with_status_sync(job_data: Job) -> None:
     except Exception as e:
         logger.error(f"Failed to update hub with job status: {e}")
         raise e
+
+def load_yaml_config(cfg_path):
+    with open(cfg_path, "r") as file:
+        return yaml.load(file, Loader=yaml.FullLoader)
+
+def prepare_input_dir(parameters: Dict, input_dir: Optional[str] = None, input_ipfs_hash: Optional[str] = None):
+    """Prepare the input directory"""
+    # make sure only input_dir or input_ipfs_hash is present
+    if input_dir and input_ipfs_hash:
+        raise ValueError("Only one of input_dir or input_ipfs_hash can be provided")
+
+    if input_dir:
+        input_dir = f"{BASE_OUTPUT_DIR}/{input_dir}"
+        parameters["input_dir"] = input_dir
+
+        if not os.path.exists(input_dir):
+            raise ValueError(f"Input directory {input_dir} does not exist")
+
+    if input_ipfs_hash:
+        input_dir = handle_ipfs_input(input_ipfs_hash)
+        parameters["input_dir"] = input_dir
+
+    return parameters
