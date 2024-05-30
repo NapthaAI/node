@@ -165,7 +165,7 @@ class FlowEngine:
         self.job = {k: v for k, v in self.job.items() if v is not None}
         await update_db_with_status_sync(job_data=self.job)
 
-        self.flow, self.cfg = await self.load_flow()
+        self.flow_func, self.validated_data, self.cfg = await self.load_flow()
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -204,56 +204,7 @@ class FlowEngine:
         logger.info(f"Starting flow run: {self.job}")
         self.state = "running"
         await update_db_with_status_sync(job_data=self.job)
-
-        current_output = None
-        num_tasks = len(self.flow.tasks)
-        for i, (node, task_name, args) in enumerate(self.flow.tasks):
-            logger.info(f"Node: {node}, Task: {task_name}, Args: {args}")
-
-            logger.info(f"Checking user: {self.consumer}")
-            consumer = await node.check_user(user_input=self.consumer)
-
-            if consumer["is_registered"] == True:
-                logger.info("Found user...", consumer)
-            elif consumer["is_registered"] == False:
-                logger.info("No user found. Registering user...")
-                consumer = await node.register_user(user_input=consumer)
-                logger.info(f"User registered: {consumer}.")
-
-            task_input = {
-                'consumer_id': consumer["id"],
-                "module_id": task_name,
-                # "module_params": args[0],
-            }
-
-            if current_output is not None:
-                task_input["module_params"] = {"prompt" : current_output["output"]}
-            else:
-                task_input["module_params"] = args[0]
-
-            logger.info(f"Running task: {task_input}")
-            job = await node.run_task(task_input=task_input, local=True)
-            logger.info(f"Flow run: {job}")
-
-            while True:
-                j = await node.check_task({"id": job['id']})
-
-                status = j['status']
-                logger.info(status)  
-                self.job["status"] = f"Task {i+1} of {num_tasks}. Status: {status}"
-                await update_db_with_status_sync(job_data=self.job)
-                if status in ["completed", "error"]:
-                    break
-                time.sleep(3)
-
-            if j['status'] == 'completed':
-                logger.info(j['reply'])
-                task_result = j['reply']
-                self.add_task_result(task_result)
-                current_output = task_result
-            else:
-                logger.info(j['error_message'])
-                await self.fail(j['error_message'])
+        response = await self.flow_func(self.validated_data, self.nodes, self.job, cfg=self.cfg)
 
         # await self.handle_outputs()
 
@@ -278,9 +229,6 @@ class FlowEngine:
         self.job["completed_time"] = datetime.now(pytz.timezone("UTC")).isoformat()
         self.job["duration"] = f"{(datetime.fromisoformat(self.job['completed_time']) - datetime.fromisoformat(self.job['start_processing_time'])).total_seconds()} seconds"
         await update_db_with_status_sync(job_data=self.job)
-
-    def add_task_result(self, task_result):
-        self.task_results.append(task_result)
 
     def load_and_validate_input_schema(self):
         tn = self.flow_name.replace("-", "_")
@@ -309,9 +257,5 @@ class FlowEngine:
         tn = self.flow_name.replace("-", "_")
         entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
         main_module = importlib.import_module(f"{tn}.run")
-        main_func = getattr(main_module, entrypoint)
-        workflow = await main_func(validated_data, self.nodes, self.job, cfg=cfg)
-        return workflow, cfg
-
-    def save_workflow_result(self):
-        pass
+        flow_func = getattr(main_module, entrypoint)
+        return flow_func, validated_data, cfg
