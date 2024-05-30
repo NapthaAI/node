@@ -23,7 +23,7 @@ python-dotenv = "^1.0.0"
 httpx = "^0.26.0"
 backoff = "^2.2.1"
 docker = "^7.0.0"
-celery = "^5.3.6"
+celery = "^5.4.0"
 redis = "^5.0.1"
 surrealdb = "^0.3.2"
 pyjwt = "^2.8.0"
@@ -37,6 +37,13 @@ pyyaml = "^6.0.1"
 protobuf = "^4.25.2"
 ecdsa = "^0.19.0"
 ipfshttpclient = "^0.7.0"
+chat = {path = "/home/ubuntu/node/node/storage/hub/modules/chat"}
+create-profile-description = {path = "/home/ubuntu/node/node/storage/hub/modules/create_profile_description"}
+generate-image = {path = "/home/ubuntu/node/node/storage/hub/modules/generate_image"}
+hello-world = {path = "/home/ubuntu/node/node/storage/hub/modules/hello_world"}
+image-to-image = {path = "/home/ubuntu/node/node/storage/hub/modules/image_to_image"}
+olas-prediction = {path = "/home/ubuntu/node/node/storage/hub/modules/olas_prediction"}
+multiplayer-chat = {path = "/home/ubuntu/node/node/storage/hub/modules/multiplayer_chat"}
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.11"

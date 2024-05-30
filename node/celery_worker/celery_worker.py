@@ -11,7 +11,15 @@ import traceback
 from typing import Dict
 from node.celery_worker.docker_manager import run_container_job
 from node.celery_worker.template_manager import run_template_job
-from node.celery_worker.utils import load_yaml_config, MODULES_PATH, prepare_input_dir, update_db_with_status_sync
+from node.celery_worker.utils import (
+    load_yaml_config, 
+    MODULES_PATH, 
+    BASE_OUTPUT_DIR,
+    prepare_input_dir, 
+    update_db_with_status_sync, 
+    upload_to_ipfs, 
+    handle_ipfs_input
+)
 from node.nodes import Node
 from node.utils import get_logger
 
@@ -109,20 +117,25 @@ def execute_template_job(job: Dict) -> None:
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
 
+
 @app.task
 def run_flow(job: Dict) -> None:
+    loop = asyncio.get_event_loop()
     workflow_engine = FlowEngine(job)
-    workflow_engine.init_run()
+    loop.run_until_complete(workflow_engine.init_run())
     try:
-        asyncio.run(workflow_engine.start_run())
+        loop.run_until_complete(workflow_engine.start_run())
         while True:
             if workflow_engine.job["status"] == "error":
-                workflow_engine.fail()
+                loop.run_until_complete(workflow_engine.fail())
                 break
             else:
-                workflow_engine.complete()
+                loop.run_until_complete(workflow_engine.complete())
                 break
             time.sleep(3)
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}")
+        loop.run_until_complete(workflow_engine.fail())
 
 
 class FlowEngine:
@@ -133,24 +146,26 @@ class FlowEngine:
         self.parameters = job["module_params"]
         self.task_results = []
 
-        if hasattr(job, 'coworkers') and job['coworkers'] is not None:
+        if ('coworkers' in job) and (job['coworkers'] is not None):
             self.nodes = [Node(coworker) for coworker in job['coworkers']]
         else:
             self.nodes = None
+
+        logger.info(f"Nodes: {self.nodes}")
 
         self.consumer = {
             "public_key": job["consumer_id"].split(':')[1],
             'id': job["consumer_id"],
         }
 
-    def init_run(self):
+    async def init_run(self):
         logger.info(f"Initializing flow run: {self.job}")
         self.job["status"] = "processing"
         self.job["start_processing_time"] = datetime.now(pytz.utc).isoformat()
-        self.job = {k: v for k, v in self.job.items() if v is not None} # remove None values from job
-        asyncio.run(update_db_with_status_sync(job_data=self.job)) # Update the job status to processing
+        self.job = {k: v for k, v in self.job.items() if v is not None}
+        await update_db_with_status_sync(job_data=self.job)
 
-        self.flow = self.load_flow()
+        self.flow, self.cfg = await self.load_flow()
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -159,14 +174,41 @@ class FlowEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None)
             )
 
+    async def handle_outputs(self):
+        """
+        Handles the outputs of the flow
+        """
+        save_location = self.parameters.get("save_location", None)
+        if save_location:
+            self.cfg["outputs"]["location"] = save_location
+
+        if self.cfg["outputs"]["save"]:
+            if self.cfg["outputs"]["location"] == "node":
+                out_msg = {
+                    "output": results
+                }
+            elif self.cfg["outputs"]["location"] == "ipfs":
+                out_msg = upload_to_ipfs(self.parameters["output_path"])
+                out_msg = f"IPFS Hash: {out_msg}"
+                out_msg = {
+                    "output": out_msg
+                }
+            else:
+                raise ValueError(f"Invalid location: {cfg['outputs']['location']}")
+        else:
+            out_msg = {
+                "output": results
+            }
+
     async def start_run(self):
         logger.info(f"Starting flow run: {self.job}")
         self.state = "running"
         await update_db_with_status_sync(job_data=self.job)
 
-        for node, task_name, args in self.flow.tasks:
-
-            logger.info(f"Node: {node}, Task: {task_name}")
+        current_output = None
+        num_tasks = len(self.flow.tasks)
+        for i, (node, task_name, args) in enumerate(self.flow.tasks):
+            logger.info(f"Node: {node}, Task: {task_name}, Args: {args}")
 
             logger.info(f"Checking user: {self.consumer}")
             consumer = await node.check_user(user_input=self.consumer)
@@ -178,50 +220,54 @@ class FlowEngine:
                 consumer = await node.register_user(user_input=consumer)
                 logger.info(f"User registered: {consumer}.")
 
-            print('Args: ', args)
-
             task_input = {
                 'consumer_id': consumer["id"],
                 "module_id": task_name,
-                "module_params": args,
+                # "module_params": args[0],
             }
+
+            if current_output is not None:
+                task_input["module_params"] = {"prompt" : current_output["output"]}
+            else:
+                task_input["module_params"] = args[0]
 
             logger.info(f"Running task: {task_input}")
             job = await node.run_task(task_input=task_input, local=True)
             logger.info(f"Flow run: {job}")
+
             while True:
                 j = await node.check_task({"id": job['id']})
 
                 status = j['status']
-                logger.info(status)   
-
-                if status == 'completed':
+                logger.info(status)  
+                self.job["status"] = f"Task {i+1} of {num_tasks}. Status: {status}"
+                await update_db_with_status_sync(job_data=self.job)
+                if status in ["completed", "error"]:
                     break
-                if status == 'error':
-                    break
-
                 time.sleep(3)
 
             if j['status'] == 'completed':
                 logger.info(j['reply'])
                 task_result = j['reply']
                 self.add_task_result(task_result)
+                current_output = task_result
             else:
                 logger.info(j['error_message'])
-                self.fail(j['error_message'])
-                break
+                await self.fail(j['error_message'])
 
-    def complete(self):
+        # await self.handle_outputs()
+
+    async def complete(self):
         self.job["status"] = "completed"
-        self.job["reply"] = out_msg
+        self.job["reply"] = {"results": json.dumps(self.task_results)}
         self.job["error"] = False
         self.job["error_message"] = ""
         self.job["completed_time"] = datetime.now(pytz.timezone("UTC")).isoformat()
-        self.job["duration"] = self.job["completed_time"] - self.job["start_processing_time"]
-        asyncio.run(update_db_with_status_sync(job_data=self.job))
-        logger.info(f"Flow run completed: {job}")
+        self.job["duration"] = f"{(datetime.fromisoformat(self.job['completed_time']) - datetime.fromisoformat(self.job['start_processing_time'])).total_seconds()} seconds"
+        await update_db_with_status_sync(job_data=self.job)
+        logger.info(f"Flow run completed: {self.job}")
 
-    def fail(self):
+    async def fail(self):
         logger.error(f"Error running template job")
         error_details = traceback.format_exc()
         logger.error(f"Full traceback: {error_details}")
@@ -230,11 +276,11 @@ class FlowEngine:
         self.job["error"] = True
         self.job["error_message"] = error_details
         self.job["completed_time"] = datetime.now(pytz.timezone("UTC")).isoformat()
-        self.job["duration"] = self.job["completed_time"] - self.job["start_processing_time"]
-        asyncio.run(update_db_with_status_sync(job_data=self.job))
+        self.job["duration"] = f"{(datetime.fromisoformat(self.job['completed_time']) - datetime.fromisoformat(self.job['start_processing_time'])).total_seconds()} seconds"
+        await update_db_with_status_sync(job_data=self.job)
 
     def add_task_result(self, task_result):
-        self.task_results.append(task_result.to_dict())
+        self.task_results.append(task_result)
 
     def load_and_validate_input_schema(self):
         tn = self.flow_name.replace("-", "_")
@@ -242,15 +288,30 @@ class FlowEngine:
         InputSchema = getattr(schemas_module, "InputSchema")
         return InputSchema(**self.parameters)
 
-    def load_flow(self):
+    async def load_flow(self):
+        """
+        Loads the flow from the module and returns the workflow
+        """
+        # Load the flow from the module
         workflow_path = f"{MODULES_PATH}/{self.flow_name}"
+
+        # Load the component.yaml file
         cfg = load_yaml_config(f"{workflow_path}/{self.flow_name}/component.yaml")
+        
+        # If the output is set to save, save the output to the outputs folder
+        if cfg["outputs"]["save"]:
+            output_path = f"{BASE_OUTPUT_DIR}/{self.job['id'].split(':')[1]}"
+            self.parameters["output_path"] = output_path
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+
         validated_data = self.load_and_validate_input_schema()
         tn = self.flow_name.replace("-", "_")
         entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
         main_module = importlib.import_module(f"{tn}.run")
         main_func = getattr(main_module, entrypoint)
-        return main_func(validated_data, self.nodes, self.job, cfg=cfg)
+        workflow = await main_func(validated_data, self.nodes, self.job, cfg=cfg)
+        return workflow, cfg
 
     def save_workflow_result(self):
         pass
