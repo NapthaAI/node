@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from node.schemas import Job
+from node.schemas import Job, JobUpdate
 from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict
@@ -17,8 +17,10 @@ async def create_task_run(task_run: Job):
     return task_run
 
 @router.post("/UpdateTaskRun")
-async def update_task_run(task_run: Job):
+async def update_task_run(task_run: JobUpdate):
+    logger.info(f"Updating task run: {task_run}")
     db = await DB()
-    updated_task_run = await db.update_job(task_run["id"], task_run)
+    updated_task_run = await db.update_job(task_run.id, task_run.model_dict())
     logger.info(f"Updated task run: {updated_task_run}")
     return updated_task_run
+

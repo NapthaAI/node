@@ -92,6 +92,30 @@ class Node:
         except Exception as e:
             print(f"Exception occurred: {e}")
 
+    async def create_task_run(self, task_run):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.node_url}/CreateTaskRun", json=task_run
+                )
+                if response.status_code != 200:
+                    print(f"Failed to create task run: {response.text}")
+            return json.loads(response.text)
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+
+    async def update_task_run(self, task_run):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.node_url}/UpdateTaskRun", json=task_run
+                )
+                if response.status_code != 200:
+                    print(f"Failed to update task run: {response.text}")
+            return json.loads(response.text)
+        except Exception as e:
+            print(f"Exception occurred: {e}")
+
     async def read_storage(self, job_id, output_dir, local, ipfs=False):
         """Read from storage."""
         if local:

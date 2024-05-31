@@ -33,6 +33,35 @@ class JobInput(BaseModel):
     docker_params: Optional[DockerJob] = None
 
 
+class JobUpdate(BaseModel):
+    job_type: JobType
+    consumer_id: str
+    module_id: str
+    id: str
+    status: str = "pending"
+    reply: Union[str, None] = None
+    error: bool = False
+    coworkers: Optional[list[str]] = None
+    error_message: Union[str, None] = None
+    created_time: Union[str, None] = None
+    start_processing_time: Union[datetime, None] = None
+    completed_time: Union[datetime, None] = None
+    docker_params: Union[DockerJob, None] = None
+    module_params: Union[dict, None] = None
+
+    class Config:
+        allow_mutation = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }
+
+    def model_dict(self):
+        model_dict = self.dict()
+        for key, value in model_dict.items():
+            if isinstance(value, datetime):
+                model_dict[key] = value.isoformat()
+        return model_dict
+
 class Job(BaseModel):
     # node_id: str
     job_type: JobType

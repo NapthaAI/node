@@ -145,6 +145,7 @@ class FlowEngine:
         self.flow_name = job["module_id"]
         self.parameters = job["module_params"]
         self.task_results = []
+        self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
 
         if ('coworkers' in job) and (job['coworkers'] is not None):
             self.nodes = [Node(coworker) for coworker in job['coworkers']]
@@ -174,7 +175,7 @@ class FlowEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None)
             )
 
-    async def handle_outputs(self):
+    async def handle_outputs(self, cfg, results):
         """
         Handles the outputs of the flow
         """
@@ -204,9 +205,16 @@ class FlowEngine:
         logger.info(f"Starting flow run: {self.job}")
         self.state = "running"
         await update_db_with_status_sync(job_data=self.job)
-        response = await self.flow_func(self.validated_data, self.nodes, self.job, cfg=self.cfg)
+        response = await self.flow_func(
+            inputs=self.validated_data, 
+            worker_nodes=self.nodes,
+            orchestrator_node=self.orchestrator_node, 
+            flow_run=self.job, 
+            cfg=self.cfg
+        )
 
         # await self.handle_outputs()
+        self.task_results = response
 
     async def complete(self):
         self.job["status"] = "completed"
