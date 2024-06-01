@@ -4,7 +4,7 @@ import tempfile
 import ipfshttpclient
 from dotenv import load_dotenv
 from pathlib import Path
-from node.schemas import Job
+from node.schemas import ModuleRun
 from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict, Optional
@@ -73,19 +73,19 @@ def upload_to_ipfs(input_dir: str) -> str:
     client.pin.add(ipfs_hash)
     return ipfs_hash
 
-async def update_db_with_status_sync(job_data: Job) -> None:
+async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     """
-    Update the hub with the job status synchronously
-    param job_data: Job data to update
+    Update the DB with the module run status synchronously
+    param module_run: ModuleRun data to update
     """
-    logger.info(f"Updating hub with job status: {job_data}")
+    logger.info(f"Updating DB with module run: {module_run}")
     db = await DB()
 
     try:
-        updated_job = await db.update_job(job_data["id"], job_data)
-        logger.info(f"Updated job: {updated_job}")
+        updated_module_run = await db.update_module_run(module_run.id, module_run)
+        logger.info(f"Updated module run: {updated_module_run}")
     except Exception as e:
-        logger.error(f"Failed to update hub with job status: {e}")
+        logger.error(f"Failed to update DB with module run status: {e}")
         raise e
 
 def load_yaml_config(cfg_path):

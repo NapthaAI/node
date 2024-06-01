@@ -1,14 +1,13 @@
 from enum import Enum
-from typing import Union, Dict, Optional
+from typing import Dict, List, Optional, Union
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-# Define enum for job types
-class JobType(str, Enum):
+class ModuleType(str, Enum):
     docker = "docker"
     template = "template"
-
+    flow = "flow"
 
 class DockerJob(BaseModel):
     docker_image: str
@@ -24,74 +23,59 @@ class DockerJob(BaseModel):
     class Config:
         allow_mutation = True
 
+    class Config:
+        allow_mutation = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }
 
-class JobInput(BaseModel):
+    def model_dict(self):
+        model_dict = self.dict()
+        for key, value in model_dict.items():
+            if isinstance(value, datetime):
+                model_dict[key] = value.isoformat()
+        return model_dict
+
+class ModuleRun(BaseModel):
+    module_name: str
+    module_type: ModuleType
     consumer_id: str
-    module_id: str
-    coworkers: Optional[list[str]] = None
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: Optional[list[str]] = None
+    worker_nodes: Optional[list[str]] = None
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[datetime] = None
+    completed_time: Optional[datetime] = None
+    duration: Optional[datetime] = None
+    docker_params: Optional[DockerJob] = None
+    module_params: Optional[dict] = None
+    child_runs: Optional[List['ModuleRun']] = None
+    parent_runs: Optional[List['ModuleRun']] = None
+
+    class Config:
+        allow_mutation = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }
+
+    def model_dict(self):
+        model_dict = self.dict()
+        for key, value in model_dict.items():
+            if isinstance(value, datetime):
+                model_dict[key] = value.isoformat()
+        return model_dict
+
+class ModuleRunInput(BaseModel):
+    module_name: str
+    consumer_id: str
+    worker_nodes: Optional[list[str]] = None
     module_params: Optional[Dict] = None
     docker_params: Optional[DockerJob] = None
-
-
-class JobUpdate(BaseModel):
-    job_type: JobType
-    consumer_id: str
-    module_id: str
-    id: str
-    status: str = "pending"
-    reply: Union[str, None] = None
-    error: bool = False
-    coworkers: Optional[list[str]] = None
-    error_message: Union[str, None] = None
-    created_time: Union[str, None] = None
-    start_processing_time: Union[datetime, None] = None
-    completed_time: Union[datetime, None] = None
-    docker_params: Union[DockerJob, None] = None
-    module_params: Union[dict, None] = None
-
-    class Config:
-        allow_mutation = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-
-    def model_dict(self):
-        model_dict = self.dict()
-        for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-        return model_dict
-
-class Job(BaseModel):
-    # node_id: str
-    job_type: JobType
-    consumer_id: str
-    module_id: str
-    # id: Union[str, None] = None
-    status: str = "pending"
-    reply: Union[str, None] = None
-    error: bool = False
-    coworkers: Optional[list[str]] = None
-    error_message: Union[str, None] = None
-    created_time: Union[str, None] = None
-    start_processing_time: Union[datetime, None] = None
-    completed_time: Union[datetime, None] = None
-    docker_params: Union[DockerJob, None] = None
-    module_params: Union[dict, None] = None
-
-    class Config:
-        allow_mutation = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-
-    def model_dict(self):
-        model_dict = self.dict()
-        for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-        return model_dict
-
+    module_type: Optional[ModuleType] = None
+    parent_runs: Optional[List['ModuleRun']] = None
 
 class NodeConfigSchema(BaseModel):
     public_key: str
@@ -109,5 +93,3 @@ class NodeConfigSchema(BaseModel):
         allow_mutation = True
 
 
-class JobId(BaseModel):
-    id: str

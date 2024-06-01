@@ -19,7 +19,7 @@ def prepare_volume_directory(
     base_dir: str,
     bind_path: str,
     mode: str,
-    job_id: Optional[str] = None,
+    module_run_id: Optional[str] = None,
     input_dir: Optional[str] = None,
     input_ipfs_hash: Optional[str] = None,
 ) -> Dict:
@@ -34,8 +34,8 @@ def prepare_volume_directory(
     elif input_ipfs_hash:
         local_path = handle_ipfs_input(input_ipfs_hash)
         return {local_path: {"bind": bind_path, "mode": mode}}
-    elif job_id:
-        local_path = f"{base_dir}/{job_id}"
+    elif module_run_id:
+        local_path = f"{base_dir}/{module_run_id}"
         if not os.path.exists(local_path):
             os.makedirs(local_path)
         return {local_path: {"bind": bind_path, "mode": mode}}
@@ -45,34 +45,34 @@ def prepare_volume_directory(
 
 def monitor_container_logs(
         container: Container, 
-        job: Dict, 
+        module_run: Dict, 
         save_location: Optional[str] = None
     ) -> str:
     """Monitor container logs"""
     output = ""
     for line in container.logs(stream=True, follow=True):
         output += line.strip().decode("utf-8") + "\n"
-        job["status"] = "running"
-        asyncio.run(update_db_with_status_sync(job_data=job))
+        module_run["status"] = "running"
+        asyncio.run(update_db_with_status_sync(module_run=module_run))
 
     if save_location == "node":
             out_msg = {
                 "output": str(output),
-                "node_storage_path": job["id"]
+                "node_storage_path": module_run["id"]
             }
     elif save_location == "ipfs":
-        out_msg = upload_to_ipfs(f"{BASE_OUTPUT_DIR}/{job['id'].split(':')[1]}")
+        out_msg = upload_to_ipfs(f"{BASE_OUTPUT_DIR}/{module_run['id'].split(':')[1]}")
         out_msg = {
             "output": str(output),
             "output_ipfs_hash": out_msg
         }
 
-    job["status"] = "completed"
-    job["reply"] = {"output": json.dumps(out_msg)}
-    job["error"] = False
-    job["error_message"] = ""
-    job["completed_time"] = datetime.now(pytz.utc).isoformat()
-    asyncio.run(update_db_with_status_sync(job_data=job))
+    module_run["status"] = "completed"
+    module_run["results"] = {"output": json.dumps(out_msg)}
+    module_run["error"] = False
+    module_run["error_message"] = ""
+    module_run["completed_time"] = datetime.now(pytz.utc).isoformat()
+    asyncio.run(update_db_with_status_sync(module_run=module_run))
     time.sleep(5)
 
     return output
@@ -86,15 +86,15 @@ def cleanup_container(container: Container) -> None:
         container.remove()
 
 
-def run_container_job(job: Dict = None, **kwargs) -> None:
+def run_container_job(module_run: Dict = None, **kwargs) -> None:
     """
         Run a docker container
-        :param job: Job details
+        :param module_run: ModuleRun details
         :param node_config: Node config
     =    :param kwargs: Additional kwargs
     """
     """
-    Example job:
+    Example module run:
     {
         'id': '1',
         'docker_image': 'nbs-test',
@@ -105,7 +105,7 @@ def run_container_job(job: Dict = None, **kwargs) -> None:
         'kwargs': {}
     }
     """
-    docker_params = job["docker_params"]  # Dict
+    docker_params = module_run["docker_params"]  # Dict
     image = docker_params["docker_image"]  # str
     command = docker_params["docker_command"]  # str
     input_dir = docker_params.get("input_dir", None)
@@ -136,7 +136,7 @@ def run_container_job(job: Dict = None, **kwargs) -> None:
         logger.info("Preparing output directory")
         out_vol = prepare_volume_directory(
             base_dir=BASE_OUTPUT_DIR,
-            job_id=job["id"].split(":")[1],
+            module_run_id=module_run["id"].split(":")[1],
             bind_path=bind_output_dir,
             mode="rw",
         )
@@ -171,57 +171,57 @@ def run_container_job(job: Dict = None, **kwargs) -> None:
             **kwargs
         )
 
-        output = monitor_container_logs(container, job, save_location=save_location)
+        output = monitor_container_logs(container, module_run, save_location=save_location)
     
-        # Update the job status to completed
+        # Update the module_run status to completed
         logger.info(f"Container finished running: {container}")
-        logger.info(f"Container job completed: {job}")
+        logger.info(f"Container module run completed: {module_run}")
 
     except (ContainerError, ImageNotFound, APIError) as e:
         logger.error(f"An error occurred: {str(e)}")
 
-        job["status"] = "error"
-        job["reply"] = {
+        module_run["status"] = "error"
+        module_run["results"] = {
             "output": str(
                 container.logs(stdout=True, stderr=False).decode().strip()
                 if container
                 else ""
             )
         }
-        job["error"] = True
-        job["error_message"] = str(e)
-        job["completed_time"] = datetime.now(pytz.utc).isoformat()
+        module_run["error"] = True
+        module_run["error_message"] = str(e)
+        module_run["completed_time"] = datetime.now(pytz.utc).isoformat()
 
         asyncio.run(
             update_db_with_status_sync(
-                job_data=job,
+                module_run=module_run,
             )
         )
 
     except Exception as e:
         logger.error(f"An unexpected error occurred: {str(e)}")
 
-        job["status"] = "error"
-        job["reply"] = {
+        module_run["status"] = "error"
+        module_run["results"] = {
             "output": str(
                 container.logs(stdout=True, stderr=False).decode().strip()
                 if container
                 else ""
             )
         }
-        job["error"] = True
-        job["error_message"] = str(e)
-        job["completed_time"] = datetime.now(pytz.utc).isoformat()
+        module_run["error"] = True
+        module_run["error_message"] = str(e)
+        module_run["completed_time"] = datetime.now(pytz.utc).isoformat()
 
-        # Update the job status to error
+        # Update the module run status to error
         asyncio.run(
             update_db_with_status_sync(
-                job_data=job,
+                module_run=module_run,
             )
         )
 
     finally:
-        logger.info(f"Celery task done for job: {job}")
+        logger.info(f"Celery task done for module run: {module_run}")
         logger.info(f"Done. Removing container: {container}")
         if container:
             cleanup_container(container)

@@ -80,11 +80,11 @@ class Node:
             print(f"Exception occurred: {e}")
         return json.loads(response.text)
 
-    async def check_task(self, job):
+    async def check_task(self, module_run):
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.node_url}/CheckTask", json=job
+                    f"{self.node_url}/CheckTask", json=module_run
                 )
                 if response.status_code != 200:
                     print(f"Failed to check task: {response.text}")
@@ -92,11 +92,11 @@ class Node:
         except Exception as e:
             print(f"Exception occurred: {e}")
 
-    async def create_task_run(self, task_run):
+    async def create_task_run(self, module_run_input):
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{self.node_url}/CreateTaskRun", json=task_run
+                    f"{self.node_url}/CreateTaskRun", json=module_run_input
                 )
                 if response.status_code != 200:
                     print(f"Failed to create task run: {response.text}")

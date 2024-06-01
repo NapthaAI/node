@@ -21,6 +21,7 @@ from node.celery_worker.utils import (
     handle_ipfs_input
 )
 from node.nodes import Node
+from node.schemas import ModuleRun
 from node.utils import get_logger
 
 logger = get_logger(__name__)
@@ -47,19 +48,19 @@ app = Celery(
 
 # Function to execute a docker job
 @app.task
-def execute_docker_job(job: Dict) -> None:
+def execute_docker_job(module_run: Dict) -> None:
     """
     Execute a docker job
     :param job: Job details
     :param hub_config: Hub config
     """
 
-    logger.info(f"Executing docker job: {job}")
+    logger.info(f"Executing docker module run: {module_run}")
 
-    job["status"] = "processing"
-    job["start_processing_time"] = datetime.now(pytz.utc).isoformat()
+    module_run["status"] = "processing"
+    module_run["start_processing_time"] = datetime.now(pytz.utc).isoformat()
 
-    # Remove None values from job recursively
+    # Remove None values from module run recursively
     def remove_none_values_from_dict(d):
         for key, value in list(d.items()):
             if value is None:
@@ -68,17 +69,17 @@ def execute_docker_job(job: Dict) -> None:
                 remove_none_values_from_dict(value)
         return d
 
-    job = remove_none_values_from_dict(job)
+    module_run = remove_none_values_from_dict(module_run)
 
     # Update the job status to processing
     asyncio.run(
         update_db_with_status_sync(
-            job_data=job,
+            module_run=module_run,
         )
     )
     try:
         run_container_job(
-            job=job,
+            job=module_run,
         )
 
     except Exception as e:
@@ -87,31 +88,31 @@ def execute_docker_job(job: Dict) -> None:
 
 # Function to execute a template job
 @app.task
-def execute_template_job(job: Dict) -> None:
+def execute_template_job(module_run: Dict) -> None:
     """
     Execute a template job
     :param job: Job details
     :param hub_config: Hub config
     """
 
-    logger.info(f"Executing template job: {job}")
+    logger.info(f"Executing template module run: {module_run}")
 
-    job["status"] = "processing"
-    job["start_processing_time"] = datetime.now(pytz.utc).isoformat()
+    module_run["status"] = "processing"
+    module_run["start_processing_time"] = datetime.now(pytz.utc).isoformat()
 
-    # remove None values from job
-    job = {k: v for k, v in job.items() if v is not None}
+    # remove None values from module run
+    module_run = {k: v for k, v in module_run.items() if v is not None}
 
     # Update the job status to processing
     asyncio.run(
         update_db_with_status_sync(
-            job_data=job,
+            module_run=module_run,
         )
     )
 
     try:
         run_template_job(
-            job=job,
+            module_run=module_run,
         )
 
     except Exception as e:
@@ -119,14 +120,15 @@ def execute_template_job(job: Dict) -> None:
 
 
 @app.task
-def run_flow(job: Dict) -> None:
+def run_flow(flow_run: Dict) -> None:
+    flow_run = ModuleRun(**flow_run)
     loop = asyncio.get_event_loop()
-    workflow_engine = FlowEngine(job)
+    workflow_engine = FlowEngine(flow_run)
     loop.run_until_complete(workflow_engine.init_run())
     try:
         loop.run_until_complete(workflow_engine.start_run())
         while True:
-            if workflow_engine.job["status"] == "error":
+            if workflow_engine.flow_run.status == "error":
                 loop.run_until_complete(workflow_engine.fail())
                 break
             else:
@@ -139,32 +141,31 @@ def run_flow(job: Dict) -> None:
 
 
 class FlowEngine:
-    def __init__(self, job):
-        self.job = job
+    def __init__(self, flow_run: ModuleRun):
+        self.flow_run = flow_run
         self.flow = None
-        self.flow_name = job["module_id"]
-        self.parameters = job["module_params"]
+        self.flow_name = flow_run.module_name
+        self.parameters = flow_run.module_params
         self.task_results = []
         self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
 
-        if ('coworkers' in job) and (job['coworkers'] is not None):
-            self.nodes = [Node(coworker) for coworker in job['coworkers']]
+        if flow_run.worker_nodes is not None:
+            self.worker_nodes = [Node(worker_node) for worker_node in flow_run.worker_nodes]
         else:
-            self.nodes = None
+            self.worker_nodes = None
 
-        logger.info(f"Nodes: {self.nodes}")
+        logger.info(f"Worker Nodes: {self.worker_nodes}")
 
         self.consumer = {
-            "public_key": job["consumer_id"].split(':')[1],
-            'id': job["consumer_id"],
+            "public_key": flow_run.consumer_id.split(':')[1],
+            'id': flow_run.consumer_id,
         }
 
     async def init_run(self):
-        logger.info(f"Initializing flow run: {self.job}")
-        self.job["status"] = "processing"
-        self.job["start_processing_time"] = datetime.now(pytz.utc).isoformat()
-        self.job = {k: v for k, v in self.job.items() if v is not None}
-        await update_db_with_status_sync(job_data=self.job)
+        logger.info(f"Initializing flow run: {self.flow_run}")
+        self.flow_run.status = "processing"
+        self.flow_run.start_processing_time = datetime.now(pytz.utc).isoformat()
+        await update_db_with_status_sync(module_run=self.flow_run)
 
         self.flow_func, self.validated_data, self.cfg = await self.load_flow()
 
@@ -202,14 +203,14 @@ class FlowEngine:
             }
 
     async def start_run(self):
-        logger.info(f"Starting flow run: {self.job}")
-        self.state = "running"
-        await update_db_with_status_sync(job_data=self.job)
+        logger.info(f"Starting flow run: {self.flow_run}")
+        self.flow_run.status = "running"
+        await update_db_with_status_sync(module_run=self.flow_run)
         response = await self.flow_func(
             inputs=self.validated_data, 
-            worker_nodes=self.nodes,
+            worker_nodes=self.worker_nodes,
             orchestrator_node=self.orchestrator_node, 
-            flow_run=self.job, 
+            flow_run=self.flow_run, 
             cfg=self.cfg
         )
 
@@ -217,26 +218,25 @@ class FlowEngine:
         self.task_results = response
 
     async def complete(self):
-        self.job["status"] = "completed"
-        self.job["reply"] = {"results": json.dumps(self.task_results)}
-        self.job["error"] = False
-        self.job["error_message"] = ""
-        self.job["completed_time"] = datetime.now(pytz.timezone("UTC")).isoformat()
-        self.job["duration"] = f"{(datetime.fromisoformat(self.job['completed_time']) - datetime.fromisoformat(self.job['start_processing_time'])).total_seconds()} seconds"
-        await update_db_with_status_sync(job_data=self.job)
-        logger.info(f"Flow run completed: {self.job}")
+        self.flow_run.status = "completed"
+        self.flow_run.results = {"results": json.dumps(self.task_results)}
+        self.flow_run.error = False
+        self.flow_run.error_message = ""
+        self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
+        self.flow_run.duration = f"{(datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()} seconds"
+        await update_db_with_status_sync(module_run=self.flow_run)
+        logger.info(f"Flow run completed: {self.flow_run}")
 
     async def fail(self):
-        logger.error(f"Error running template job")
+        logger.error(f"Error running template flow_run")
         error_details = traceback.format_exc()
         logger.error(f"Full traceback: {error_details}")
-        self.job["status"] = "error"
-        self.job["status"] = "error"
-        self.job["error"] = True
-        self.job["error_message"] = error_details
-        self.job["completed_time"] = datetime.now(pytz.timezone("UTC")).isoformat()
-        self.job["duration"] = f"{(datetime.fromisoformat(self.job['completed_time']) - datetime.fromisoformat(self.job['start_processing_time'])).total_seconds()} seconds"
-        await update_db_with_status_sync(job_data=self.job)
+        self.flow_run.status = "error"
+        self.flow_run.error = True
+        self.flow_run.error_message = error_details
+        self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
+        self.flow_run.duration = f"{(datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()} seconds"
+        await update_db_with_status_sync(module_run=self.flow_run)
 
     def load_and_validate_input_schema(self):
         tn = self.flow_name.replace("-", "_")
@@ -256,7 +256,7 @@ class FlowEngine:
         
         # If the output is set to save, save the output to the outputs folder
         if cfg["outputs"]["save"]:
-            output_path = f"{BASE_OUTPUT_DIR}/{self.job['id'].split(':')[1]}"
+            output_path = f"{BASE_OUTPUT_DIR}/{self.flow_run.id.split(':')[1]}"
             self.parameters["output_path"] = output_path
             if not os.path.exists(output_path):
                 os.makedirs(output_path)

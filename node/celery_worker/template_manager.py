@@ -16,7 +16,7 @@ from node.celery_worker.utils import (
     upload_to_ipfs,
 )
 from node.nodes import Node
-from node.schemas import Job
+from node.schemas import ModuleRun
 
 
 logger = get_logger(__name__)
@@ -66,7 +66,7 @@ def prepare_input_dir(template_args: Dict, input_dir: Optional[str] = None, inpu
     return template_args
 
 
-def run_template_job(job: Job):
+def run_template_job(job: ModuleRun):
     """Run a template job"""
     try:
         logger.info(f"Running template job: {job}")
