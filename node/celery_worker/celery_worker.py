@@ -3,6 +3,7 @@ from celery import Celery
 from datetime import datetime
 from dotenv import load_dotenv
 import importlib
+import inspect
 import json
 import os
 import pytz
@@ -206,13 +207,23 @@ class FlowEngine:
         logger.info(f"Starting flow run: {self.flow_run}")
         self.flow_run.status = "running"
         await update_db_with_status_sync(module_run=self.flow_run)
-        response = await self.flow_func(
-            inputs=self.validated_data, 
-            worker_nodes=self.worker_nodes,
-            orchestrator_node=self.orchestrator_node, 
-            flow_run=self.flow_run, 
-            cfg=self.cfg
-        )
+
+        if inspect.iscoroutinefunction(self.flow_func):
+            response = await self.flow_func(
+                inputs=self.validated_data, 
+                worker_nodes=self.worker_nodes,
+                orchestrator_node=self.orchestrator_node, 
+                flow_run=self.flow_run, 
+                cfg=self.cfg
+            )
+        else:
+            response = self.flow_func(
+                inputs=self.validated_data, 
+                worker_nodes=self.worker_nodes,
+                orchestrator_node=self.orchestrator_node, 
+                flow_run=self.flow_run, 
+                cfg=self.cfg
+            )
 
         # await self.handle_outputs()
         self.task_results = response
