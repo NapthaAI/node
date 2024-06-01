@@ -230,7 +230,7 @@ class FlowEngine:
 
     async def complete(self):
         self.flow_run.status = "completed"
-        self.flow_run.results = {"results": json.dumps(self.task_results)}
+        self.flow_run.results.append(self.task_results)
         self.flow_run.error = False
         self.flow_run.error_message = ""
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()

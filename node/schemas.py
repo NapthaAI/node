@@ -43,7 +43,7 @@ class ModuleRun(BaseModel):
     status: str = "pending"
     error: bool = False
     id: Optional[str] = None
-    results: Optional[list[str]] = None
+    results: list[str] = []
     worker_nodes: Optional[list[str]] = None
     error_message: Optional[str] = None
     created_time: Optional[str] = None
