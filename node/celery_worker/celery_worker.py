@@ -147,7 +147,6 @@ class FlowEngine:
         self.flow = None
         self.flow_name = flow_run.module_name
         self.parameters = flow_run.module_params
-        self.task_results = []
         self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
 
         if flow_run.worker_nodes is not None:
@@ -226,11 +225,9 @@ class FlowEngine:
             )
 
         # await self.handle_outputs()
-        self.task_results = response
 
     async def complete(self):
         self.flow_run.status = "completed"
-        self.flow_run.results.append(self.task_results)
         self.flow_run.error = False
         self.flow_run.error_message = ""
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()

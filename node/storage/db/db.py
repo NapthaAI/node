@@ -1,7 +1,7 @@
 
 from dotenv import load_dotenv
 import jwt
-from node.schemas import ModuleRun
+from node.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger
 import os
 from surrealdb import Surreal
@@ -94,9 +94,10 @@ class DB:
         logger.info(f"Getting user: {user_id}")
         return await self.surrealdb.select(user_id)
 
-    async def create_module_run(self, module_run: ModuleRun) -> ModuleRun:
-        logger.info(f"Creating module run: {module_run.dict()}")
-        module_run = await self.surrealdb.create("module_run", module_run.dict())
+    async def create_module_run(self, module_run_input: ModuleRunInput) -> ModuleRun:
+        logger.info(f"Creating module run: {module_run_input.model_dict()}")
+        module_run = await self.surrealdb.create("module_run", module_run_input.model_dict())
+        logger.info(f"Created module run: {module_run_input}")
         module_run = module_run[0]
         return ModuleRun(**module_run)
 
@@ -105,12 +106,14 @@ class DB:
         return await self.surrealdb.update(module_run_id, module_run.model_dict())
 
     async def list_module_runs(self, module_run_id=None) -> List[ModuleRun]:
+        logger.info(f'Listing module runs with ID: {module_run_id}')
         if module_run_id is None:
             module_runs = await self.surrealdb.select("module_run")
             module_runs = [ModuleRun(**module_run) for module_run in module_runs]
             return module_runs
         else:
             module_run = await self.surrealdb.select(module_run_id)
+            logger.info(f'Found module run with ID {module_run_id}: {module_run}')
             module_run = ModuleRun(**module_run)
             return module_run
 
