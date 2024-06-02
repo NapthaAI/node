@@ -52,8 +52,8 @@ class ModuleRun(BaseModel):
     duration: Optional[datetime] = None
     docker_params: Optional[DockerJob] = None
     module_params: Optional[dict] = None
-    child_runs: Optional[List['ModuleRun']] = None
-    parent_runs: Optional[List['ModuleRun']] = None
+    child_runs: List['ModuleRun'] = []
+    parent_runs: List['ModuleRun'] = []
 
     class Config:
         allow_mutation = True
@@ -75,7 +75,7 @@ class ModuleRunInput(BaseModel):
     module_params: Optional[Dict] = None
     docker_params: Optional[DockerJob] = None
     module_type: Optional[ModuleType] = None
-    parent_runs: Optional[List['ModuleRun']] = None
+    parent_runs: List['ModuleRun'] = []
 
 class NodeConfigSchema(BaseModel):
     public_key: str

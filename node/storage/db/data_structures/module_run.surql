@@ -31,5 +31,5 @@ DEFINE FIELD module_type ON module_run TYPE string DEFAULT "docker"; -- Can be '
 DEFINE FIELD error ON module_run TYPE option<bool> DEFAULT false;
 DEFINE FIELD error_message ON module_run TYPE option<string | null>;
 DEFINE FIELD worker_nodes ON module_run FLEXIBLE TYPE option<array | null>;
-DEFINE FIELD child_runs ON module_run FLEXIBLE TYPE option<array | null> DEFAULT NONE;
-DEFINE FIELD parent_runs ON module_run FLEXIBLE TYPE option<array | null> DEFAULT NONE;
+DEFINE FIELD child_runs ON module_run FLEXIBLE TYPE array DEFAULT [];
+DEFINE FIELD parent_runs ON module_run FLEXIBLE TYPE array DEFAULT [];
