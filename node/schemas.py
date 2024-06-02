@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Dict, List, Optional, Union
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 
 
@@ -49,7 +49,7 @@ class ModuleRun(BaseModel):
     created_time: Optional[str] = None
     start_processing_time: Optional[datetime] = None
     completed_time: Optional[datetime] = None
-    duration: Optional[datetime] = None
+    duration: Optional[float] = None
     docker_params: Optional[DockerJob] = None
     module_params: Optional[dict] = None
     child_runs: List['ModuleRun'] = []
@@ -66,6 +66,8 @@ class ModuleRun(BaseModel):
         for key, value in model_dict.items():
             if isinstance(value, datetime):
                 model_dict[key] = value.isoformat()
+            elif isinstance(value, ModuleType):
+                model_dict[key] = value.value
         return model_dict
 
 class ModuleRunInput(BaseModel):

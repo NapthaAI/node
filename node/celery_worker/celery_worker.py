@@ -234,7 +234,7 @@ class FlowEngine:
         self.flow_run.error = False
         self.flow_run.error_message = ""
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
-        self.flow_run.duration = f"{(datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()} seconds"
+        self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
         await update_db_with_status_sync(module_run=self.flow_run)
         logger.info(f"Flow run completed: {self.flow_run}")
 
@@ -246,7 +246,7 @@ class FlowEngine:
         self.flow_run.error = True
         self.flow_run.error_message = error_details
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
-        self.flow_run.duration = f"{(datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()} seconds"
+        self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
         await update_db_with_status_sync(module_run=self.flow_run)
 
     def load_and_validate_input_schema(self):

@@ -101,8 +101,8 @@ class DB:
         return ModuleRun(**module_run)
 
     async def update_module_run(self, module_run_id: str, module_run: ModuleRun) -> bool:
-        logger.info(f"Updating module run {module_run_id}: {module_run}")
-        return await self.surrealdb.update(module_run_id, module_run.dict())
+        logger.info(f"Updating module run {module_run_id}: {module_run.model_dict()}")
+        return await self.surrealdb.update(module_run_id, module_run.model_dict())
 
     async def list_module_runs(self, module_run_id=None) -> List[ModuleRun]:
         if module_run_id is None:
