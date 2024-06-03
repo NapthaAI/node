@@ -15,8 +15,8 @@ from node.celery_worker.utils import (
     update_db_with_status_sync,
     upload_to_ipfs,
 )
-from node.nodes import Node
-from node.schemas import ModuleRun
+from naptha_sdk.client.node import Node
+from naptha_sdk.schemas import ModuleRun
 
 
 logger = get_logger(__name__)

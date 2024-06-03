@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from node.schemas import ModuleRun, ModuleRunInput
+from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict

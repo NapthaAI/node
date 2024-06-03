@@ -1,7 +1,7 @@
 
 from dotenv import load_dotenv
 import jwt
-from node.schemas import ModuleRun, ModuleRunInput
+from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger
 import os
 from surrealdb import Surreal

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from node.celery_worker.celery_worker import execute_docker_job, execute_template_job, run_flow
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
-from node.schemas import ModuleRun, ModuleRunInput, DockerJob
+from naptha_sdk.schemas import DockerJob, ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
 import traceback
 

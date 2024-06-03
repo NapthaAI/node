@@ -21,8 +21,8 @@ from node.celery_worker.utils import (
     upload_to_ipfs, 
     handle_ipfs_input
 )
-from node.nodes import Node
-from node.schemas import ModuleRun
+from naptha_sdk.client.node import Node
+from naptha_sdk.schemas import ModuleRun
 from node.utils import get_logger
 
 logger = get_logger(__name__)

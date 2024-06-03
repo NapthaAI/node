@@ -4,7 +4,7 @@ import tempfile
 import ipfshttpclient
 from dotenv import load_dotenv
 from pathlib import Path
-from node.schemas import ModuleRun
+from naptha_sdk.schemas import ModuleRun
 from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict, Optional
