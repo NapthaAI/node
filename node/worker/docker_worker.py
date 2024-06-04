@@ -9,9 +9,11 @@ import docker
 from docker.types import DeviceRequest
 from docker.models.containers import Container
 from docker.errors import ContainerError, ImageNotFound, APIError
+from naptha_sdk.schemas import DockerParams, ModuleRun
 from node.utils import get_logger
 from node.worker.main import app
 from node.worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, update_db_with_status_sync, upload_to_ipfs
+import traceback
 
 logger = get_logger(__name__)
 
@@ -53,26 +55,30 @@ def monitor_container_logs(
     output = ""
     for line in container.logs(stream=True, follow=True):
         output += line.strip().decode("utf-8") + "\n"
-        module_run["status"] = "running"
+        module_run.status = "running"
         asyncio.run(update_db_with_status_sync(module_run=module_run))
 
     if save_location == "node":
-            out_msg = {
-                "output": str(output),
-                "node_storage_path": module_run["id"]
-            }
+        out_msg = {
+            "output": str(output),
+            "node_storage_path": module_run.id
+        }
     elif save_location == "ipfs":
-        out_msg = upload_to_ipfs(f"{BASE_OUTPUT_DIR}/{module_run['id'].split(':')[1]}")
+        out_msg = upload_to_ipfs(f"{BASE_OUTPUT_DIR}/{module_run.id.split(':')[1]}")
         out_msg = {
             "output": str(output),
             "output_ipfs_hash": out_msg
         }
+    else:
+        out_msg = {
+            "output": str(output),
+        }
 
-    module_run["status"] = "completed"
-    module_run["results"] = {"output": json.dumps(out_msg)}
-    module_run["error"] = False
-    module_run["error_message"] = ""
-    module_run["completed_time"] = datetime.now(pytz.utc).isoformat()
+    module_run.status = "completed"
+    module_run.results = [out_msg["output"]]
+    module_run.error = False
+    module_run.error_message = ""
+    module_run.completed_time = datetime.now(pytz.utc).isoformat()
     asyncio.run(update_db_with_status_sync(module_run=module_run))
     time.sleep(5)
 
@@ -87,7 +93,7 @@ def cleanup_container(container: Container) -> None:
         container.remove()
 
 
-def run_container_job(module_run: Dict = None, **kwargs) -> None:
+def run_container_module(module_run: ModuleRun = None, **kwargs) -> None:
     """
         Run a docker container
         :param module_run: ModuleRun details
@@ -106,39 +112,29 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
         'kwargs': {}
     }
     """
-    docker_params = module_run["docker_params"]  # Dict
-    image = docker_params["docker_image"]  # str
-    command = docker_params["docker_command"]  # str
-    input_dir = docker_params.get("input_dir", None)
-    input_ipfs_hash = docker_params.get("input_ipfs_hash", None)
-    bind_input_dir = docker_params.get("docker_input_dir", None)
-    bind_output_dir = docker_params.get("docker_output_dir", None)
-    num_gpus = docker_params.get("docker_num_gpus", 0)  # int 0 for none -1 for all
-    env_vars = docker_params.get("docker_env_vars", None)  # Union[Dict, None]
-    save_location = docker_params.get("save_location", None)
 
-    if save_location:
-        if save_location not in ["node", "ipfs"]:
+    if module_run.module_params.save_location:
+        if module_run.module_params.save_location not in ["node", "ipfs"]:
             raise ValueError("save_location must be either 'node' or 'ipfs'")
 
     volumes = {}
-    if input_dir or input_ipfs_hash:
+    if module_run.module_params.input_dir or module_run.module_params.input_ipfs_hash:
         logger.info("Preparing input directory")
         inp_vol = prepare_volume_directory(
             base_dir=BASE_OUTPUT_DIR,
-            bind_path=bind_input_dir,
+            bind_path=module_run.module_params.bind_input_dir,
             mode="ro",
-            input_dir=input_dir,
-            input_ipfs_hash=input_ipfs_hash,
+            input_dir=module_run.module_params.input_dir,
+            input_ipfs_hash=module_run.module_params.input_ipfs_hash,
         )
         volumes.update(inp_vol)
 
-    if bind_output_dir:
+    if module_run.module_params.docker_output_dir:
         logger.info("Preparing output directory")
         out_vol = prepare_volume_directory(
             base_dir=BASE_OUTPUT_DIR,
-            module_run_id=module_run["id"].split(":")[1],
-            bind_path=bind_output_dir,
+            module_run_id=module_run.id.split(":")[1],
+            bind_path=module_run.module_params.docker_output_dir,
             mode="rw",
         )
         volumes.update(out_vol)
@@ -151,13 +147,13 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
 
     try:
         # GPU allocation
-        if num_gpus != 0:
-            gpu_request = DeviceRequest(count=num_gpus, capabilities=[["gpu"]])
+        if module_run.module_params.docker_num_gpus != 0:
+            gpu_request = DeviceRequest(count=module_run.module_params.docker_num_gpus, capabilities=[["gpu"]])
             kwargs["device_requests"] = [gpu_request]
 
         # Environment variables
-        if env_vars:
-            kwargs["environment"] = env_vars
+        if module_run.module_params.docker_env_vars:
+            kwargs["environment"] = module_run.module_params.docker_env_vars
 
         # Volumes
         if volumes:
@@ -166,13 +162,13 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
         logger.debug(f"Running container with kwargs: {kwargs}")
 
         container = client.containers.run(
-            image=image, 
-            command=command, 
+            image=module_run.module_params.docker_image, 
+            command=module_run.module_params.docker_command, 
             detach=True, 
             **kwargs
         )
 
-        output = monitor_container_logs(container, module_run, save_location=save_location)
+        output = monitor_container_logs(container, module_run, save_location=module_run.module_params.save_location)
     
         # Update the module_run status to completed
         logger.info(f"Container finished running: {container}")
@@ -180,18 +176,20 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
 
     except (ContainerError, ImageNotFound, APIError) as e:
         logger.error(f"An error occurred: {str(e)}")
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
 
-        module_run["status"] = "error"
-        module_run["results"] = {
+        module_run.status = "error"
+        module_run.results = {
             "output": str(
                 container.logs(stdout=True, stderr=False).decode().strip()
                 if container
                 else ""
             )
         }
-        module_run["error"] = True
-        module_run["error_message"] = str(e)
-        module_run["completed_time"] = datetime.now(pytz.utc).isoformat()
+        module_run.error = True
+        module_run.error_message = str(e) + error_details
+        module_run.completed_time = datetime.now(pytz.utc).isoformat()
 
         asyncio.run(
             update_db_with_status_sync(
@@ -201,18 +199,20 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
 
     except Exception as e:
         logger.error(f"An unexpected error occurred: {str(e)}")
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")
 
-        module_run["status"] = "error"
-        module_run["results"] = {
+        module_run.status = "error"
+        module_run.results = {
             "output": str(
                 container.logs(stdout=True, stderr=False).decode().strip()
                 if container
                 else ""
             )
         }
-        module_run["error"] = True
-        module_run["error_message"] = str(e)
-        module_run["completed_time"] = datetime.now(pytz.utc).isoformat()
+        module_run.error = True
+        module_run.error_message = str(e) + error_details
+        module_run.completed_time = datetime.now(pytz.utc).isoformat()
 
         # Update the module run status to error
         asyncio.run(
@@ -227,41 +227,33 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
         if container:
             cleanup_container(container)
 
-# Function to execute a docker job
+# Function to execute a docker module
 @app.task
-def execute_docker_job(module_run: Dict) -> None:
+def execute_docker_module(module_run: Dict) -> None:
     """
-    Execute a docker job
-    :param job: Job details
+    Execute a docker module
+    :param module_run: ModuleRun details
     :param hub_config: Hub config
     """
-
+    module_run = ModuleRun(**module_run)
+    module_run.module_params = DockerParams(**module_run.module_params)
     logger.info(f"Executing docker module run: {module_run}")
 
-    module_run["status"] = "processing"
-    module_run["start_processing_time"] = datetime.now(pytz.utc).isoformat()
+    module_run.status = "processing"
+    module_run.start_processing_time = datetime.now(pytz.utc).isoformat()
 
-    # Remove None values from module run recursively
-    def remove_none_values_from_dict(d):
-        for key, value in list(d.items()):
-            if value is None:
-                del d[key]
-            elif isinstance(value, dict):
-                remove_none_values_from_dict(value)
-        return d
-
-    module_run = remove_none_values_from_dict(module_run)
-
-    # Update the job status to processing
+    # Update the module run status to processing
     asyncio.run(
         update_db_with_status_sync(
             module_run=module_run,
         )
     )
     try:
-        run_container_job(
-            job=module_run,
+        run_container_module(
+            module_run=module_run,
         )
 
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
+        error_details = traceback.format_exc()
+        logger.error(f"Full traceback: {error_details}")

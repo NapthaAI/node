@@ -20,9 +20,6 @@ DEFINE FIELD module_name ON module_run TYPE string DEFAULT NONE;
 DEFINE FIELD module_params ON TABLE module_run FLEXIBLE TYPE option<object | null> DEFAULT NONE
     PERMISSIONS FOR UPDATE NONE
 ;
-DEFINE FIELD docker_params ON TABLE module_run FLEXIBLE TYPE option<object | null> DEFAULT NONE
-    PERMISSIONS FOR UPDATE NONE
-;
 DEFINE FIELD results ON TABLE module_run FLEXIBLE TYPE array
     DEFAULT []
 ;

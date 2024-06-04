@@ -40,7 +40,6 @@ ipfshttpclient = "^0.7.0"
 
 [tool.poetry.dependencies.naptha-sdk]
 git = "https://github.com/NapthaAI/naptha-sdk.git"
-branch = "feat/workflow-state"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.11"

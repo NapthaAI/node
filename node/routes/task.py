@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
-from node.worker.docker_worker import execute_docker_job
+from node.worker.docker_worker import execute_docker_module
 from node.worker.template_worker import run_flow
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
-from naptha_sdk.schemas import DockerJob, ModuleRun, ModuleRunInput
+from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
 import traceback
 
@@ -34,6 +34,9 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
 
         module_run_input.module_type = module["type"]
 
+        if module["type"] == "docker":
+            module_run_input.module_params = DockerParams(**module_run_input.module_params)
+
         db = await DB()
         module_run = await db.create_module_run(module_run_input)
         logger.info(f"Created module run: {module_run}")
@@ -45,7 +48,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         if module_run.module_type in ["flow", "template"]:
             run_flow.delay(module_run.dict())
         elif module_run.module_type == "docker":
-            execute_docker_job.delay(module_run.dict())
+            execute_docker_module.delay(module_run.dict())
         else:
             raise HTTPException(status_code=400, detail="Invalid module type")
 

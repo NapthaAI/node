@@ -9,7 +9,6 @@ import pytz
 import time
 import traceback
 from typing import Dict
-from node.worker.docker_worker import run_container_job
 from node.worker.main import app
 from node.worker.utils import (
     load_yaml_config, 
@@ -34,8 +33,8 @@ def run_flow(flow_run: Dict) -> None:
     flow_run = ModuleRun(**flow_run)
     loop = asyncio.get_event_loop()
     workflow_engine = FlowEngine(flow_run)
-    loop.run_until_complete(workflow_engine.init_run())
     try:
+        loop.run_until_complete(workflow_engine.init_run())
         loop.run_until_complete(workflow_engine.start_run())
         while True:
             if workflow_engine.flow_run.status == "error":
@@ -76,14 +75,14 @@ class FlowEngine:
         self.flow_run.start_processing_time = datetime.now(pytz.utc).isoformat()
         await update_db_with_status_sync(module_run=self.flow_run)
 
-        self.flow_func, self.validated_data, self.cfg = await self.load_flow()
-
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
                 parameters=self.parameters,
                 input_dir=self.parameters.get("input_dir", None),
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None)
             )
+
+        self.flow_func, self.validated_data, self.cfg = await self.load_flow()
 
     async def handle_outputs(self, cfg, results):
         """
