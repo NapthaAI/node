@@ -1,7 +1,7 @@
 
 from dotenv import load_dotenv
 import jwt
-from node.schemas import Job
+from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger
 import os
 from surrealdb import Surreal
@@ -94,44 +94,38 @@ class DB:
         logger.info(f"Getting user: {user_id}")
         return await self.surrealdb.select(user_id)
 
-    async def create_job(self, job: Dict) -> Tuple[bool, Optional[Dict]]:
-        logger.info(f"Creating job: {job}")
-        return await self.surrealdb.create("consume", job)
+    async def create_module_run(self, module_run_input: ModuleRunInput) -> ModuleRun:
+        logger.info(f"Creating module run: {module_run_input.model_dict()}")
+        module_run = await self.surrealdb.create("module_run", module_run_input.model_dict())
+        logger.info(f"Created module run: {module_run_input}")
+        module_run = module_run[0]
+        return ModuleRun(**module_run)
 
-    async def update_job(self, job_id: str, job: Dict) -> bool:
-        logger.info(f"Updating job {job_id}: {job}")
-        return await self.surrealdb.update(job_id, job)
+    async def update_module_run(self, module_run_id: str, module_run: ModuleRun) -> bool:
+        logger.info(f"Updating module run {module_run_id}: {module_run.model_dict()}")
+        return await self.surrealdb.update(module_run_id, module_run.model_dict())
 
-    async def list_tasks(self, task_id=None) -> List:
-        if task_id is None:
-            return await self.surrealdb.select("consume")
+    async def list_module_runs(self, module_run_id=None) -> List[ModuleRun]:
+        logger.info(f'Listing module runs with ID: {module_run_id}')
+        if module_run_id is None:
+            module_runs = await self.surrealdb.select("module_run")
+            module_runs = [ModuleRun(**module_run) for module_run in module_runs]
+            return module_runs
         else:
-            return await self.surrealdb.select(task_id)
+            module_run = await self.surrealdb.select(module_run_id)
+            logger.info(f'Found module run with ID {module_run_id}: {module_run}')
+            module_run = ModuleRun(**module_run)
+            return module_run
 
-    async def delete_job(self, job_id: str) -> bool:
+    async def delete_module_run(self, module_run_id: str) -> bool:
         try:
-            await self._perform_db_operation(self.surrealdb.delete, job_id)
+            await self._perform_db_operation(self.surrealdb.delete, module_run_id)
             return True
         except Exception as e:
-            logger.error(f"Failed to delete job: {e}")
+            logger.error(f"Failed to delete module run: {e}")
             return False
 
     async def query(self, query: str) -> List:
         result = await self._perform_db_operation(self.surrealdb.query, query)
         return result
 
-
-async def update_db_with_status_sync(job_data: Job) -> None:
-    """
-    Update the hub with the job status synchronously
-    param job_data: Job data to update
-    """
-    logger.info(f"Updating hub with job status: {job_data}")
-    db = await DB()
-
-    try:
-        updated_job = await db.update_job(job_data["id"], job_data)
-        logger.info(f"Updated job: {updated_job}")
-    except Exception as e:
-        logger.error(f"Failed to update hub with job status: {e}")
-        raise e

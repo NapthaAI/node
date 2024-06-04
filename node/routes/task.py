@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from node.celery_worker.celery_worker import execute_docker_job, execute_template_job
+from node.worker.docker_worker import execute_docker_module
+from node.worker.template_worker import run_flow
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
-from node.schemas import Job, JobInput, DockerJob
+from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
 import traceback
-from typing import Dict
 
 logger = get_logger(__name__)
 
@@ -16,81 +16,76 @@ BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 # Endpoint to receive a task
 @router.post("/CreateTask")
-async def create_task(job_input: JobInput) -> Dict:
+async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
     """
     Create a Task
-    :param job: Job details
+    :param module_run_input: Module run specifications
     :return: Status
     """
     try:
-        logger.info(f"Received task: {job_input}")
+        logger.info(f"Received task: {module_run_input}")
 
         hub = await Hub()
-        module = await hub.list_modules(f"module:{job_input.module_id}")
+        module = await hub.list_modules(f"module:{module_run_input.module_name}")
         logger.info(f"Found module: {module}")
 
         if not module:
             raise HTTPException(status_code=404, detail="Module not found")
 
-        job = dict(job_input)
-        job["job_type"] = module["type"]
-        job = Job(**job)
+        module_run_input.module_type = module["type"]
+
+        if module["type"] == "docker":
+            module_run_input.module_params = DockerParams(**module_run_input.module_params)
 
         db = await DB()
-        job = await db.create_job(job)
-        job = job[0]
-        logger.info(f"Created job: {job}")
+        module_run = await db.create_module_run(module_run_input)
+        logger.info(f"Created module run: {module_run}")
 
-        updated_job = await db.update_job(job["id"], job)
-        logger.info(f"Updated job: {updated_job}")
+        updated_module_run = await db.update_module_run(module_run.id, module_run)
+        logger.info(f"Updated module run: {updated_module_run}")
 
-        # Validate the job type
-        if job["job_type"] not in ["template", "docker"]:
-            raise HTTPException(status_code=400, detail="Invalid job type")
-
-        # Enqueue the job in Celery
-        if job["job_type"] == "template":
-            execute_template_job.delay(job)
-
-        elif job["job_type"] == "docker":
-            execute_docker_job.delay(job)
+        # Enqueue the module run in Celery
+        if module_run.module_type in ["flow", "template"]:
+            run_flow.delay(module_run.dict())
+        elif module_run.module_type == "docker":
+            execute_docker_module.delay(module_run.dict())
         else:
-            raise HTTPException(status_code=400, detail="Invalid job type")
+            raise HTTPException(status_code=400, detail="Invalid module type")
 
-        return job
+        return module_run
 
     except Exception as e:
-        logger.error(f"Failed to execute job: {str(e)}")
+        logger.error(f"Failed to run module: {str(e)}")
         error_details = traceback.format_exc()
         logger.error(f"Full traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Failed to execute job: {job}")
+        raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run}")
 
 
 @router.post("/CheckTask")
-async def check_task(job: Dict) -> Dict:
+async def check_task(module_run: ModuleRun) -> ModuleRun:
     """
     Check a task
-    :param job: Job details
+    :param module_run: ModuleRun details
     :return: Status
     """
-    logger.info(f"Checking task: {job}")
+    logger.info(f"Checking task: {module_run}")
 
     db = await DB()
-    job = await db.list_tasks(job["id"])
+    module_run = await db.list_module_runs(module_run.id)
 
-    logger.info(f"Found task: {job}")
+    logger.info(f"Found task: {module_run}")
 
-    status = job["status"]
+    status = module_run.status
     logger.info(f"Found task status: {status}")
 
     response = None
-    if job["status"] == "completed":
-        logger.info(f"Task completed. Returning output: {job['reply']}")
-        response = job["reply"]
+    if module_run.status == "completed":
+        logger.info(f"Task completed. Returning output: {module_run.results}")
+        response = module_run.results
         logger.info(f"Response: {response}")
-    elif job["status"] == "error":
-        logger.info(f"Task failed. Returning error: {job['error_message']}")
-        response = job["error_message"]
+    elif module_run.status == "error":
+        logger.info(f"Task failed. Returning error: {module_run.error_message}")
+        response = module_run.error_message
         logger.info(f"Response: {response}")
 
-    return job
+    return module_run

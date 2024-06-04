@@ -7,6 +7,8 @@ import platform
 import psutil
 import requests
 from pathlib import Path
+import subprocess
+from typing import List
 
 load_dotenv()
 
@@ -27,6 +29,7 @@ def get_logger(name):
     logger.addHandler(ch)
     return logger
 
+logger = get_logger(__name__)
 
 def get_external_ip():
     """Get the external IP address of the node. If the IP address is not found, raise an error."""
@@ -120,6 +123,26 @@ def create_output_dir(base_output_dir):
     except Exception as e:
         raise Exception(f"Error creating base_output_dir: {e}")
 
+def run_subprocess(cmd: List) -> None:
+    """Run a subprocess"""
+    logger.info(f"Running subprocess: {cmd}")
+    try:
+        out, err = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        ).communicate()
+
+        # Log the output
+        logger.info(f"Subprocess output: {out.decode('utf-8')}")
+
+        if err:
+            logger.info(f"Subprocess error: {err.decode('utf-8')}")
+            raise Exception(err)
+
+        return out.decode("utf-8")
+
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        raise e
 
 if __name__ == "__main__":
     config = get_config()

@@ -129,13 +129,13 @@ class Hub:
             "SELECT * FROM wins WHERE in=$user;", {"user": purchases["me"]}
         )
 
-    async def list_modules(self, module_id=None) -> List:
-        if not module_id:
+    async def list_modules(self, module_name=None) -> List:
+        if not module_name:
             modules = await self.surrealdb.query("SELECT * FROM module;")
             return modules[0]["result"]
         else:
             module = await self.surrealdb.query(
-                "SELECT * FROM module WHERE id=$module_id;", {"module_id": module_id}
+                "SELECT * FROM module WHERE id=$module_name;", {"module_name": module_name}
             )
             try:
                 return module[0]["result"][0]
