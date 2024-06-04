@@ -223,7 +223,8 @@ class FlowEngine:
                 flow_run=self.flow_run, 
                 cfg=self.cfg
             )
-
+        logger.info(f"Flow run response: {response}")
+        self.flow_run.results = [response]
         # await self.handle_outputs()
 
     async def complete(self):
