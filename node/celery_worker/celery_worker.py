@@ -224,6 +224,9 @@ class FlowEngine:
                 cfg=self.cfg
             )
         logger.info(f"Flow run response: {response}")
+
+        if isinstance(response, dict):
+            response = json.dumps(response)
         self.flow_run.results = [response]
         # await self.handle_outputs()
 
