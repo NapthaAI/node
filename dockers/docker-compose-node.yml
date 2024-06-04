@@ -22,7 +22,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.celery
-    command: celery -A celery_worker.app worker --loglevel=debug
+    command: celery -A worker.app worker --loglevel=debug
     volumes:
       - .:/app
     working_dir: /app

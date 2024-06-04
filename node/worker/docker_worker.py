@@ -10,7 +10,8 @@ from docker.types import DeviceRequest
 from docker.models.containers import Container
 from docker.errors import ContainerError, ImageNotFound, APIError
 from node.utils import get_logger
-from node.celery_worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, update_db_with_status_sync, upload_to_ipfs
+from node.worker.main import app
+from node.worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, update_db_with_status_sync, upload_to_ipfs
 
 logger = get_logger(__name__)
 
@@ -225,3 +226,42 @@ def run_container_job(module_run: Dict = None, **kwargs) -> None:
         logger.info(f"Done. Removing container: {container}")
         if container:
             cleanup_container(container)
+
+# Function to execute a docker job
+@app.task
+def execute_docker_job(module_run: Dict) -> None:
+    """
+    Execute a docker job
+    :param job: Job details
+    :param hub_config: Hub config
+    """
+
+    logger.info(f"Executing docker module run: {module_run}")
+
+    module_run["status"] = "processing"
+    module_run["start_processing_time"] = datetime.now(pytz.utc).isoformat()
+
+    # Remove None values from module run recursively
+    def remove_none_values_from_dict(d):
+        for key, value in list(d.items()):
+            if value is None:
+                del d[key]
+            elif isinstance(value, dict):
+                remove_none_values_from_dict(value)
+        return d
+
+    module_run = remove_none_values_from_dict(module_run)
+
+    # Update the job status to processing
+    asyncio.run(
+        update_db_with_status_sync(
+            module_run=module_run,
+        )
+    )
+    try:
+        run_container_job(
+            job=module_run,
+        )
+
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}")

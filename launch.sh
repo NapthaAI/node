@@ -380,7 +380,7 @@ start_celery_worker() {
     # Write celery_worker_start.sh
     echo "#!/bin/bash" > celery_worker_start.sh
     echo "source $CURRENT_DIR/.venv/bin/activate" >> celery_worker_start.sh
-    echo "exec celery -A node.celery_worker.celery_worker.app worker --loglevel=info" >> celery_worker_start.sh
+    echo "exec celery -A node.worker.main.app worker --loglevel=info" >> celery_worker_start.sh
 
     # Make the script executable
     chmod +x celery_worker_start.sh

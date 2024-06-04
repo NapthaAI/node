@@ -1,5 +1,4 @@
 import asyncio
-from celery import Celery
 from datetime import datetime
 from dotenv import load_dotenv
 import importlib
@@ -10,9 +9,9 @@ import pytz
 import time
 import traceback
 from typing import Dict
-from node.celery_worker.docker_manager import run_container_job
-from node.celery_worker.template_manager import run_template_job
-from node.celery_worker.utils import (
+from node.worker.docker_worker import run_container_job
+from node.worker.main import app
+from node.worker.utils import (
     load_yaml_config, 
     MODULES_PATH, 
     BASE_OUTPUT_DIR,
@@ -29,96 +28,6 @@ logger = get_logger(__name__)
 
 # Load environment variables
 load_dotenv(".env")
-
-# Celery config
-BROKER_URL = os.environ.get("CELERY_BROKER_URL")
-
-# Make sure OPENAI_API_KEY is set
-try:
-    OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-    logger.info("OPENAI_API_KEY found in environment")
-except KeyError:
-    logger.error("OPENAI_API_KEY not found in environment")
-    raise Exception("OPENAI_API_KEY not found in environment")
-
-# Celery app
-app = Celery(
-    "docker_tasks",
-    broker=BROKER_URL,
-)
-
-# Function to execute a docker job
-@app.task
-def execute_docker_job(module_run: Dict) -> None:
-    """
-    Execute a docker job
-    :param job: Job details
-    :param hub_config: Hub config
-    """
-
-    logger.info(f"Executing docker module run: {module_run}")
-
-    module_run["status"] = "processing"
-    module_run["start_processing_time"] = datetime.now(pytz.utc).isoformat()
-
-    # Remove None values from module run recursively
-    def remove_none_values_from_dict(d):
-        for key, value in list(d.items()):
-            if value is None:
-                del d[key]
-            elif isinstance(value, dict):
-                remove_none_values_from_dict(value)
-        return d
-
-    module_run = remove_none_values_from_dict(module_run)
-
-    # Update the job status to processing
-    asyncio.run(
-        update_db_with_status_sync(
-            module_run=module_run,
-        )
-    )
-    try:
-        run_container_job(
-            job=module_run,
-        )
-
-    except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-
-
-# Function to execute a template job
-@app.task
-def execute_template_job(module_run: Dict) -> None:
-    """
-    Execute a template job
-    :param job: Job details
-    :param hub_config: Hub config
-    """
-
-    logger.info(f"Executing template module run: {module_run}")
-
-    module_run["status"] = "processing"
-    module_run["start_processing_time"] = datetime.now(pytz.utc).isoformat()
-
-    # remove None values from module run
-    module_run = {k: v for k, v in module_run.items() if v is not None}
-
-    # Update the job status to processing
-    asyncio.run(
-        update_db_with_status_sync(
-            module_run=module_run,
-        )
-    )
-
-    try:
-        run_template_job(
-            module_run=module_run,
-        )
-
-    except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-
 
 @app.task
 def run_flow(flow_run: Dict) -> None:

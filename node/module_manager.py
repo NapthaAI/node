@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-from node.celery_worker.subprocess_manager import run_subprocess
+from node.utils import run_subprocess
 from node.utils import get_logger, get_config
 
 logger = get_logger(__name__)

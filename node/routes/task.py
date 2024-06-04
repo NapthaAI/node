@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from node.celery_worker.celery_worker import execute_docker_job, execute_template_job, run_flow
+from node.worker.docker_worker import execute_docker_job
+from node.worker.template_worker import run_flow
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from naptha_sdk.schemas import DockerJob, ModuleRun, ModuleRunInput
@@ -41,12 +42,10 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         logger.info(f"Updated module run: {updated_module_run}")
 
         # Enqueue the module run in Celery
-        if module_run.module_type == "template":
+        if module_run.module_type in ["flow", "template"]:
             run_flow.delay(module_run.dict())
         elif module_run.module_type == "docker":
             execute_docker_job.delay(module_run.dict())
-        elif module_run.module_type == "flow":
-            run_flow.delay(module_run.dict())
         else:
             raise HTTPException(status_code=400, detail="Invalid module type")
 
