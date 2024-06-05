@@ -252,6 +252,10 @@ CREATE module:image_to_image SET name="Image to Image Stable Diffusion", descrip
 CREATE module:chat SET name="Chat", description="A simple chat workflow", author=user:creator1, url="https://github.com/NapthaAI/chat", type="template";
 CREATE module:multiplayer_chat SET name="Multiplayer Chat", description="A multiplayer chat app", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="flow";
 CREATE module:multi_olas_prediction SET name="Multi Olas Prediction", description="An implementation of multi olas prediction", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="flow";
+CREATE module:babyagi SET name="Babyagi", description="A simple babyagi app", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="flow";
+CREATE module:babyagi_task_initiator SET name="Babyagi Task Initiator", description="A simple babyagi task initiator", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_initiator", type="template";
+CREATE module:babyagi_task_executor SET name="Babyagi Task Executor", description="A simple babyagi task executor", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_executor", type="template";
+CREATE module:babyagi_task_finalizer SET name="Babyagi Task Finalizer", description="A simple babyagi task finalizer", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_finalizer", type="template";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
 

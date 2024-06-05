@@ -70,7 +70,7 @@ async def check_model(model):
 
 
 async def setup_ollama():
-    MODELS = ["phi"]
+    MODELS = ["phi", "gemma"]
 
     if not await check_ollama():
         out = await install_ollama()
