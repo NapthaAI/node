@@ -63,7 +63,7 @@ async def on_startup():
     logger.info(f"Node Config: {hub.node_config}")
     create_output_dir(config["BASE_OUTPUT_DIR"])
 
-    await setup_ollama()
+    await setup_ollama(hub.node_config.ollama_models)
 
     # Setup Modules
     module_config_path = Path("../node/storage/hub/packages.json")

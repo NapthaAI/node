@@ -1,4 +1,4 @@
-from typing import Union
+from typing import List, Union
 from pydantic import BaseModel, Field
 
 class NodeConfigSchema(BaseModel):
@@ -8,6 +8,7 @@ class NodeConfigSchema(BaseModel):
     os: str
     arch: str
     ram: int
+    ollama_models: List[str]
     id: Union[str, None] = Field(default=None)
     ip: Union[str, None] = Field(default=None)
     port: Union[int, None] = Field(default=None)

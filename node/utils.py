@@ -73,6 +73,7 @@ def get_config():
     else:
         raise Exception("Unknown node type specified in environment.")
 
+    config["OLLAMA_MODELS"] = [item.strip() for item in os.getenv("OLLAMA_MODELS", "").split(",") if item.strip()]
     config["NUM_GPUS"] = os.getenv("NUM_GPUS", 0)
     config["VRAM"] = os.getenv("VRAM", 0)
     config["OS_INFO"] = platform.system()
@@ -92,6 +93,7 @@ def get_node_config(config):
         ip=config["NODE_IP"],
         port=config["NODE_PORT"],
         routing=config["NODE_ROUTING"],
+        ollama_models=config["OLLAMA_MODELS"],
         num_gpus=config["NUM_GPUS"],
         vram=config["VRAM"],
         os=config["OS_INFO"],
