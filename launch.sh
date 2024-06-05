@@ -293,15 +293,20 @@ check_and_copy_env() {
     fi
 }
 
-generate_key_pair() {
-    read -p "Would you like to generate a key pair? (yes/no): " response
+check_and_set_private_key() {
+    # Check if .env file exists and if PRIVATE_KEY has a value
+    if [[ -f .env ]]; then
+        private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
+        if [[ -n "$private_key_value" ]]; then
+            echo "PRIVATE_KEY already set."
+            return
+        fi
+    else
+        touch .env
+    fi
+    read -p "No value for PRIVATE_KEY set. Would you like to generate one? (yes/no): " response
     if [[ "$response" == "yes" ]]; then
         private_key=$(poetry run python scripts/generate_user.py)
-
-        # Check if .env file exists
-        if [[ ! -f .env ]]; then
-            touch .env
-        fi
 
         # Remove existing PRIVATE_KEY line if it exists and add the new one
         sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=\"$private_key\"\n" .env
@@ -440,7 +445,7 @@ install_docker
 start_rabbitmq
 setup_poetry
 check_and_copy_env
-generate_key_pair
+check_and_set_private_key
 load_env_file
 start_hub_surrealdb
 start_node
