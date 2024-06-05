@@ -28,12 +28,6 @@ git clone https://github.com/NapthaAI/node.git
 cd node
 ```
 
-Copy the env file (and add a valid Stability platform API key, if you would like to use the image modules):
-
-```bash
-cp .env.example .env
-```
-
 Then run the node:
 
 ```bash
@@ -49,7 +43,9 @@ This will install all of the components, including:
 - Docker (isolates Modules from the system)
 - Naptha node (orchestrates ML workflows)
 
- After a few minutes you should see,```[System] Setup complete. Applications are running.```
+The first time you launch, you will be prompted about whether (i) to generate a private key, and (ii) to input a Stability API key, which is needed if you would like to run the image module examples. If you choose not to, you can always edit the .env file manually later.
+
+After a few minutes you should see,```[System] Setup complete. Applications are running.```
 
 Then, in a new terminal window run:
 
