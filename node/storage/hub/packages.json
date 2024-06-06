@@ -1,7 +1,7 @@
 {
     "NapthaAI/chat/0.4": "https://github.com/NapthaAI/module_chat",
     "NapthaAI/create_profile_description/0.8": "https://github.com/NapthaAI/module_create_profile_description",
-    "NapthaAI/generate_image/0.6": "https://github.com/NapthaAI/module_generate_image",
+    "NapthaAI/generate_image/0.7": "https://github.com/NapthaAI/module_generate_image",
     "NapthaAI/hello_world/0.11": "https://github.com/NapthaAI/module_hello_world",
     "NapthaAI/image_to_image/0.5": "https://github.com/NapthaAI/module_image2image",
     "NapthaAI/olas_prediction/0.2": "https://huggingface.co/NapthaAI/olas_prediction",
