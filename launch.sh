@@ -65,8 +65,6 @@ install_ollama() {
         sudo systemctl start ollama
         echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
     fi
-    ollama serve &
-    sleep 1
     echo "Pulling ollama models." | log_with_service_name "Ollama" $RED
     ollama pull phi
 }

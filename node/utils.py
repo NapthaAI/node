@@ -56,8 +56,11 @@ def get_config():
     if base_output_dir is None:
         raise Exception("base_output_dir not found in environment")
     base_output_dir = NODE_PATH / base_output_dir
-
     base_output_dir = base_output_dir.resolve()
+
+    ollama_models = os.getenv("OLLAMA_MODELS")
+    if ollama_models is None:
+        raise Exception("ollama_models not found in environment")
 
     config = {}
     config["PUBLIC_KEY"] = get_public_key(os.getenv("PRIVATE_KEY"))
