@@ -11,7 +11,11 @@ logger = get_logger(__name__)
 
 class Hub:
     def __init__(self, *args, **kwargs):
-        self.endpoint = os.getenv("HUB_ENDPOINT")
+        local_hub = os.getenv("LOCAL_HUB")
+        if local_hub == 'true':
+            self.hub_url = os.getenv("LOCAL_HUB_URL")
+        else:
+            self.hub_url = os.getenv("PUBLIC_HUB_URL")
         self.ns = os.getenv("HUB_NS")
         self.db = os.getenv("HUB_DB")
         self.username = os.getenv("HUB_USERNAME")
@@ -19,7 +23,7 @@ class Hub:
         self.root_user = os.getenv("HUB_ROOT_USER")
         self.root_pass = os.getenv("HUB_ROOT_PASS")
 
-        self.surrealdb = Surreal(self.endpoint)
+        self.surrealdb = Surreal(self.hub_url)
         self.__storedargs = args, kwargs
         self.async_initialized = False
         self.node_config = None

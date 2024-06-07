@@ -271,47 +271,105 @@ install_python312() {
 }
 
 start_hub_surrealdb() {
-    # cp .env.example .env
+    if [ "$LOCAL_HUB" = true ]; then
+        echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
+        
+        PWD=$(pwd)
+        INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
+        chmod +x "$INIT_PYTHON_PATH"
 
-    # Echo start SurrealDB
-    echo "Starting SurrealDB..." | log_with_service_name "SurrealDB" $RED
+        poetry run python "$INIT_PYTHON_PATH"
+    else
+        echo "Not running Hub DB locally..." | log_with_service_name "HubDB" $RED
+    fi
+}
+
+check_and_copy_env() {
+    if [ ! -f .env ]; then
+        cp .env.example .env
+        echo ".env file created from .env.example"
+    else
+        echo ".env file already exists."
+    fi
+}
+
+check_and_set_private_key() {
+    # Check if .env file exists and if PRIVATE_KEY has a value
+    if [[ -f .env ]]; then
+        private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
+        if [[ -n "$private_key_value" ]]; then
+            echo "PRIVATE_KEY already set."
+            return
+        fi
+    else
+        touch .env
+    fi
+    read -p "No value for PRIVATE_KEY set. Would you like to generate one? (yes/no): " response
+    if [[ "$response" == "yes" ]]; then
+        private_key=$(poetry run python scripts/generate_user.py)
+
+        # Remove existing PRIVATE_KEY line if it exists and add the new one
+        sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=\"$private_key\"\n" .env
+
+        echo "Key pair generated and saved to .env file."
+    else
+        echo "Key pair generation aborted."
+    fi
+}
+
+check_and_set_stability_key() {
+    # Check if .env file exists and if STABILITY_API_KEY has a value
+    if [[ -f .env ]]; then
+        stability_key_value=$(grep -oP '(?<=^STABILITY_API_KEY=).*' .env)
+        if [[ -n "$stability_key_value" ]]; then
+            echo "STABILITY_API_KEY already set."
+            return
+        fi
+    else
+        touch .env
+    fi
+    read -p "No value for STABILITY_API_KEY set. You will need this to run the image module examples. Would you like to enter a value for STABILITY_API_KEY? (yes/no): " response
+    if [[ "$response" == "yes" ]]; then
+        read -p "Enter the value for STABILITY_API_KEY: " stability_key
+
+        # Ensure stability_key is not empty
+        if [[ -z "$stability_key" ]]; then
+            echo "No value entered for STABILITY_API_KEY."
+            return
+        fi
+
+        # Remove existing STABILITY_API_KEY line if it exists and add the new one
+        sed -i "/^STABILITY_API_KEY=/c\STABILITY_API_KEY=\"$stability_key\"" .env
+
+        echo "STABILITY_API_KEY has been updated in the .env file."
+    else
+        echo "STABILITY_API_KEY update aborted."
+    fi
+}
+
+
+load_env_file() {
+    CURRENT_DIR=$(pwd)
+    ENV_FILE="$CURRENT_DIR/.env"
     
-    # Correctly get the current working directory
-    PWD=$(pwd)
-    INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
+    # Debug: Check if .env file exists and permissions
+    if [ -f "$ENV_FILE" ]; then
+        echo ".env file found." | log_with_service_name "EnvLoader" "info"
+        # Load .env file
+        set -a
+        . "$ENV_FILE"
+        set +a
 
-    # Ensure the Python script is executable
-    chmod +x "$INIT_PYTHON_PATH"
-
-    echo "Starting SurrealDB..." | log_with_service_name "SurrealDB" $RED
-    # activate the virtual environment in the project directory
-    . .venv/bin/activate
-    poetry run python "$INIT_PYTHON_PATH"
+        . .venv/bin/activate
+    else
+        echo ".env file does not exist in $CURRENT_DIR." | log_with_service_name "EnvLoader" "error"
+        exit 1
+    fi
 }
 
 start_node() {
     # Echo start Node
     echo "Starting Node..." | log_with_service_name "Node" $BLUE
-
-    # Echo current directory to verify script's execution path
-    CURRENT_DIR=$(pwd)
-    echo "Current directory: $CURRENT_DIR" | log_with_service_name "Node" "info"
-    
-    # Define the .env file path
-    ENV_FILE="$CURRENT_DIR/.env"
-    
-    # Debug: Check if .env file exists and permissions
-    if [ -f "$ENV_FILE" ]; then
-        echo ".env file found." | log_with_service_name "Node" "info"
-    else
-        echo ".env file does not exist in $CURRENT_DIR." | log_with_service_name "Node" "error"
-        exit 1
-    fi
-
-    # Load .env file
-    set -a
-    . "$ENV_FILE"
-    set +a
 
     # Get the port from the .env file
     port=${NODE_PORT:-3000} # Default to 3000 if not set
@@ -417,6 +475,10 @@ clean_node
 install_docker
 start_rabbitmq
 setup_poetry
+check_and_copy_env
+check_and_set_private_key
+check_and_set_stability_key
+load_env_file
 start_hub_surrealdb
 start_node
 start_celery_worker

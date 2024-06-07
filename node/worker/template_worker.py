@@ -84,7 +84,7 @@ class FlowEngine:
 
         self.flow_func, self.validated_data, self.cfg = await self.load_flow()
 
-    async def handle_outputs(self, cfg, results):
+    async def handle_ipfs_output(self, cfg, results):
         """
         Handles the outputs of the flow
         """
@@ -93,22 +93,11 @@ class FlowEngine:
             self.cfg["outputs"]["location"] = save_location
 
         if self.cfg["outputs"]["save"]:
-            if self.cfg["outputs"]["location"] == "node":
-                out_msg = {
-                    "output": results
-                }
-            elif self.cfg["outputs"]["location"] == "ipfs":
+            if self.cfg["outputs"]["location"] == "ipfs":
                 out_msg = upload_to_ipfs(self.parameters["output_path"])
                 out_msg = f"IPFS Hash: {out_msg}"
-                out_msg = {
-                    "output": out_msg
-                }
-            else:
-                raise ValueError(f"Invalid location: {cfg['outputs']['location']}")
-        else:
-            out_msg = {
-                "output": results
-            }
+                logger.info(f"Output uploaded to IPFS: {out_msg}")
+                self.flow_run.results = [out_msg]
 
     async def start_run(self):
         logger.info(f"Starting flow run: {self.flow_run}")
@@ -135,8 +124,9 @@ class FlowEngine:
 
         if isinstance(response, dict):
             response = json.dumps(response)
+
         self.flow_run.results = [response]
-        # await self.handle_outputs()
+        await self.handle_ipfs_output(self.cfg, response)
 
     async def complete(self):
         self.flow_run.status = "completed"

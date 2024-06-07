@@ -15,7 +15,7 @@ class DB:
     """Database class to handle all database operations"""
 
     def __init__(self, *args, **kwargs):
-        self.endpoint = os.getenv("DB_ENDPOINT")
+        self.endpoint = os.getenv("DB_URL")
         self.ns = os.getenv("DB_NS")
         self.db = os.getenv("DB_DB")
         self.username = os.getenv("DB_ROOT_USER")
