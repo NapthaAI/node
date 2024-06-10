@@ -13,6 +13,7 @@ class NodeConfigSchema(BaseModel):
     ip: Union[str, None] = Field(default=None)
     port: Union[int, None] = Field(default=None)
     routing: Union[str, None] = Field(default=None)
+    owner: Union[str, None] = Field(default=None)
 
     class Config:
         allow_mutation = True
