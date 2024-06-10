@@ -70,6 +70,8 @@ async def on_startup():
     setup_modules_from_config(module_config_path)
 
     # Register node with hub
+    _, _, user_id = await hub.signin()
+    hub.node_config.owner = f"{user_id}"
     node_details = hub.node_config.dict()
     node_details.pop("id", None)
 
