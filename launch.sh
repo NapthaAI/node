@@ -19,7 +19,11 @@ log_with_service_name() {
 install_surrealdb() {
     echo "Installing SurrealDB..." | log_with_service_name "SurrealDB" $GREEN
 
-    SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
+    if [ "$(uname)" = "Darwin" ]; then
+        SURREALDB_INSTALL_PATH="/Users/$(whoami)/.surrealdb"
+    else
+        SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
+    fi
     SURREALDB_BINARY="$SURREALDB_INSTALL_PATH/surreal"
 
     if [ -f /usr/local/bin/surreal ]; then
@@ -44,7 +48,7 @@ install_surrealdb() {
 }
 
 # Function for manual installation of Ollama
-install_ollama() {
+linux_install_ollama() {
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
@@ -71,8 +75,33 @@ install_ollama() {
     ollama pull phi
 }
 
+darwin_install_ollama() {
+    # Echo start Ollama
+    echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
+
+    if command -v ollama >/dev/null 2>&1; then
+        echo "Ollama is already installed." | log_with_service_name "Ollama" $RED
+        cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
+        launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
+    else
+        echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
+        sudo curl -L https://ollama.ai/download/ollama-linux-amd64 -o /usr/bin/ollama
+        sudo chmod +x /usr/bin/ollama
+        sudo dscl . -create /Users/ollama
+        sudo dscl . -create /Users/ollama UserShell /bin/false
+        sudo dscl . -create /Users/ollama NFSHomeDirectory /usr/share/ollama
+        cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
+        launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
+        echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
+    fi
+    ollama serve &
+    sleep 1
+    echo "Pulling ollama models." | log_with_service_name "Ollama" $RED
+    ollama pull phi
+}
+
 # Function to install Miniforge
-install_miniforge() {
+linux_install_miniforge() {
     
     echo "Checking for Miniforge installation..." | log_with_service_name "Miniforge" $BLUE
 
@@ -116,8 +145,51 @@ install_miniforge() {
     fi
 }
 
+darwin_install_miniforge() {
+    echo "Checking for Miniforge installation..." | log_with_service_name "Miniforge" $BLUE
+
+    # Check if Miniforge is already installed
+    if [ -d "$HOME/miniforge3" ]; then
+        echo "Miniforge is already installed." | log_with_service_name "Miniforge" $BLUE
+    else
+        # Installation process
+        echo "Installing Miniforge..." | log_with_service_name "Miniforge" $BLUE
+        MINIFORGE_INSTALLER="Miniforge3-MacOSX-arm64.sh"
+        curl -sSL "https://github.com/conda-forge/miniforge/releases/latest/download/$MINIFORGE_INSTALLER" -o $MINIFORGE_INSTALLER
+        chmod +x $MINIFORGE_INSTALLER
+        ./$MINIFORGE_INSTALLER -b
+        rm $MINIFORGE_INSTALLER
+        "$HOME/miniforge3/bin/conda" init zsh
+    fi
+
+    # Ensure Miniforge's bin directory is in PATH in .zshrc
+    if ! grep -q 'miniforge3/bin' ~/.zshrc; then
+        echo 'export PATH="$HOME/miniforge3/bin:$PATH"' >> ~/.zshrc
+        source ~/.zshrc
+        echo "Miniforge path added to .zshrc" | log_with_service_name "Miniforge" $BLUE
+    fi
+
+    # Activate Miniforge environment
+    eval "$($HOME/miniforge3/bin/conda shell.zsh hook)"
+    conda activate
+
+    # Check which Python is in use
+    PYTHON_PATH=$(which python)
+    if [[ $PYTHON_PATH == *"$HOME/miniforge3"* ]]; then
+        echo "Miniforge Python is in use." | log_with_service_name "Miniforge" $BLUE
+    else
+        echo "Miniforge Python is not in use. Activating..." | log_with_service_name "Miniforge" $BLUE
+        # Assuming there is a default environment to activate or using base
+        conda activate base
+
+        # Check which Python is in use again
+        PYTHON_PATH=$(which python)
+        echo "Python path: $PYTHON_PATH" | log_with_service_name "Miniforge" $BLUE
+    fi
+}
+
 # Fuction to clean the node
-clean_node() {
+linux_clean_node() {
     # Eccho start cleaning
     echo "Cleaning node..." | log_with_service_name "Node" $NC
 
@@ -133,6 +205,40 @@ clean_node() {
 
 }
 
+darwin_clean_node() {
+    # Echo start cleaning
+    echo "Cleaning node..." | log_with_service_name "Node" $NC
+
+    # Remove node_modules if it exists
+    if [ -d "node_modules" ]; then
+        rm -rf node_modules
+        echo "Removed node_modules directory." | log_with_service_name "Node" $NC
+    fi
+
+    # Check if Homebrew is installed
+    if ! command -v brew >/dev/null 2>&1; then
+        echo "Homebrew not found. Installing Homebrew..." | log_with_service_name "Homebrew" $NC
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+
+    # Install make using Homebrew
+    if ! command -v make >/dev/null 2>&1; then
+        echo "Installing make..." | log_with_service_name "Make" $NC
+        brew install make
+    else
+        echo "Make is already installed." | log_with_service_name "Make" $NC
+    fi
+
+    # Run make pyproject-clean
+    if [ -f "Makefile" ]; then
+        echo "Running make pyproject-clean..." | log_with_service_name "Node" $NC
+        make pyproject-clean
+    else
+        echo "Makefile not found. Skipping make pyproject-clean." | log_with_service_name "Node" $NC
+    fi
+}
+
+
 # Function to check if Docker is running
 check_docker() {
     # Echo start checking Docker
@@ -143,7 +249,7 @@ check_docker() {
     fi
 }
 
-install_docker() {
+linux_install_docker() {
     echo "Checking for Docker installation..." | log_with_service_name "Docker" $RED
     if docker >/dev/null 2>&1; then
         echo "Docker is already installed." | log_with_service_name "Docker" $RED
@@ -187,6 +293,46 @@ install_docker() {
     echo "Docker is running." | log_with_service_name "Docker" $RED
 }
 
+darwin_install_docker() {
+    echo "Checking for Docker installation..." | log_with_service_name "Docker" $RED
+
+    if docker --version >/dev/null 2>&1; then
+        echo "Docker is already installed." | log_with_service_name "Docker" $RED
+    else
+        echo "Installing Docker..." | log_with_service_name "Docker" $RED
+
+        # Check if Homebrew is installed
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew not found. Installing Homebrew..." | log_with_service_name "Homebrew" $NC
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+
+        # Install Docker using Homebrew
+        brew install --cask docker
+
+        echo "Docker installed." | log_with_service_name "Docker" $RED
+        echo "Starting Docker..." | log_with_service_name "Docker" $RED
+
+        # Start Docker.app
+        open /Applications/Docker.app
+
+        # Wait for Docker to start
+        echo "Waiting for Docker to start..."
+        while ! docker system info >/dev/null 2>&1; do
+            sleep 1
+        done
+    fi
+
+    echo "Checking if Docker is running..." | log_with_service_name "Docker" $RED
+    if docker info >/dev/null 2>&1; then
+        echo "Docker is already running." | log_with_service_name "Docker" $RED
+    else
+        echo "Failed to start Docker. Exiting..." | log_with_service_name "Docker" $RED
+        exit 1
+    fi
+
+    echo "Docker is running." | log_with_service_name "Docker" $RED
+}
 
 # Function to start RabbitMQ in Docker
 start_rabbitmq() {
@@ -236,7 +382,12 @@ setup_poetry() {
         echo "Poetry is already installed." | log_with_service_name "Poetry" "$BLUE"
     fi
 
-    export PATH="/home/$(whoami)/.local/bin:$PATH"
+    os="$(uname)"
+    if [ "$os" = "Darwin" ]; then
+        export PATH="/Users/$(whoami)/.local/bin:$PATH"
+    else
+        export PATH="/home/$(whoami)/.local/bin:$PATH"
+    fi
 
     # Configure Poetry to create virtual environments in the project directory
     poetry config virtualenvs.in-project true
@@ -256,10 +407,19 @@ setup_poetry() {
 }
 
 
+# Function to install Python 3.12 on Linux
 install_python312() {
     echo "Checking for Python 3.12 installation..." | log_with_service_name "Python" $NC
     if python3.12 --version >/dev/null 2>&1; then
         echo "Python 3.12 is already installed." | log_with_service_name "Python" $NC
+        return
+    fi
+
+    os="$(uname)"
+    if [ "$os" = "Darwin" ]; then
+        echo "Installing Python 3.12..." | log_with_service_name "Python" $NC
+        brew install python@3.12
+        python3.12 --version
     else
         echo "Installing Python 3.12..." | log_with_service_name "Python" $NC
         sudo add-apt-repository ppa:deadsnakes/ppa -y
@@ -270,6 +430,7 @@ install_python312() {
     echo "Python 3.12 is installed." | log_with_service_name "Python" $NC
 }
 
+# Function to start the Hub SurrealDB
 start_hub_surrealdb() {
     if [ "$LOCAL_HUB" = true ]; then
         echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
@@ -284,6 +445,7 @@ start_hub_surrealdb() {
     fi
 }
 
+# Function to check and copy the .env file
 check_and_copy_env() {
     if [ ! -f .env ]; then
         cp .env.example .env
@@ -293,10 +455,15 @@ check_and_copy_env() {
     fi
 }
 
+# Function to check and set the private key
 check_and_set_private_key() {
-    # Check if .env file exists and if PRIVATE_KEY has a value
+    os="$(uname)"
     if [[ -f .env ]]; then
-        private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
+        if [ "$os" = "Darwin" ]; then
+            private_key_value=$(grep '^PRIVATE_KEY=' .env | awk -F'=' '{print $2}')
+        else
+            private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
+        fi
         if [[ -n "$private_key_value" ]]; then
             echo "PRIVATE_KEY already set."
             return
@@ -304,12 +471,17 @@ check_and_set_private_key() {
     else
         touch .env
     fi
+
     read -p "No value for PRIVATE_KEY set. Would you like to generate one? (yes/no): " response
     if [[ "$response" == "yes" ]]; then
         private_key=$(poetry run python scripts/generate_user.py)
 
         # Remove existing PRIVATE_KEY line if it exists and add the new one
-        sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=\"$private_key\"\n" .env
+        if [ "$os" = "Darwin" ]; then
+            sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=\"$private_key\"/" .env
+        else
+            sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=\"$private_key\"\n" .env
+        fi
 
         echo "Key pair generated and saved to .env file."
     else
@@ -318,9 +490,13 @@ check_and_set_private_key() {
 }
 
 check_and_set_stability_key() {
-    # Check if .env file exists and if STABILITY_API_KEY has a value
+    os="$(uname)"
     if [[ -f .env ]]; then
-        stability_key_value=$(grep -oP '(?<=^STABILITY_API_KEY=).*' .env)
+        if [ "$os" = "Darwin" ]; then
+            stability_key_value=$(grep '^STABILITY_API_KEY=' .env | cut -d '=' -f2)
+        else
+            stability_key_value=$(grep -oP '(?<=^STABILITY_API_KEY=).*' .env)
+        fi
         if [[ -n "$stability_key_value" ]]; then
             echo "STABILITY_API_KEY already set."
             return
@@ -328,6 +504,7 @@ check_and_set_stability_key() {
     else
         touch .env
     fi
+
     read -p "No value for STABILITY_API_KEY set. You will need this to run the image module examples. Would you like to enter a value for STABILITY_API_KEY? (yes/no): " response
     if [[ "$response" == "yes" ]]; then
         read -p "Enter the value for STABILITY_API_KEY: " stability_key
@@ -339,7 +516,11 @@ check_and_set_stability_key() {
         fi
 
         # Remove existing STABILITY_API_KEY line if it exists and add the new one
-        sed -i "/^STABILITY_API_KEY=/c\STABILITY_API_KEY=\"$stability_key\"" .env
+        if [ "$os" = "Darwin" ]; then
+            sed -i '' "s/^STABILITY_API_KEY=.*/STABILITY_API_KEY=\"$stability_key\"/" .env
+        else
+            sed -i "/^STABILITY_API_KEY=/c\STABILITY_API_KEY=\"$stability_key\"" .env
+        fi
 
         echo "STABILITY_API_KEY has been updated in the .env file."
     else
@@ -367,7 +548,7 @@ load_env_file() {
     fi
 }
 
-start_node() {
+linux_start_node() {
     # Echo start Node
     echo "Starting Node..." | log_with_service_name "Node" $BLUE
 
@@ -412,8 +593,71 @@ start_node() {
     fi
 }
 
+darwin_start_node() {
+    # Echo start Node
+    echo "Starting Node..." | log_with_service_name "Node" $BLUE
+
+    # Get the port from the .env file
+    port=${NODE_PORT:-3000} # Default to 3000 if not set
+    echo "Port: $port"
+
+    echo "Starting Node application..." | log_with_service_name "Node" "info"
+
+    # Define paths
+    USER_NAME=$(whoami)
+    CURRENT_DIR=$(pwd)
+    PYTHON_APP_PATH="$CURRENT_DIR/.venv/bin/poetry"
+    WORKING_DIR="$CURRENT_DIR/node"
+    ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
+    PLIST_FILE="com.example.nodeapp.plist"
+    SURRREALDB_PATH="/usr/local/bin"
+
+    # Create the launchd plist file for nodeapp
+    cat <<EOF > ~/Library/LaunchAgents/$PLIST_FILE
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.example.nodeapp</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PYTHON_APP_PATH</string>
+        <string>run</string>
+        <string>python</string>
+        <string>main.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$WORKING_DIR</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ENVIRONMENT_FILE_PATH</key>
+        <string>$ENVIRONMENT_FILE_PATH</string>
+        <key>PATH</key>
+        <string>$SURRREALDB_PATH:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/nodeapp.out</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/nodeapp.err</string>
+</dict>
+</plist>
+EOF
+
+    # Load and start the nodeapp service
+    # launchctl unload ~/Library/LaunchAgents/$PLIST_FILE
+    launchctl load ~/Library/LaunchAgents/$PLIST_FILE
+    launchctl start com.example.nodeapp
+
+    echo "Node application service started successfully." | log_with_service_name "Node" "info"
+}
+
 # Function to start the Celery worker
-start_celery_worker() {
+linux_start_celery_worker() {
     echo "Starting Celery worker..." | log_with_service_name "Celery" $GREEN
     
     # Prepare fields for the service file
@@ -466,22 +710,97 @@ start_celery_worker() {
     cd -
 }
 
+darwin_start_celery_worker() {
+    echo "Starting Celery worker..." | log_with_service_name "Celery" $GREEN
+    
+    # Prepare fields for the service file
+    USER_NAME=$(whoami)
+    CURRENT_DIR=$(pwd)
+    WORKING_DIR="$CURRENT_DIR"
+    ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
+    EXECUTION_PATH="$CURRENT_DIR/celery_worker_start.sh"
+
+    # Write celery_worker_start.sh
+    echo "#!/bin/bash" > celery_worker_start.sh
+    echo "source $CURRENT_DIR/.venv/bin/activate" >> celery_worker_start.sh
+    echo "exec celery -A node.worker.main.app worker --loglevel=info" >> celery_worker_start.sh
+
+    # Make the script executable
+    chmod +x celery_worker_start.sh
+
+    # Create the launchd plist file for Celery worker
+    cat <<EOF > ~/Library/LaunchAgents/com.example.celeryworker.plist
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.example.celeryworker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$EXECUTION_PATH</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$WORKING_DIR</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ENVIRONMENT_FILE_PATH</key>
+        <string>$ENVIRONMENT_FILE_PATH</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/celeryworker.out</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/celeryworker.err</string>
+</dict>
+</plist>
+EOF
+
+    # Load and start the celeryworker service
+    launchctl load ~/Library/LaunchAgents/com.example.celeryworker.plist
+    launchctl start com.example.celeryworker
+
+    echo "Celery worker service started successfully." | log_with_service_name "Celery" "info"
+}
+
+os="$(uname)"
 # Main execution flow
-install_python312
-install_surrealdb
-install_ollama
-install_miniforge
-clean_node
-install_docker
-start_rabbitmq
-setup_poetry
-check_and_copy_env
-check_and_set_private_key
-check_and_set_stability_key
-load_env_file
-start_hub_surrealdb
-start_node
-start_celery_worker
+if [ "$os" = "Darwin" ]; then
+    install_python312
+    install_surrealdb
+    darwin_install_ollama
+    darwin_install_miniforge
+    darwin_clean_node
+    darwin_install_docker
+    start_rabbitmq
+    setup_poetry
+    check_and_copy_env
+    check_and_set_private_key
+    check_and_set_stability_key
+    load_env_file
+    start_hub_surrealdb
+    darwin_start_node
+    darwin_start_celery_worker
+else
+    install_python312
+    install_surrealdb
+    linux_install_ollama
+    linux_install_miniforge
+    linux_clean_node
+    linux_install_docker
+    start_rabbitmq
+    setup_poetry
+    check_and_copy_env
+    check_and_set_private_key
+    check_and_set_stability_key
+    load_env_file
+    start_hub_surrealdb
+    linux_start_node
+    linux_start_celery_worker
+fi
 
 echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN
 
