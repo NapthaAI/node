@@ -766,9 +766,29 @@ EOF
     echo "Celery worker service started successfully." | log_with_service_name "Celery" "info"
 }
 
+print_logo(){
+    echo """
+                ▄█▀█                  
+            █▀█▄▀██▀   ▄█▀█         
+        ▄▄▄ █▄█▀ ██    ▀█▄█▀        
+    ▄▄▄ █▄█  ██  ██ ▄▄▄ ██  ▄▄     
+   ▐█ █▌ ██  ██  ██ █▄█ ██ █▄▐█       
+ ▄▄  ██  ██  ██  ██ ▐█  ██  ██  ▄▄    ███╗   ██╗ █████╗ ██████╗ ████████╗██╗  ██╗ █████╗ 
+█▌ █ ██  ██  ██  ██ ▐█  ██  ██ █▌▐█   ████╗  ██║██╔══██╗██╔══██╗╚══██╔══╝██║  ██║██╔══██╗
+ ██  ██  ██  ██  ██▄█▀  ██  ██  ██    ██╔██╗ ██║███████║██████╔╝   ██║   ███████║███████║
+ ██  ██  ▀██  ▀  ██▀▀  ▄██ ▐██  ██    ██║╚██╗██║██╔══██║██╔═══╝    ██║   ██╔══██║██╔══██║
+ ██  ▀██▄  ▀██▄  ██  ▄█▀▀ ▄██▀  ██    ██║ ╚████║██║  ██║██║        ██║   ██║  ██║██║  ██║
+  ▀██▄ ▀███  ██  ██ ██  ▄██▀ ▄██▀     ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
+    ▀██▄ ██  ██  ██ ██  ██  ▄█▀                       Decentralized Multi-Agent Workflows
+       ▀ ██  ██  ██ ██  █▌ ▀                                                www.naptha.ai
+          ▀▀▀██  ██ ███▀▀                                                    
+    """
+}
+
 os="$(uname)"
 # Main execution flow
 if [ "$os" = "Darwin" ]; then
+    print_logo
     install_python312
     install_surrealdb
     darwin_install_ollama
@@ -785,6 +805,7 @@ if [ "$os" = "Darwin" ]; then
     darwin_start_node
     darwin_start_celery_worker
 else
+    print_logo
     install_python312
     install_surrealdb
     linux_install_ollama
