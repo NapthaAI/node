@@ -1,4 +1,3 @@
-from fastapi import APIRouter, HTTPException
 from node.worker.docker_worker import execute_docker_module
 from node.worker.template_worker import run_flow
 from node.storage.hub.hub import Hub
@@ -9,13 +8,10 @@ import traceback
 
 logger = get_logger(__name__)
 
-router = APIRouter()
-
 BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 
 # Endpoint to receive a task
-@router.post("/CreateTask")
 async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
     """
     Create a Task
@@ -30,7 +26,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         logger.info(f"Found module: {module}")
 
         if not module:
-            raise HTTPException(status_code=404, detail="Module not found")
+            raise Exception("Module not found")
 
         module_run_input.module_type = module["type"]
 
@@ -50,7 +46,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         elif module_run.module_type == "docker":
             execute_docker_module.delay(module_run.dict())
         else:
-            raise HTTPException(status_code=400, detail="Invalid module type")
+            raise Exception("Invalid module type")
 
         return module_run
 
@@ -58,10 +54,9 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         logger.error(f"Failed to run module: {str(e)}")
         error_details = traceback.format_exc()
         logger.error(f"Full traceback: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run}")
+        raise Exception(f"Failed to run module: {module_run}")
 
 
-@router.post("/CheckTask")
 async def check_task(module_run: ModuleRun) -> ModuleRun:
     """
     Check a task

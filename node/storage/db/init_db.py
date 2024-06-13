@@ -11,6 +11,10 @@ file_path = os.path.dirname(os.path.realpath(__file__))
 surql_path = os.path.join(file_path, "data_structures")
 
 
+logger.info(f"DB root pass: {os.getenv('DB_ROOT_PASS')}")
+logger.info(f"DB root user: {os.getenv('DB_ROOT_USER')}")
+
+
 def import_surql():
     """Import SURQL files to the database"""
     logger.info("Importing SURQL files")

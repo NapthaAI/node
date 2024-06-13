@@ -1,22 +1,30 @@
+import os
+import json
+import asyncio
+import websockets
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from pathlib import Path
 
 from node.storage.db.init_db import init_db
 from node.storage.hub.hub import Hub
 
-# from node.storage.hub.init_hub import init_hub
 from node.module_manager import setup_modules_from_config
 from node.ollama.init_ollama import setup_ollama
-from node.routes.task import router as task_router
-from node.routes.storage import router as storage_router
-from node.routes.user import router as user_router
-from node.routes.orchestration import router as orchestration_router
+from node.comms.http_server.task import router as http_server_router
+from node.comms.http_server.storage import router as http_server_storage_router
+from node.comms.http_server.user import router as http_server_user_router
+from node.comms.http_server.orchestration import router as http_server_orchestration_router
+from node.comms.ws_server.task import create_task_ws, check_task_ws
+from node.comms.ws_server.user import register_user_ws, check_user_ws
+from node.comms.ws_server.orchestration import create_task_run_ws, update_task_run_ws
+from node.comms.ws_server.storage import write_to_ipfs_ws, read_from_ipfs_ws, write_storage_ws, read_storage_ws
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
 
+
 logger = get_logger(__name__)
+
 
 # Get file path
 FILE_PATH = Path(__file__).resolve()
@@ -25,15 +33,18 @@ PARENT_DIR = FILE_PATH.parent
 
 # Setup REST API
 app = FastAPI()
-app.include_router(task_router)
-app.include_router(storage_router)
-app.include_router(user_router)
-app.include_router(orchestration_router)
+app.include_router(http_server_router)
+app.include_router(http_server_storage_router)
+app.include_router(http_server_user_router)
+app.include_router(http_server_orchestration_router)
+
 
 # Setup CORS
 origins = [
     "*",
 ]
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,45 +53,118 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # init the database
 init_db()
+
+
 config = get_config()
+
 
 hub = None
 
 
+async def websocket_handler(uri):
+    """Handles persistent WebSocket connection."""
+    async with websockets.connect(uri) as websocket:
+        logger.info("Connected to relay server")
+        try:
+            while True:
+                try:
+                    message = await websocket.recv()
+                    message = json.loads(message)
+                    logger.info(f"Received message from relay server: {message}")
+                    if message["path"] == "create_task":
+                        await create_task_ws(
+                            websocket=websocket, 
+                            message=message
+                        )
+                    elif message["path"] == "check_task":
+                        await check_task_ws(
+                            websocket=websocket, 
+                            message=message
+                        )
+                    elif message["path"] == "check_user":
+                        await check_user_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "register_user":
+                        await register_user_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "create_task_run":
+                        await create_task_run_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "update_task_run":
+                        await update_task_run_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "write_to_ipfs":
+                        await write_to_ipfs_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "read_from_ipfs":
+                        await read_from_ipfs_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "write_storage":
+                        await write_storage_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    elif message["path"] == "read_storage":
+                        await read_storage_ws(
+                            websocket=websocket,
+                            message=message
+                        )
+                    else:
+                        logger.error(f"Unknown message path: {message}")
+                        await websocket.send(json.dumps({
+                            'target_node': message['source_node'],
+                            'source_node': message['target_node'],
+                            'params': {'error': 'Unknown message path'}
+                        }))
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    response = {
+                        'target_node': message['source_node'],
+                        'source_node': message['target_node'],
+                        'params': {'error': str(e)}
+                    }
+                    await websocket.send(json.dumps(response))
+        except websockets.ConnectionClosed:
+            logger.error("WebSocket connection closed unexpectedly")
+
+
 @app.on_event("startup")
 async def on_startup():
-    """
-    Register the node with the hub on startup
-    """
     global hub
     hub = await Hub()
-    logger.info(f"Token: {hub.token}")
-    logger.info(f"User ID: {hub.user_id}")
-
     hub.node_config = get_node_config(config)
-    logger.info(f"Node Config: {hub.node_config}")
     create_output_dir(config["BASE_OUTPUT_DIR"])
-
     await setup_ollama(hub.node_config.ollama_models)
+    setup_modules_from_config(Path("../node/storage/hub/packages.json"))
 
-    # Setup Modules
-    module_config_path = Path("../node/storage/hub/packages.json")
-    setup_modules_from_config(module_config_path)
-
-    # Register node with hub
     _, _, user_id = await hub.signin()
     hub.node_config.owner = f"{user_id}"
     node_details = hub.node_config.dict()
     node_details.pop("id", None)
-
     node = await hub.create_node(node_details)
+
     if node is None:
         raise Exception("Failed to register node")
 
-    logger.info(f"Node: {node}")
-    logger.info(f"Node config: {hub.node_config}")
+    if not node_details["ip"]:
+        logger.info("Node is indirect")
+        uri = f"{node_details['routing']}/connect/{node[0]['id'].split(':')[-1]}"
+        asyncio.create_task(websocket_handler(uri))
 
 
 # Unregister the node with the hub on shutdown

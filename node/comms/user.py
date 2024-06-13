@@ -7,7 +7,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-@router.post("/RegisterUser")
+
 async def register_user(user_input: Dict) -> Dict:
     logger.info(f"Received request to register user.")
     db = await DB()
@@ -15,7 +15,7 @@ async def register_user(user_input: Dict) -> Dict:
     logger.info(f"Created user: {user}")
     return user
 
-@router.post("/CheckUser")
+
 async def check_user(user_input: Dict) -> Dict:
     logger.info(f"Received request to check user.")
     user_input['id'] = f"user:{user_input['public_key']}"
