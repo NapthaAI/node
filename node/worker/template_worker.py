@@ -55,14 +55,22 @@ class FlowEngine:
         self.flow = None
         self.flow_name = flow_run.module_name
         self.parameters = flow_run.module_params
-        self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
+        self.node_type = os.getenv("NODE_TYPE")
+        if self.node_type == "direct":
+            self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
+            logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
+        else:
+            self.orchestrator_node = Node(
+                indirect_node_id=os.getenv("INDIRECT_NODE_ID"),
+                routing_url=os.getenv("NODE_ROUTING")
+            )
 
         if flow_run.worker_nodes is not None:
             self.worker_nodes = [Node(worker_node) for worker_node in flow_run.worker_nodes]
         else:
             self.worker_nodes = None
 
-        logger.info(f"Worker Nodes: {self.worker_nodes}")
+        logger.info(f"Worker Nodes: {[node.node_url for node in self.worker_nodes]}")
 
         self.consumer = {
             "public_key": flow_run.consumer_id.split(':')[1],
