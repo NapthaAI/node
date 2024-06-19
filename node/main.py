@@ -66,7 +66,7 @@ hub = None
 
 async def websocket_handler(uri):
     """Handles persistent WebSocket connection."""
-    async with websockets.connect(uri) as websocket:
+    async with websockets.connect(uri, ping_interval=None) as websocket:
         logger.info("Connected to relay server")
         try:
             while True:
@@ -74,6 +74,10 @@ async def websocket_handler(uri):
                     message = await websocket.recv()
                     message = json.loads(message)
                     logger.info(f"Received message from relay server: {message}")
+
+                    if message['source_node'] == message['target_node']:
+                        logger.info(f"Source Node is same as target node")
+                        
                     if message["path"] == "create_task":
                         await create_task_ws(
                             websocket=websocket, 
@@ -141,6 +145,13 @@ async def websocket_handler(uri):
                     await websocket.send(json.dumps(response))
         except websockets.ConnectionClosed:
             logger.error("WebSocket connection closed unexpectedly")
+        except Exception as err:
+            logger.error(f"{err}")
+            pass
+
+@app.get("/node_id")
+async def get_node_id():
+    return os.environ["NODE_ID"]
 
 
 @app.on_event("startup")
@@ -157,13 +168,14 @@ async def on_startup():
     node_details = hub.node_config.dict()
     node_details.pop("id", None)
     node = await hub.create_node(node_details)
-
+    os.environ["NODE_ID"] = node[0]["id"].split(":")[1]
+    logger.info(f"Node ID: {os.environ['NODE_ID']}")
     if node is None:
         raise Exception("Failed to register node")
 
     if not node_details["ip"]:
         logger.info("Node is indirect")
-        uri = f"{node_details['routing']}/connect/{node[0]['id'].split(':')[-1]}"
+        uri = f"{node_details['routing']}/ws/{node[0]['id'].split(':')[-1]}"
         asyncio.create_task(websocket_handler(uri))
 
 
