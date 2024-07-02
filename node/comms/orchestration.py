@@ -1,4 +1,3 @@
-from fastapi import APIRouter
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.storage.db.db import DB
 from node.utils import get_logger
@@ -6,9 +5,7 @@ from typing import Dict
 
 logger = get_logger(__name__)
 
-router = APIRouter()
 
-@router.post("/CreateTaskRun")
 async def create_task_run(module_run_input: ModuleRunInput) -> ModuleRun:
     logger.info(f"Creating module run for worker node {module_run_input.worker_nodes[0]}: {module_run_input}")
     db = await DB()
@@ -16,7 +13,7 @@ async def create_task_run(module_run_input: ModuleRunInput) -> ModuleRun:
     logger.info(f"Created module run for worker node {module_run_input.worker_nodes[0]}: {module_run}")
     return module_run
 
-@router.post("/UpdateTaskRun")
+
 async def update_task_run(module_run: ModuleRun) -> ModuleRun:
     logger.info(f"Updating module run for worker node {module_run.worker_nodes[0]}: {module_run}")
     db = await DB()

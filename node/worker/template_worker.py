@@ -7,6 +7,7 @@ import json
 import os
 import pytz
 import time
+import requests
 import traceback
 from typing import Dict
 from node.worker.main import app
@@ -55,7 +56,18 @@ class FlowEngine:
         self.flow = None
         self.flow_name = flow_run.module_name
         self.parameters = flow_run.module_params
-        self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
+        self.node_type = os.getenv("NODE_TYPE")
+        if self.node_type == "direct":
+            self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
+            logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
+        else:
+            node_id = requests.get("http://localhost:7001/node_id").json()
+            if not node_id:
+                raise ValueError("NODE_ID environment variable is not set")
+            self.orchestrator_node = Node(
+                indirect_node_id=node_id,
+                routing_url=os.getenv("NODE_ROUTING")
+            )
 
         if flow_run.worker_nodes is not None:
             self.worker_nodes = [Node(worker_node) for worker_node in flow_run.worker_nodes]

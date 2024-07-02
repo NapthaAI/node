@@ -17,5 +17,3 @@ class NodeConfigSchema(BaseModel):
 
     class Config:
         allow_mutation = True
-
-

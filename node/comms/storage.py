@@ -1,10 +1,6 @@
 import os
 import io
-from fastapi import APIRouter, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
-from starlette.responses import Response
 from node.utils import get_logger, get_config
-import tarfile
 from uuid import uuid4
 from pathlib import Path
 import ipfshttpclient
@@ -14,7 +10,6 @@ import tempfile
 
 logger = get_logger(__name__)
 
-router = APIRouter()
 
 BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
@@ -33,8 +28,7 @@ def zip_dir(directory_path: str) -> io.BytesIO:
     return zip_buffer
 
 
-@router.post("/write_storage")
-async def write_storage(file: UploadFile = File(...)):
+async def write_storage(file):
     """Write files to the storage."""
     logger.info(f"Received request to write files to storage: {file.filename}")
     folder_name = uuid4().hex
@@ -55,10 +49,8 @@ async def write_storage(file: UploadFile = File(...)):
     else:
         pass
 
-    return JSONResponse(
-        status_code=201,
-        content={"message": "Files written to storage", "folder_id": folder_name},
-    )
+    return (201, {"message": "Files written to storage", "folder_id": folder_name})
+
 
 def zip_directory(file_path, zip_path):
     """Utility function to recursively zip the content of a directory and its subdirectories, 
@@ -72,7 +64,7 @@ def zip_directory(file_path, zip_path):
                 arcname = os.path.join(*Path(full_path).parts[base_path_len:])
                 zipf.write(full_path, arcname)
 
-@router.get("/read_storage/{job_id}")
+
 async def read_storage(job_id: str):
     """Get the output directory for a job_id and serve it as a tar.gz file."""
     logger.info(f"Received request for output dir for job: {job_id}")
@@ -86,23 +78,22 @@ async def read_storage(job_id: str):
 
     if not output_path.exists():
         logger.error(f"Output directory not found for job: {job_id}")
-        raise HTTPException(status_code=404, detail="Output directory not found")
+        return (404, {"message": "Output directory not found"})
 
     # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmpfile:
         zip_directory(output_path, tmpfile.name)
         tmpfile.close()
 
-        return FileResponse(
-            path=tmpfile.name,
-            media_type="application/zip",
-            filename=f"{job_id}.zip",
-            headers={"Content-Disposition": f"attachment; filename={job_id}.zip"}
-        )
+        return (200, {
+            "path": tmpfile.name,
+            "media_type": "application/zip",
+            "filename": f"{job_id}.zip",
+            "headers": {"Content-Disposition": f"attachment; filename={job_id}.zip"}
+        })
 
 
-@router.post("/write_ipfs")
-async def write_to_ipfs(file: UploadFile = File(...)):
+async def write_to_ipfs(file):
     """Write a file to IPFS and pin it."""
     try:
         logger.info(f"Received request to write file to IPFS: {file.filename}")
@@ -111,11 +102,9 @@ async def write_to_ipfs(file: UploadFile = File(...)):
         IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
         if not IPFS_GATEWAY_URL:
             logger.error("IPFS_GATEWAY_URL not found in environment")
-            raise HTTPException(
-                status_code=500, detail="IPFS_GATEWAY_URL not found in environment"
-            )
 
-        # Connect to IPFS node
+            return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
+
         client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
 
         # Create a temporary file to ensure compatibility with IPFS
@@ -137,21 +126,16 @@ async def write_to_ipfs(file: UploadFile = File(...)):
         os.unlink(tmpfile_name)
 
         # Result['Hash'] contains the IPFS hash of the uploaded file
-        return JSONResponse(
-            status_code=201,
-            content={
+        return (201, {
                 "message": "File written and pinned to IPFS",
                 "ipfs_hash": result["Hash"],
-            },
+            }
         )
     except Exception as e:
         logger.error(f"Error writing and pinning file to IPFS: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error writing and pinning file to IPFS: {e}"
-        )
+        return (500, {"message": f"Error writing and pinning file to IPFS: {e}"})
 
 
-@router.get("/read_ipfs/{ipfs_hash}")
 async def read_from_ipfs(ipfs_hash: str):
     """Read a file from IPFS."""
     try:
@@ -160,9 +144,7 @@ async def read_from_ipfs(ipfs_hash: str):
         IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
         if not IPFS_GATEWAY_URL:
             logger.error("IPFS_GATEWAY_URL not found in environment")
-            raise HTTPException(
-                status_code=500, detail="IPFS_GATEWAY_URL not found in environment"
-            )
+            return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
 
         client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
 
@@ -175,23 +157,24 @@ async def read_from_ipfs(ipfs_hash: str):
         if os.path.isdir(file_path):
             # It's a directory, zip it
             zip_buffer = zip_dir(file_path)
-            return Response(
-                content=zip_buffer.getvalue(),
-                media_type="application/zip",
-                headers={
+            return (200, {
+                "content": zip_buffer.getvalue(),
+                "media_type": "application/zip",
+                "headers": {
                     "Content-Disposition": f"attachment; filename={ipfs_hash}.zip"
                 },
-            )
+            })
         else:
             # It's a single file, stream it directly
-            return FileResponse(
-                path=file_path,
-                media_type="application/octet-stream",
-                filename=os.path.basename(file_path),
-            )
+            return (200, {
+                "path": file_path,
+                "media_type": "application/octet-stream",
+                "filename": os.path.basename(file_path),
+                "headers": {
+                    "Content-Disposition": f"attachment; filename={os.path.basename(file_path)}"
+                },
+            })
 
     except Exception as e:
         logger.error(f"Error reading file from IPFS: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Error reading file from IPFS: {e}"
-        )
+        return (500, {"message": f"Error reading file from IPFS: {e}"})
