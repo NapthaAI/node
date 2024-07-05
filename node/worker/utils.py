@@ -73,6 +73,18 @@ def upload_to_ipfs(input_dir: str) -> str:
     client.pin.add(ipfs_hash)
     return ipfs_hash
 
+def upload_json_string_to_ipfs(json_string: str) -> str:
+    """Upload a json string to IPFS. And pin it."""
+    logger.info(f"Uploading json string to IPFS")
+    IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
+    if not IPFS_GATEWAY_URL:
+        raise Exception("IPFS_GATEWAY_URL is not set in the environment")
+    client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
+    res = client.add_str(json_string)
+    logger.info(f"IPFS add response: {res}")
+    client.pin.add(res)
+    return res
+
 async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     """
     Update the DB with the module run status synchronously

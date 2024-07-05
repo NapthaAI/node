@@ -18,7 +18,8 @@ from node.worker.utils import (
     prepare_input_dir, 
     update_db_with_status_sync, 
     upload_to_ipfs, 
-    handle_ipfs_input
+    handle_ipfs_input,
+    upload_json_string_to_ipfs
 )
 from naptha_sdk.client.node import Node
 from naptha_sdk.schemas import ModuleRun
@@ -166,6 +167,13 @@ class FlowEngine:
         InputSchema = getattr(schemas_module, "InputSchema")
         return InputSchema(**self.parameters)
 
+    async def upload_input_params_to_ipfs(self, validated_data):
+        """
+        Uploads the input parameters to IPFS
+        """
+        ipfs_hash = upload_json_string_to_ipfs(validated_data.model_dump_json())
+        return ipfs_hash
+
     async def load_flow(self):
         """
         Loads the flow from the module and returns the workflow
@@ -184,6 +192,7 @@ class FlowEngine:
                 os.makedirs(output_path)
 
         validated_data = self.load_and_validate_input_schema()
+        self.flow_run.input_schema_ipfs_hash = await self.upload_input_params_to_ipfs(validated_data)
         tn = self.flow_name.replace("-", "_")
         entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
         main_module = importlib.import_module(f"{tn}.run")
