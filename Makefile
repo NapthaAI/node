@@ -44,3 +44,11 @@ remove:
 	@rm -rf .venv
 	@rm -rf node/storage/hub/modules
 	@echo "Cleanup completed."
+
+# Target to remove hub.db and db.db
+remove-db:
+	@echo "Removing hub.db and db.db..."
+	cd $(shell pwd) && \
+	db_path=$$PWD/node/storage/db/db.db && \
+	hub_path=$$PWD/node/storage/hub/hub.db && \
+	rm -rf $$db_path $$hub_path

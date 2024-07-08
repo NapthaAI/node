@@ -30,3 +30,7 @@ DEFINE FIELD error_message ON module_run TYPE option<string | null>;
 DEFINE FIELD worker_nodes ON module_run FLEXIBLE TYPE option<array | null>;
 DEFINE FIELD child_runs ON module_run FLEXIBLE TYPE array DEFAULT [];
 DEFINE FIELD parent_runs ON module_run FLEXIBLE TYPE array DEFAULT [];
+DEFINE FIELD created_time ON module_run FLEXIBLE TYPE option<datetime | null>;
+DEFINE FIELD start_processing_time ON module_run FLEXIBLE TYPE option<datetime | null>;
+DEFINE FIELD completed_time ON module_run FLEXIBLE TYPE option<datetime | null>;
+DEFINE FIELD duration ON module_run FLEXIBLE TYPE option<number | null>;

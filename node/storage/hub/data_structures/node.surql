@@ -11,5 +11,5 @@ DEFINE FIELD vram ON node TYPE option<number>;
 DEFINE FIELD ram ON node TYPE option<number>;
 DEFINE FIELD ip ON node TYPE option<string|null>;
 DEFINE FIELD port ON node TYPE option<number|null>;
-DEFINE FIELD routing ON node TYPE option<record<node>|null>;
+DEFINE FIELD routing ON node TYPE option<string|null>;
 DEFINE FIELD owner ON node TYPE record<user>;
