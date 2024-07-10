@@ -247,6 +247,114 @@ check_docker() {
     fi
 }
 
+linux_install_docker() {
+    echo "Checking for Docker installation..." | log_with_service_name "Docker" $RED
+    
+    set -a
+    source .env
+    set +a
+
+    if [ "$DOCKER_JOBS" = "true" ]; then
+        echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
+    else
+        echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
+        return
+    fi
+
+    if docker >/dev/null 2>&1; then
+        echo "Docker is already installed." | log_with_service_name "Docker" $RED
+    else
+        echo "Installing Docker." | log_with_service_name "Docker" $RED
+
+        sudo apt-get update
+        sudo apt-get install ca-certificates curl
+        sudo install -m 0755 -d /etc/apt/keyrings
+        sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+        sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+        # Add the repository to Apt sources:
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo apt-get update
+
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+        sudo chmod 666 /var/run/docker.sock
+
+        echo "Docker installed." | log_with_service_name "Docker" $RED
+        echo "Starting Docker." | log_with_service_name "Docker" $RED
+    fi
+
+    echo "Checking if Docker is running..." | log_with_service_name "Docker" $RED
+    if docker info >/dev/null 2>&1; then
+        echo "Docker is already running." | log_with_service_name "Docker" $RED
+    else
+        echo "Starting Docker." | log_with_service_name "Docker" $RED
+        sudo systemctl enable docker.service
+        sudo systemctl start docker
+    fi
+
+    if ! sudo docker info >/dev/null 2>&1; then
+        echo "Docker still does not seem to be running. Exiting..." | log_with_service_name "Docker" $RED
+        exit 1
+    fi    
+
+    echo "Docker is running." | log_with_service_name "Docker" $RED
+}
+
+darwin_install_docker() {
+    echo "Checking for Docker installation..." | log_with_service_name "Docker" $RED
+    
+    set -a
+    source .env
+    set +a
+
+    if [ "$DOCKER_JOBS" = "true" ]; then
+        echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
+    else
+        echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
+        return
+    fi
+
+    if docker --version >/dev/null 2>&1; then
+        echo "Docker is already installed." | log_with_service_name "Docker" $RED
+    else
+        echo "Installing Docker..." | log_with_service_name "Docker" $RED
+
+        # Check if Homebrew is installed
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew not found. Installing Homebrew..." | log_with_service_name "Homebrew" $NC
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+
+        # Install Docker using Homebrew
+        brew install --cask docker
+
+        echo "Docker installed." | log_with_service_name "Docker" $RED
+        echo "Starting Docker..." | log_with_service_name "Docker" $RED
+
+        # Start Docker.app
+        open /Applications/Docker.app
+
+        # Wait for Docker to start
+        echo "Waiting for Docker to start..."
+        while ! docker system info >/dev/null 2>&1; do
+            sleep 1
+        done
+    fi
+
+    echo "Checking if Docker is running..." | log_with_service_name "Docker" $RED
+    if docker info >/dev/null 2>&1; then
+        echo "Docker is already running." | log_with_service_name "Docker" $RED
+    else
+        echo "Failed to start Docker. Exiting..." | log_with_service_name "Docker" $RED
+        exit 1
+    fi
+
+    echo "Docker is running." | log_with_service_name "Docker" $RED
+}
+
 # Function to start RabbitMQ on Linux
 linux_start_rabbitmq() {
     echo "Starting RabbitMQ on Linux..." | log_with_service_name "RabbitMQ" $GREEN
@@ -739,6 +847,7 @@ if [ "$os" = "Darwin" ]; then
     install_surrealdb
     darwin_install_ollama
     darwin_install_miniforge
+    darwin_install_docker
     darwin_clean_node
     darwin_start_rabbitmq
     setup_poetry
@@ -755,6 +864,7 @@ else
     install_surrealdb
     linux_install_ollama
     linux_install_miniforge
+    linux_install_docker
     linux_clean_node
     linux_start_rabbitmq
     setup_poetry

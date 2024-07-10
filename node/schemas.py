@@ -9,6 +9,7 @@ class NodeConfigSchema(BaseModel):
     arch: str
     ram: int
     ollama_models: List[str]
+    docker_jobs: bool
     id: Union[str, None] = Field(default=None)
     ip: Union[str, None] = Field(default=None)
     port: Union[int, None] = Field(default=None)
