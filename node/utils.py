@@ -86,6 +86,7 @@ def get_config():
     config["MODULES_PATH"] = os.getenv("MODULES_PATH", None)
     config["HUB_USERNAME"] = os.getenv("HUB_USERNAME")
     config["HUB_PASSWORD"] = os.getenv("HUB_PASSWORD")
+    config["DOCKER_JOBS"] = os.getenv("DOCKER_JOBS", "False")
     return config
 
 
@@ -103,6 +104,7 @@ def get_node_config(config):
         arch=config["ARCH_INFO"],
         ram=config["RAM_INFO"],
         id=None,
+        docker_jobs=config["DOCKER_JOBS"],
     )
     return node_config
 

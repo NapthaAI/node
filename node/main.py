@@ -208,10 +208,8 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=port,
-        log_level="info",
-        timeout_keep_alive=15,  # Keep-alive timeout
-        # http_lifespan=60,  # HTTP lifespan timeout
-        # limit_concurrency=100,  # Limit on the number of concurrent connections
-        # backlog=2048,  # Maximum number of pending connections
-        # shutdown_timeout=30  # Graceful shutdown timeout
+        log_level="debug",
+        timeout_keep_alive=300,  # Increase the keep-alive timeout to 300 seconds
+        limit_concurrency=200,  # Limit the number of concurrent connections to 200
+        backlog=4096,  # Increase the maximum number of pending connections to 4096
     )

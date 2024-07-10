@@ -249,6 +249,18 @@ check_docker() {
 
 linux_install_docker() {
     echo "Checking for Docker installation..." | log_with_service_name "Docker" $RED
+    
+    set -a
+    source .env
+    set +a
+
+    if [ "$DOCKER_JOBS" = "true" ]; then
+        echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
+    else
+        echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
+        return
+    fi
+
     if docker >/dev/null 2>&1; then
         echo "Docker is already installed." | log_with_service_name "Docker" $RED
     else
@@ -293,6 +305,17 @@ linux_install_docker() {
 
 darwin_install_docker() {
     echo "Checking for Docker installation..." | log_with_service_name "Docker" $RED
+    
+    set -a
+    source .env
+    set +a
+
+    if [ "$DOCKER_JOBS" = "true" ]; then
+        echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
+    else
+        echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
+        return
+    fi
 
     if docker --version >/dev/null 2>&1; then
         echo "Docker is already installed." | log_with_service_name "Docker" $RED
@@ -332,33 +355,66 @@ darwin_install_docker() {
     echo "Docker is running." | log_with_service_name "Docker" $RED
 }
 
-# Function to start RabbitMQ in Docker
-start_rabbitmq() {
-    # Echo start RabbitMQ
-    echo "Starting RabbitMQ..." | log_with_service_name "RabbitMQ" $GREEN
+# Function to start RabbitMQ on Linux
+linux_start_rabbitmq() {
+    echo "Starting RabbitMQ on Linux..." | log_with_service_name "RabbitMQ" $GREEN
+    # Load the .env file
+    set -a
+    source .env
+    set +a
 
-    # Check if RabbitMQ container exists and is running
-    if sudo docker ps --filter "name=rabbitmq" --filter "status=running" | grep -q rabbitmq; then
-        echo "RabbitMQ is already running." | log_with_service_name "RabbitMQ" $GREEN
-        return
-    fi
+    # Install RabbitMQ
+    sudo apt-get update
+    sudo apt-get install -y rabbitmq-server
 
-    # Check if RabbitMQ container exists but stopped
-    if sudo docker ps --all --filter "name=rabbitmq" | grep -q rabbitmq; then
-        echo "RabbitMQ container exists but stopped. Starting it..." | log_with_service_name "RabbitMQ" $GREEN
-        sudo docker start rabbitmq
+    # Enable the management plugin
+    sudo rabbitmq-plugins enable rabbitmq_management
+
+    # Start RabbitMQ
+    sudo systemctl enable rabbitmq-server
+    sudo systemctl start rabbitmq-server
+
+    # Check if the user already exists
+    if sudo rabbitmqctl list_users | grep -q "^$RMQ_USER"; then
+        echo "User '$RMQ_USER' already exists. Skipping user creation."
     else
-        echo "Starting RabbitMQ in Docker..." | log_with_service_name "RabbitMQ" $GREEN
-        sudo docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
-        sleep 10
-        sudo docker start rabbitmq
+        # Create a new user with the credentials from .env
+        sudo rabbitmqctl add_user "$RMQ_USER" "$RMQ_PASSWORD"
+        sudo rabbitmqctl set_user_tags "$RMQ_USER" administrator
+        sudo rabbitmqctl set_permissions -p / "$RMQ_USER" ".*" ".*" ".*"
+    fi
+    echo "RabbitMQ started with management console on default port." | log_with_service_name "RabbitMQ" $GREEN
+}
+
+# Function to start RabbitMQ on macOS
+darwin_start_rabbitmq() {
+    echo "Starting RabbitMQ on macOS..." | log_with_service_name "RabbitMQ" $GREEN
+
+    # Load the .env file
+    set -a
+    source .env
+    set +a
+
+    # Install RabbitMQ using Homebrew
+    brew install rabbitmq
+
+    # Enable the management plugin
+    rabbitmq-plugins enable rabbitmq_management
+
+    # Start RabbitMQ
+    brew services start rabbitmq
+
+    # Check if the user already exists
+    if rabbitmqctl list_users | grep -q "^$RMQ_USER"; then
+        echo "User '$RMQ_USER' already exists. Skipping user creation."
+    else
+        # Create a new user with the credentials from .env
+        rabbitmqctl add_user "$RMQ_USER" "$RMQ_PASSWORD"
+        rabbitmqctl set_user_tags "$RMQ_USER" administrator
+        rabbitmqctl set_permissions -p / "$RMQ_USER" ".*" ".*" ".*"
     fi
 
-    # Wait for RabbitMQ to start
-    until sudo docker exec rabbitmq rabbitmqctl list_queues >/dev/null 2>&1; do
-        echo "Waiting for RabbitMQ to start..." | log_with_service_name "RabbitMQ" $GREEN
-        sleep 1
-    done
+    echo "RabbitMQ started with management console on default port." | log_with_service_name "RabbitMQ" $GREEN
 }
 
 # Function to set up poetry within Miniforge environment
@@ -695,9 +751,9 @@ linux_start_celery_worker() {
     sudo systemctl enable celeryworker
     sudo systemctl start celeryworker
 
-    # Check until the Celery worker is up and running
-    until sudo docker exec rabbitmq rabbitmqctl list_queues | grep -q celery; do
-        echo "Waiting for Celery worker to start..." | log_with_service_name "Celery" $GREEN
+    # Check until the Celery worker is up and running by checking the logs
+    echo "Waiting for Celery worker to start..." | log_with_service_name "Celery" $GREEN
+    while ! sudo journalctl -u celeryworker.service -n 100 | grep -q "celery@$(hostname) ready"; do
         sleep 1
     done
 
@@ -791,9 +847,9 @@ if [ "$os" = "Darwin" ]; then
     install_surrealdb
     darwin_install_ollama
     darwin_install_miniforge
-    darwin_clean_node
     darwin_install_docker
-    start_rabbitmq
+    darwin_clean_node
+    darwin_start_rabbitmq
     setup_poetry
     check_and_copy_env
     check_and_set_private_key
@@ -808,9 +864,9 @@ else
     install_surrealdb
     linux_install_ollama
     linux_install_miniforge
-    linux_clean_node
     linux_install_docker
-    start_rabbitmq
+    linux_clean_node
+    linux_start_rabbitmq
     setup_poetry
     check_and_copy_env
     check_and_set_private_key
