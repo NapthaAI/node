@@ -9,6 +9,7 @@ from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict, Optional
 import yaml
+from node.comms.storage import get_ipns_record
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -118,7 +119,12 @@ def prepare_input_dir(parameters: Dict, input_dir: Optional[str] = None, input_i
             raise ValueError(f"Input directory {input_dir} does not exist")
 
     if input_ipfs_hash:
-        input_dir = handle_ipfs_input(input_ipfs_hash)
+        if input_ipfs_hash.startswith('k'):
+            ipfs_hash = get_ipns_record(input_ipfs_hash)
+        else:
+            ipfs_hash = input_ipfs_hash
+            
+        input_dir = handle_ipfs_input(ipfs_hash)
         parameters["input_dir"] = input_dir
 
     return parameters

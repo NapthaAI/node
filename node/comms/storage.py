@@ -6,6 +6,7 @@ from pathlib import Path
 import ipfshttpclient
 import zipfile
 import shutil
+import requests
 import tempfile
 
 logger = get_logger(__name__)
@@ -93,69 +94,73 @@ async def read_storage(job_id: str):
         })
 
 
-async def write_to_ipfs(file):
-    """Write a file to IPFS and pin it."""
+def get_api_url():
+    ipfs_gateway_url = os.getenv('IPFS_GATEWAY_URL')
+    domain = ipfs_gateway_url.split('/')[2]
+    port = ipfs_gateway_url.split('/')[4]
+    return f'http://{domain}:{port}/api/v0'
+
+
+async def write_to_ipfs(file, publish_to_ipns=False, update_ipns_name=None):
+    """Write a file to IPFS, optionally publish to IPNS or update an existing IPNS record."""
     try:
-        logger.info(f"Received request to write file to IPFS: {file.filename}")
-
-        # Get IPFS_GATEWAY_URL from environment
-        IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
+        logger.info(f"Writing file to IPFS: {file.filename}")
+        IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
         if not IPFS_GATEWAY_URL:
-            logger.error("IPFS_GATEWAY_URL not found in environment")
-
             return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
-
+        
         client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
-
-        # Create a temporary file to ensure compatibility with IPFS
         with tempfile.NamedTemporaryFile(mode="wb", delete=False) as tmpfile:
-            content = await file.read()  # Read the content of the uploaded file
+            content = await file.read()
             tmpfile.write(content)
             tmpfile_name = tmpfile.name
-
-        # Ensure the file is closed before adding it to IPFS
         file.file.close()
-
-        # Add file to IPFS
+        
         result = client.add(tmpfile_name)
-
-        # Pin the file in IPFS to ensure persistence
         client.pin.add(result["Hash"])
-
-        # Optionally, clean up the temporary file if desired
         os.unlink(tmpfile_name)
+        
+        ipfs_hash = result["Hash"]
+        response = {
+            "message": "File written and pinned to IPFS",
+            "ipfs_hash": ipfs_hash,
+        }
 
-        # Result['Hash'] contains the IPFS hash of the uploaded file
-        return (201, {
-                "message": "File written and pinned to IPFS",
-                "ipfs_hash": result["Hash"],
-            }
-        )
+        if publish_to_ipns:
+            ipns_hash = publish_to_ipns_func(ipfs_hash)
+            response["ipns_hash"] = ipns_hash
+            response["message"] += " and published to IPNS"
+        elif update_ipns_name:
+            updated_ipns_hash = update_ipns_record(update_ipns_name, ipfs_hash)
+            response["ipns_hash"] = updated_ipns_hash
+            response["message"] += " and IPNS record updated"
+
+        return (201, response)
     except Exception as e:
-        logger.error(f"Error writing and pinning file to IPFS: {e}")
-        return (500, {"message": f"Error writing and pinning file to IPFS: {e}"})
+        logger.error(f"Error writing file to IPFS: {e}")
+        return (500, {"message": f"Error writing file to IPFS: {e}"})
 
 
-async def read_from_ipfs(ipfs_hash: str):
-    """Read a file from IPFS."""
+async def read_from_ipfs_or_ipns(hash_or_name: str):
+    """Read a file from IPFS or IPNS."""
     try:
-        logger.info(f"Received request to read file from IPFS: {ipfs_hash}")
-
-        IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
+        logger.info(f"Reading from IPFS/IPNS: {hash_or_name}")
+        IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
         if not IPFS_GATEWAY_URL:
-            logger.error("IPFS_GATEWAY_URL not found in environment")
             return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
 
-        client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
+        # If it's an IPNS name, resolve it to an IPFS hash
+        if hash_or_name.startswith('k'):
+            ipfs_hash = get_ipns_record(hash_or_name)
+        else:
+            ipfs_hash = hash_or_name
 
-        # Specify the directory to save the downloaded files
+        client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
         temp_dir = tempfile.mkdtemp()
         client.get(ipfs_hash, target=temp_dir)
-
-        # Determine if the path is a file or directory
         file_path = os.path.join(temp_dir, ipfs_hash)
+
         if os.path.isdir(file_path):
-            # It's a directory, zip it
             zip_buffer = zip_dir(file_path)
             return (200, {
                 "content": zip_buffer.getvalue(),
@@ -165,7 +170,6 @@ async def read_from_ipfs(ipfs_hash: str):
                 },
             })
         else:
-            # It's a single file, stream it directly
             return (200, {
                 "path": file_path,
                 "media_type": "application/octet-stream",
@@ -174,7 +178,27 @@ async def read_from_ipfs(ipfs_hash: str):
                     "Content-Disposition": f"attachment; filename={os.path.basename(file_path)}"
                 },
             })
-
     except Exception as e:
-        logger.error(f"Error reading file from IPFS: {e}")
-        return (500, {"message": f"Error reading file from IPFS: {e}"})
+        logger.error(f"Error reading from IPFS/IPNS: {e}")
+        return (500, {"message": f"Error reading from IPFS/IPNS: {e}"})
+
+
+def publish_to_ipns_func(ipfs_hash: str) -> str:
+    api_url = get_api_url()
+    params = {'arg': ipfs_hash, 'lifetime': '876000h'}  # Set lifetime to infinity (100 years)
+    ipns_pub = requests.post(f'{api_url}/name/publish', params=params)
+    return ipns_pub.json()['Name']
+
+
+def get_ipns_record(ipns_name: str) -> str:
+    api_url = get_api_url()
+    params = {'arg': ipns_name}
+    ipns_get = requests.post(f'{api_url}/name/resolve', params=params)
+    return ipns_get.json()['Path'].split('/')[-1]
+
+
+def update_ipns_record(ipns_name: str, ipfs_hash: str) -> str:
+    api_url = get_api_url()
+    params = {'arg': ipfs_hash, 'key': ipns_name, 'lifetime': '876000h'}  # Set lifetime to infinity (100 years)
+    ipns_pub = requests.post(f'{api_url}/name/publish', params=params)
+    return ipns_pub.json()['Name']

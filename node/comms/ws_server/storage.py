@@ -3,13 +3,10 @@ import base64
 from pydantic import BaseModel
 from fastapi import UploadFile
 from node.utils import get_logger, get_config
-from node.comms.storage import write_to_ipfs, read_from_ipfs, write_storage, read_storage
+from node.comms.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from fastapi import WebSocket
 import io
 import os
-import zipfile
-import tempfile
-import shutil
 
 
 logger = get_logger(__name__)
@@ -85,7 +82,7 @@ async def write_storage_ws(websocket: WebSocket, message: dict):
         await websocket.send(json.dumps(response))
 
 async def write_to_ipfs_ws(websocket: WebSocket, message: dict):
-    """Write a file to IPFS and pin it."""
+    """Write a file to IPFS, optionally publish to IPNS or update an existing IPNS record."""
     target_node_id = message['source_node']
     source_node_id = message['target_node']
     params = message['params']
@@ -95,6 +92,8 @@ async def write_to_ipfs_ws(websocket: WebSocket, message: dict):
     }
     filename = params['filename']
     file_data = params['file_data']
+    publish_to_ipns = params.get('publish_to_ipns', False)
+    update_ipns_name = params.get('update_ipns_name')
     
     temp_dir = os.path.join(BASE_OUTPUT_DIR, "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -106,8 +105,8 @@ async def write_to_ipfs_ws(websocket: WebSocket, message: dict):
             if temp_filepath in temp_files:
                 with open(temp_files[temp_filepath], "rb") as temp_file:
                     file = UploadFile(filename=filename, file=temp_file)
-                    status_code, message_dict = await write_to_ipfs(file)
-                    logger.info(f"Statau code: {status_code}, massage: {message_dict}")
+                    status_code, message_dict = await write_to_ipfs(file, publish_to_ipns, update_ipns_name)
+                    logger.info(f"Status code: {status_code}, message: {message_dict}")
                     if status_code == 201:
                         response['params'] = message_dict
                     else:
@@ -132,6 +131,7 @@ async def write_to_ipfs_ws(websocket: WebSocket, message: dict):
     except Exception as e:
         response['params'] = {'error': str(e)}
         await websocket.send(json.dumps(response))
+
 
 async def read_storage_ws(websocket: WebSocket, message: dict):
     """Get the output directory for a job_id and serve it as a zip file."""
@@ -177,8 +177,8 @@ async def read_storage_ws(websocket: WebSocket, message: dict):
         response['params'] = {'error': str(e)}
         await websocket.send(json.dumps(response))
 
-async def read_from_ipfs_ws(websocket: WebSocket, message: dict):
-    """Read a file from IPFS."""
+async def read_from_ipfs_or_ipns_ws(websocket: WebSocket, message: dict):
+    """Read a file from IPFS or IPNS."""
     target_node_id = message['source_node']
     source_node_id = message['target_node']
     params = message['params']
@@ -187,28 +187,47 @@ async def read_from_ipfs_ws(websocket: WebSocket, message: dict):
         'source_node': source_node_id
     }
     try:
-        ipfs_hash = params['ipfs_hash']
-        status_code, message_dict = await read_from_ipfs(ipfs_hash)
+        hash_or_name = params['hash_or_name']
+        status_code, message_dict = await read_from_ipfs_or_ipns(hash_or_name)
         if status_code == 200:
-            temp_filename = message_dict["path"]
-            file_size = os.path.getsize(temp_filename)
-            chunk_index = 0
-            with open(temp_filename, "rb") as file:
-                while chunk := file.read(CHUNK_SIZE):
+            if "content" in message_dict:
+                # For zipped directory content
+                content = message_dict["content"]
+                file_size = len(content)
+                chunk_index = 0
+                for i in range(0, file_size, CHUNK_SIZE):
+                    chunk = content[i:i+CHUNK_SIZE]
                     encoded_chunk = base64.b64encode(chunk).decode('utf-8')
                     response['params'] = {
                         'file_data': encoded_chunk,
-                        'filename': message_dict["filename"],
+                        'filename': f"{hash_or_name}.zip",
                         'chunk_index': chunk_index,
                         'chunk_total': (file_size // CHUNK_SIZE) + 1
                     }
                     await websocket.send(json.dumps(response))
-                    logger.info(f"Sent chunk {chunk_index} of {message_dict['filename']}")
+                    logger.info(f"Sent chunk {chunk_index} of {hash_or_name}.zip")
                     chunk_index += 1
+            else:
+                # For single file content
+                temp_filename = message_dict["path"]
+                file_size = os.path.getsize(temp_filename)
+                chunk_index = 0
+                with open(temp_filename, "rb") as file:
+                    while chunk := file.read(CHUNK_SIZE):
+                        encoded_chunk = base64.b64encode(chunk).decode('utf-8')
+                        response['params'] = {
+                            'file_data': encoded_chunk,
+                            'filename': message_dict["filename"],
+                            'chunk_index': chunk_index,
+                            'chunk_total': (file_size // CHUNK_SIZE) + 1
+                        }
+                        await websocket.send(json.dumps(response))
+                        logger.info(f"Sent chunk {chunk_index} of {message_dict['filename']}")
+                        chunk_index += 1
             
             response['params'] = {
                 'file_data': 'EOF',
-                'filename': message_dict["path"],
+                'filename': message_dict.get("filename", f"{hash_or_name}.zip"),
                 'chunk_index': chunk_index,
                 'chunk_total': (file_size // CHUNK_SIZE) + 1
             }
