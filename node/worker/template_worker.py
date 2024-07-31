@@ -18,7 +18,6 @@ from node.worker.utils import (
     prepare_input_dir, 
     update_db_with_status_sync, 
     upload_to_ipfs, 
-    handle_ipfs_input,
     upload_json_string_to_ipfs
 )
 from naptha_sdk.client.node import Node
@@ -29,6 +28,7 @@ logger = get_logger(__name__)
 
 # Load environment variables
 load_dotenv(".env")
+os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 
 @app.task
 def run_flow(flow_run: Dict) -> None:

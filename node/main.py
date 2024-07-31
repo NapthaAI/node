@@ -19,7 +19,7 @@ from node.comms.http_server.orchestration import router as http_server_orchestra
 from node.comms.ws_server.task import create_task_ws, check_task_ws
 from node.comms.ws_server.user import register_user_ws, check_user_ws
 from node.comms.ws_server.orchestration import create_task_run_ws, update_task_run_ws
-from node.comms.ws_server.storage import write_to_ipfs_ws, read_from_ipfs_ws, write_storage_ws, read_storage_ws
+from node.comms.ws_server.storage import write_to_ipfs_ws, read_from_ipfs_or_ipns, write_storage_ws, read_storage_ws
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
 
 
@@ -114,7 +114,7 @@ async def websocket_handler(uri):
                             message=message
                         )
                     elif message["path"] == "read_from_ipfs":
-                        await read_from_ipfs_ws(
+                        await read_from_ipfs_or_ipns(
                             websocket=websocket,
                             message=message
                         )
