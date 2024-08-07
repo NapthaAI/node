@@ -172,3 +172,5 @@ input_folder/
 
 # addl .db files/folder
 *.db
+
+logs/
