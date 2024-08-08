@@ -6,9 +6,20 @@ IMAGE_NAME="naptha-full-stack"
 # Name of the Docker container
 CONTAINER_NAME="naptha-container"
 
+# Detect the operating system and choose the appropriate Dockerfile
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    DOCKERFILE="Dockerfile.macos"
+    echo "Detected macOS. Using $DOCKERFILE"
+else
+    # Linux or other
+    DOCKERFILE="Dockerfile"
+    echo "Using default $DOCKERFILE"
+fi
+
 # Build the Docker image
 echo "Building Docker image..."
-docker build -t $IMAGE_NAME . --no-cache
+docker build -t $IMAGE_NAME -f $DOCKERFILE . 
 
 # Check if the container already exists
 if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then

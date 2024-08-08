@@ -46,11 +46,11 @@ def get_config():
     dev_mode = os.getenv("DEV_MODE")
     dev_mode = True if dev_mode == "true" else False
 
-    if not dev_mode:
-        if ip is None or ip == "" or "localhost" in ip:
-            ip = get_external_ip()
-            # add http:// to the ip
-            ip = f"http://{ip}"
+    # if not dev_mode:
+    #     if ip is None or ip == "" or "localhost" in ip:
+    #         ip = get_external_ip()
+    #         # add http:// to the ip
+    #         ip = f"http://{ip}"
 
     base_output_dir = os.getenv("BASE_OUTPUT_DIR")
     if base_output_dir is None:
