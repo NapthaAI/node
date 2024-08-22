@@ -27,6 +27,8 @@ git clone https://github.com/NapthaAI/node.git
 cd node
 ```
 
+## Launch with systemd
+
 Then run the node:
 
 ```bash
@@ -62,18 +64,37 @@ tail -n 100 -f /tmp/nodeapp.err
 
 That's it! You're now running a local AI node.
 
+## Launch with docker
+
+Copy the example env file and add a PRIVATE_KEY:
+
+```bash
+cp .env.example .env
+```
+
+Then run the node in docker:
+
+```bash
+bash launch_docker.sh
+```
+
+
 # Run AI modules on your node
 
 To run modules, keep your node running and follow the the instructions using the [Naptha SDK](https://github.com/NapthaAI/naptha-sdk). 
 
-# Set up your payment settings
-
-Coming soon.
-
 ## Stop
 
+If using systemd:
+
 ```
-bash stop-service.sh
+bash stop_service.sh
+```
+
+If using docker:
+
+```
+bash stop_docker.sh
 ```
 
 ## To cleanup

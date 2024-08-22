@@ -46,11 +46,11 @@ def get_config():
     dev_mode = os.getenv("DEV_MODE")
     dev_mode = True if dev_mode == "true" else False
 
-    if not dev_mode:
-        if ip is None or ip == "" or "localhost" in ip:
-            ip = get_external_ip()
-            # add http:// to the ip
-            ip = f"http://{ip}"
+    # if not dev_mode:
+    #     if ip is None or ip == "" or "localhost" in ip:
+    #         ip = get_external_ip()
+    #         # add http:// to the ip
+    #         ip = f"http://{ip}"
 
     base_output_dir = os.getenv("BASE_OUTPUT_DIR")
     if base_output_dir is None:
@@ -130,26 +130,33 @@ def create_output_dir(base_output_dir):
     except Exception as e:
         raise Exception(f"Error creating base_output_dir: {e}")
 
-def run_subprocess(cmd: List) -> None:
+def run_subprocess(cmd: List) -> str:
     """Run a subprocess"""
     logger.info(f"Running subprocess: {cmd}")
     try:
-        out, err = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ).communicate()
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
+        )
+        out, err = process.communicate()
 
         # Log the output
-        logger.info(f"Subprocess output: {out.decode('utf-8')}")
+        if out:
+            logger.info(f"Subprocess output: {out}")
 
+        # Check if there's any stderr output
         if err:
-            logger.info(f"Subprocess error: {err.decode('utf-8')}")
-            raise Exception(err)
+            # Check if it's a pip warning about running as root
+            if "WARNING: Running pip as the 'root' user" in err:
+                logger.warning(f"Pip warning: {err}")
+            else:
+                logger.error(f"Subprocess error: {err}")
+                raise Exception(err)
 
-        return out.decode("utf-8")
+        return out
 
     except Exception as e:
         logger.error(f"An error occurred: {e}")
-        raise e
+        raise
 
 if __name__ == "__main__":
     config = get_config()

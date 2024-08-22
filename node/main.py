@@ -161,7 +161,7 @@ async def on_startup():
     hub.node_config = get_node_config(config)
     create_output_dir(config["BASE_OUTPUT_DIR"])
     await setup_ollama(hub.node_config.ollama_models)
-    setup_modules_from_config(Path("../node/storage/hub/packages.json"))
+    setup_modules_from_config(Path(f"{PARENT_DIR}/storage/hub/packages.json"))
 
     _, _, user_id = await hub.signin()
     hub.node_config.owner = f"{user_id}"
