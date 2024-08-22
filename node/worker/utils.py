@@ -92,7 +92,7 @@ async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     param module_run: ModuleRun data to update
     """
     logger.info(f"Updating DB with module run: {module_run}")
-    db = await DB()
+    db = DB()
 
     try:
         updated_module_run = await db.update_module_run(module_run.id, module_run)

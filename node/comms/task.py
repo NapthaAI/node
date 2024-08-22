@@ -33,7 +33,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         if module["type"] == "docker":
             module_run_input.module_params = DockerParams(**module_run_input.module_params)
 
-        db = await DB()
+        db = DB()
         module_run = await db.create_module_run(module_run_input)
         logger.info(f"Created module run: {module_run}")
 
@@ -65,7 +65,7 @@ async def check_task(module_run: ModuleRun) -> ModuleRun:
     """
     logger.info(f"Checking task: {module_run}")
 
-    db = await DB()
+    db = DB()
     module_run = await db.list_module_runs(module_run.id)
 
     logger.info(f"Found task: {module_run}")
