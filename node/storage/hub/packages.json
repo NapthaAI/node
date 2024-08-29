@@ -1,6 +1,4 @@
 {
-    "NapthaAI/chat/0.4": "https://github.com/NapthaAI/module_chat",
-    "NapthaAI/generate_image/0.7": "https://github.com/NapthaAI/module_generate_image",
-    "NapthaAI/hello_world/0.11": "https://github.com/NapthaAI/module_hello_world",
-    "NapthaAI/image_to_image/0.6": "https://github.com/NapthaAI/module_image2image"
+    "NapthaAI/chat/0.6": "https://github.com/NapthaAI/module_chat",
+    "NapthaAI/hello_world/0.11": "https://github.com/NapthaAI/module_hello_world"
 }

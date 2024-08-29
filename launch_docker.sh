@@ -13,7 +13,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Detected macOS. Using $DOCKERFILE"
 else
     # Linux or other
-    DOCKERFILE="Dockerfile"
+    DOCKERFILE="Dockerfile.linux"
     echo "Using default $DOCKERFILE"
 fi
 

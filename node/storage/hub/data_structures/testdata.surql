@@ -256,6 +256,9 @@ CREATE module:babyagi SET name="Babyagi", description="A simple babyagi app", au
 CREATE module:babyagi_task_initiator SET name="Babyagi Task Initiator", description="A simple babyagi task initiator", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_initiator", type="template";
 CREATE module:babyagi_task_executor SET name="Babyagi Task Executor", description="A simple babyagi task executor", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_executor", type="template";
 CREATE module:babyagi_task_finalizer SET name="Babyagi Task Finalizer", description="A simple babyagi task finalizer", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_finalizer", type="template";
+CREATE module:napthaville_module SET name="Napthaville Module", description="implementation of Agentic game", author=user:naptha, url="https://github.com/moarshy/napthaville_module", type="template";
+CREATE module:napthaville_chat SET name="Napthaville Chat", description="implementation of Napthaville chat between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="flow";
+CREATE module:napthaville_move SET name="Napthaville Move", description="implementation of Napthaville move between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="flow";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
 
