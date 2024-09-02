@@ -75,6 +75,9 @@ async def setup_ollama(ollama_models):
 
         if not out:
             return
+        
+    # wait for ollama to start
+    await asyncio.sleep(20)
 
     for model in ollama_models:
         await pull_model(model)

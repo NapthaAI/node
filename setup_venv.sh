@@ -7,6 +7,7 @@ conda activate myenv
 
 # Install dependencies using Poetry
 cd /app
+poetry lock
 poetry install
 
 # Print Python version and path for verification
