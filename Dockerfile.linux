@@ -1,5 +1,6 @@
-# Use NVIDIA Ubuntu 24.04 as the base image
-FROM nvidia/cuda:12.2.0-base-ubuntu22.04
+# Use Ubuntu 24.04 as the base image, with an option for CUDA
+ARG BASE_IMAGE=ubuntu:24.04
+FROM ${BASE_IMAGE}
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -10,6 +11,9 @@ ENV PATH="/root/miniforge3/bin:${PATH}"
 
 # Set work directory
 WORKDIR /app
+
+# Use ARG to determine if we're building for GPU
+ARG USE_GPU=false
 
 # Install system dependencies, build tools, and networking utilities
 RUN apt-get update && apt-get install -y \
@@ -68,8 +72,29 @@ RUN conda create -n myenv python=3.12 -y
 # Activate conda environment
 SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
 
-# Install vLLM dependencies
-RUN pip install -vv vllm poetry
+# Install vLLM dependencies based on GPU flag
+RUN if [ "$USE_GPU" = "true" ]; then \
+        pip install -vv vllm poetry; \
+    else \
+        pip install -vv poetry; \
+        # Clone vLLM repository
+        git clone https://github.com/vllm-project/vllm.git /app/vllm; \
+        # Change to vLLM directory
+        cd /app/vllm; \
+        # Install vLLM dependencies
+        pip install --upgrade pip && \
+        pip install wheel packaging ninja "setuptools>=49.4.0" numpy; \
+        # Install vLLM CPU requirements
+        pip install -v -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu; \
+        # Install specific torchvision version
+        pip uninstall -y torchvision && \
+        wget https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp312-cp312-linux_x86_64.whl && \
+        pip install torchvision-0.19.0+cpu-cp312-cp312-linux_x86_64.whl; \
+        # Install vLLM
+        VLLM_TARGET_DEVICE=cpu python setup.py install; \
+        # Change back to app directory
+        cd /app; \
+    fi
 
 # Copy the project files
 COPY ./.dockerignore /app/
