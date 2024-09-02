@@ -14,32 +14,42 @@ IMAGE_NAME="naptha-full-stack"
 # Name of the Docker container
 CONTAINER_NAME="naptha-container"
 
-# Detect the operating system and choose the appropriate Dockerfile
+# Detect the operating system and set build arguments
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
-    DOCKERFILE="Dockerfile.macos"
-    echo "Detected macOS. Using $DOCKERFILE"
-    BUILD_ARGS=""
-    echo "Building Docker image with ARGS: $BUILD_ARGS"
+    BASE_IMAGE="ubuntu:24.04"
+    BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=false --build-arg OS_TYPE=macos"
+    echo "Detected macOS. Using base image: $BASE_IMAGE"
+    
+    # Ensure LLM_BACKEND is set to 'ollama' for macOS
+    if [ "$LLM_BACKEND" != "ollama" ]; then
+        echo "Setting LLM_BACKEND to 'ollama' for macOS"
+        sed -i '' 's/^LLM_BACKEND=.*/LLM_BACKEND=ollama/' .env
+    fi
+    
+    # Ensure OLLAMA_MODELS is set
+    if [ -z "$OLLAMA_MODELS" ]; then
+        echo "OLLAMA_MODELS is not set. Please enter the Ollama models you want to use (comma-separated if multiple):"
+        read OLLAMA_MODELS
+        echo "OLLAMA_MODELS=$OLLAMA_MODELS" >> .env
+    fi
 else
     # Linux
-    DOCKERFILE="Dockerfile.linux"
-    echo "Using $DOCKERFILE"
     if [ "$GPU" = "true" ]; then
         BASE_IMAGE="nvidia/cuda:12.2.0-base-ubuntu22.04"
-        BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=true"
+        BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=true --build-arg OS_TYPE=linux"
     else
         BASE_IMAGE="ubuntu:24.04"
-        BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=false"
+        BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=false --build-arg OS_TYPE=linux"
     fi
-    echo "Detected Linux"
-    echo "Base image: $BASE_IMAGE"
-    echo "Building Docker image with ARGS: $BUILD_ARGS"
+    echo "Detected Linux. Using base image: $BASE_IMAGE"
 fi
+
+echo "Building Docker image with ARGS: $BUILD_ARGS"
 
 # Build the Docker image
 echo "Building Docker image..."
-docker build -t $IMAGE_NAME -f $DOCKERFILE $BUILD_ARGS .
+docker build -t $IMAGE_NAME $BUILD_ARGS .
 
 # Check if the container already exists
 if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
@@ -65,7 +75,11 @@ if [ ! -d "./logs" ]; then
     mkdir -p ./logs
 else
     echo "Emptying ./logs directory..."
-    sudo rm -rf ./logs/*
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        rm -rf ./logs/*
+    else
+        sudo rm -rf ./logs/*
+    fi
 fi
 
 chmod 777 ./logs

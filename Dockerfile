@@ -14,6 +14,7 @@ WORKDIR /app
 
 # Use ARG to determine if we're building for GPU
 ARG USE_GPU=false
+ARG OS_TYPE=linux
 
 # Install system dependencies, build tools, and networking utilities
 RUN apt-get update && apt-get install -y \
@@ -72,27 +73,22 @@ RUN conda create -n myenv python=3.12 -y
 # Activate conda environment
 SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
 
-# Install vLLM dependencies based on GPU flag
-RUN if [ "$USE_GPU" = "true" ]; then \
+# Install vLLM dependencies based on GPU flag and OS type
+RUN if [ "$OS_TYPE" = "macos" ]; then \
+        pip install -vv poetry; \
+    elif [ "$USE_GPU" = "true" ]; then \
         pip install -vv vllm poetry; \
     else \
-        pip install -vv poetry; \
-        # Clone vLLM repository
-        git clone https://github.com/vllm-project/vllm.git /app/vllm; \
-        # Change to vLLM directory
-        cd /app/vllm; \
-        # Install vLLM dependencies
+        pip install -vv poetry && \
+        git clone https://github.com/vllm-project/vllm.git /app/vllm && \
+        cd /app/vllm && \
         pip install --upgrade pip && \
-        pip install wheel packaging ninja "setuptools>=49.4.0" numpy; \
-        # Install vLLM CPU requirements
-        pip install -v -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu; \
-        # Install specific torchvision version
+        pip install wheel packaging ninja "setuptools>=49.4.0" numpy && \
+        pip install -v -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu && \
         pip uninstall -y torchvision && \
         wget https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp312-cp312-linux_x86_64.whl && \
-        pip install torchvision-0.19.0+cpu-cp312-cp312-linux_x86_64.whl; \
-        # Install vLLM
-        VLLM_TARGET_DEVICE=cpu python setup.py install; \
-        # Change back to app directory
+        pip install torchvision-0.19.0+cpu-cp312-cp312-linux_x86_64.whl && \
+        VLLM_TARGET_DEVICE=cpu python setup.py install && \
         cd /app; \
     fi
 
