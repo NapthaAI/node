@@ -49,6 +49,10 @@ install_surrealdb() {
 
 # Function for manual installation of Ollama
 linux_install_ollama() {
+    set -a
+    source .env
+    set +a
+
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
@@ -69,11 +73,21 @@ linux_install_ollama() {
         sudo systemctl start ollama
         echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
     fi
-    echo "Pulling ollama models." | log_with_service_name "Ollama" $RED
-    ollama pull phi
+    # Pull Ollama models
+    echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    echo "MODELS: $MODELS" | log_with_service_name "Ollama" $RED
+    for model in "${MODELS[@]}"; do
+        echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
+        ollama pull "$model"
+    done
 }
 
 darwin_install_ollama() {
+    set -a
+    source .env
+    set +a
+    
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
@@ -94,8 +108,14 @@ darwin_install_ollama() {
     fi
     ollama serve &
     sleep 1
-    echo "Pulling ollama models." | log_with_service_name "Ollama" $RED
-    ollama pull phi
+    # Pull Ollama models
+    echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    echo "MODELS: $MODELS" | log_with_service_name "Ollama" $RED
+    for model in "${MODELS[@]}"; do
+        echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
+        ollama pull "$model"
+    done
 }
 
 # Function to install Miniforge
