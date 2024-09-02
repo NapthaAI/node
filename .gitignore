@@ -174,3 +174,4 @@ input_folder/
 *.db
 
 logs/
+.env copy

@@ -2,10 +2,10 @@
 FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV DEBIAN_FRONTEND noninteractive
-ENV RABBITMQ_LOG_BASE /var/log/rabbitmq
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+ENV RABBITMQ_LOG_BASE=/var/log/rabbitmq
 ENV PATH="/root/miniforge3/bin:${PATH}"
 
 # Set work directory
@@ -71,8 +71,20 @@ SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
 # Install vLLM dependencies
 RUN pip install -vv vllm poetry
 
-# Copy the rest of the project files
-COPY . .
+# Copy the project files
+COPY ./.dockerignore /app/
+COPY ./node /app/node
+COPY ./celery_worker_start_docker.sh /app/
+COPY ./environment.yml /app/
+COPY ./init_llm.py /app/
+COPY ./setup_venv.sh /app/
+COPY ./supervisord.conf /app/
+COPY ./pyproject.toml /app/
+COPY ./poetry.lock /app/
+COPY ./README.md /app/
+
+# After copying all files
+WORKDIR /app
 
 # Run the setup script
 RUN chmod +x /app/setup_venv.sh
@@ -93,14 +105,18 @@ RUN mkdir -p /var/log && \
     touch /var/log/celery.err.log && \
     chmod 666 /var/log/*.log
 
-# Copy .env file
-COPY .env /app/.env
-
 # Expose ports
-EXPOSE 3001 3002 7001 7002 5672 15672 11434
+EXPOSE 3001 3002 7001 7002 5672 15672 11434 
+
+# Expose ssh
+EXPOSE 22
 
 # Set up supervisord configuration
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Start supervisord
-CMD ["conda", "run", "--no-capture-output", "-n", "myenv", "/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Copy the start script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Set the entrypoint to the start script
+ENTRYPOINT ["/app/start.sh"]
