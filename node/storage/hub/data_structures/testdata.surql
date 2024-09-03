@@ -102,6 +102,11 @@ CREATE user:naptha SET
     username="naptha1", 
     password=crypto::argon2::generate("great-password")
 ;
+CREATE user:marketagents SET 
+    name="MarketAgents", 
+    username="marketagents", 
+    password=crypto::argon2::generate("great-password")
+;
 CREATE user:seller1 SET
     name = "Test Seller 1",
     username = "seller1",
@@ -259,6 +264,8 @@ CREATE module:babyagi_task_finalizer SET name="Babyagi Task Finalizer", descript
 CREATE module:napthaville_module SET name="Napthaville Module", description="implementation of Agentic game", author=user:naptha, url="https://github.com/moarshy/napthaville_module", type="template";
 CREATE module:napthaville_chat SET name="Napthaville Chat", description="implementation of Napthaville chat between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="flow";
 CREATE module:napthaville_move SET name="Napthaville Move", description="implementation of Napthaville move between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="flow";
+CREATE module:debate_agent SET name="Debate Agent", description="debating agent", author=user:marketagents, url="https://huggingface.co/NapthaAI/debate_agent", type="template";
+CREATE module:debate_protocol SET name="Debate Protocol", description="debating protocol", author=user:marketagents, url="https://huggingface.co/NapthaAI/debate_protocol", type="flow";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
 
