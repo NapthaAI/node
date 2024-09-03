@@ -9,6 +9,10 @@ import pytz
 import time
 import requests
 import traceback
+import importlib
+from git import Repo
+from git.exc import GitCommandError, InvalidGitRepositoryError
+from packaging import version
 from typing import Dict
 from node.worker.main import app
 from node.worker.utils import (
@@ -20,6 +24,7 @@ from node.worker.utils import (
     upload_to_ipfs, 
     upload_json_string_to_ipfs
 )
+from node.module_manager import clone_repo, install_module
 from naptha_sdk.client.node import Node
 from naptha_sdk.schemas import ModuleRun
 from node.utils import get_logger
@@ -33,6 +38,17 @@ os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 @app.task
 def run_flow(flow_run: Dict) -> None:
     flow_run = ModuleRun(**flow_run)
+    module_version = f"v{flow_run.module_version}"
+
+    logger.info(f"Received flow run: {flow_run}")
+    logger.info(f"Checking if module {flow_run.module_name} version {module_version} is installed")
+    
+    # Check if module is installed and install if necessary
+    if not is_module_installed(flow_run.module_name, module_version):
+        if not flow_run.module_url:
+            raise ValueError(f"Module URL is required for installation of {flow_run.module_name}")
+        install_module_if_needed(flow_run.module_name, module_version, flow_run.module_url)
+
     loop = asyncio.get_event_loop()
     workflow_engine = FlowEngine(flow_run)
     try:
@@ -49,6 +65,57 @@ def run_flow(flow_run: Dict) -> None:
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}")
         loop.run_until_complete(workflow_engine.fail())
+
+def is_module_installed(module_name: str, required_version: str) -> bool:
+    try:
+        module = importlib.import_module(module_name)
+        module_path = os.path.join(MODULES_PATH, module_name)
+        
+        try:
+            repo = Repo(module_path)
+            if repo.head.is_detached:
+                current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
+            else:
+                current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
+            
+            if current_tag:
+                logger.info(f"Module {module_name} is at tag: {current_tag}")
+                # Remove 'v' prefix if present for comparison
+                current_version = current_tag[1:] if current_tag.startswith('v') else current_tag
+                required_version = required_version[1:] if required_version.startswith('v') else required_version
+                return current_version == required_version
+            else:
+                logger.warning(f"No tag found for current commit in {module_name}")
+                return False
+        except (InvalidGitRepositoryError, GitCommandError) as e:
+            logger.error(f"Error checking Git repository for {module_name}: {str(e)}")
+            return False
+        
+    except ImportError:
+        logger.warning(f"Module {module_name} not found")
+        return False
+
+def install_module_if_needed(module_name: str, module_version: str, module_url: str):
+    if not module_url:
+        raise ValueError(f"Module URL is required for installation of {module_name}")
+
+    logger.info(f"Installing module {module_name} version {module_version}")
+    
+    try:
+        # Clone the repository
+        clone_repo(
+            tag=module_version, 
+            url=module_url, 
+            module_name=module_name
+        )
+        
+        # Install the module
+        install_module(module_name)
+        
+        logger.info(f"Successfully installed {module_name} version {module_version}")
+    except Exception as e:
+        logger.error(f"An error occurred while installing {module_name}: {str(e)}")
+        raise
 
 
 class FlowEngine:

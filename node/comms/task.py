@@ -29,6 +29,9 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
             raise Exception("Module not found")
 
         module_run_input.module_type = module["type"]
+        module_run_input.module_version = module["version"]
+        module_run_input.module_url = module["url"]
+
 
         if module["type"] == "docker":
             module_run_input.module_params = DockerParams(**module_run_input.module_params)

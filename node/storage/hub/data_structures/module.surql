@@ -7,3 +7,4 @@ DEFINE FIELD description ON TABLE module TYPE string;
 DEFINE FIELD author ON TABLE module TYPE record<user>;
 DEFINE FIELD url ON TABLE module TYPE string;
 DEFINE FIELD type ON TABLE module TYPE string;
+DEFINE FIELD version ON TABLE module TYPE string;
