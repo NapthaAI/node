@@ -247,25 +247,24 @@ CREATE auction:auction1 SET consigner=user:seller1, buy_it_now_price=10.0, listi
 RELATE user:seller1->requests_to_publish->auction:auction1;
 
 -- MODULEs
-CREATE module:chat_aiflows SET name="Chat using AI Flows", description="A simple chat workflow using the AI Flows library", author=user:aideveloper1, url="https://huggingface.co/NapthaAI/chat_aiflows", type="template";
-CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha, url="https://huggingface.co/NapthaAI/olas_prediction", type="template";
-CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:creator1, url="https://github.com/NapthaAI/module_hello_world", type="template";
-CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="https://hub.docker.com/_/hello-world", type="docker";
-CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple workflow for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template";
-CREATE module:create_profile_description SET name="Generate Profile Description", description="A simple workflow for writing a profile description based on key points", author=user:creator1, url="https://github.com/NapthaAI/module_create_profile_description", type="template";
-CREATE module:image_to_image SET name="Image to Image Stable Diffusion", description="A simple workflow for generating an image from another image", author=user:creator1, url="https://github.com/NapthaAI/module_image2image", type="template";
-CREATE module:chat SET name="Chat", description="A simple chat workflow", author=user:creator1, url="https://github.com/NapthaAI/chat", type="template";
-CREATE module:multiplayer_chat SET name="Multiplayer Chat", description="A multiplayer chat app", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="flow";
-CREATE module:multi_olas_prediction SET name="Multi Olas Prediction", description="An implementation of multi olas prediction", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="flow";
-CREATE module:babyagi SET name="Babyagi", description="A simple babyagi app", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="flow";
-CREATE module:babyagi_task_initiator SET name="Babyagi Task Initiator", description="A simple babyagi task initiator", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_initiator", type="template";
-CREATE module:babyagi_task_executor SET name="Babyagi Task Executor", description="A simple babyagi task executor", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_executor", type="template";
-CREATE module:babyagi_task_finalizer SET name="Babyagi Task Finalizer", description="A simple babyagi task finalizer", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_finalizer", type="template";
-CREATE module:napthaville_module SET name="Napthaville Module", description="implementation of Agentic game", author=user:naptha, url="https://github.com/moarshy/napthaville_module", type="template";
-CREATE module:napthaville_chat SET name="Napthaville Chat", description="implementation of Napthaville chat between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="flow";
-CREATE module:napthaville_move SET name="Napthaville Move", description="implementation of Napthaville move between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="flow";
-CREATE module:debate_agent SET name="Debate Agent", description="debating agent", author=user:marketagents, url="https://huggingface.co/NapthaAI/debate_agent", type="template";
-CREATE module:debate_protocol SET name="Debate Protocol", description="debating protocol", author=user:marketagents, url="https://huggingface.co/NapthaAI/debate_protocol", type="flow";
+CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:creator1, url="https://github.com/NapthaAI/module_hello_world", type="template", version="0.11";
+CREATE module:chat SET name="Chat", description="A simple chat workflow", author=user:creator1, url="https://github.com/NapthaAI/chat", type="template", version="0.7";
+CREATE module:multiplayer_chat SET name="Multiplayer Chat", description="A multiplayer chat app", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="flow", version="0.6";
+CREATE module:create_profile_description SET name="Generate Profile Description", description="A simple workflow for writing a profile description based on key points", author=user:creator1, url="https://github.com/NapthaAI/module_create_profile_description", type="template", version=0.8";
+CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple workflow for generating an image from text", author=user:creator1, url="https://github.com/NapthaAI/module_generate_image", type="template", version="0.8";
+CREATE module:image_to_image SET name="Image to Image Stable Diffusion", description="A simple workflow for generating an image from another image", author=user:creator1, url="https://github.com/NapthaAI/module_image2image", type="template", version="0.7";
+CREATE module:babyagi SET name="Babyagi", description="A simple babyagi app", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="flow", version="0.1";
+CREATE module:babyagi_task_initiator SET name="Babyagi Task Initiator", description="A simple babyagi task initiator", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_initiator", type="template", version="0.1";
+CREATE module:babyagi_task_executor SET name="Babyagi Task Executor", description="A simple babyagi task executor", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_executor", type="template", version="0.1";
+CREATE module:babyagi_task_finalizer SET name="Babyagi Task Finalizer", description="A simple babyagi task finalizer", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_finalizer", type="template", version="0.1";
+CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha, url="https://huggingface.co/NapthaAI/olas_prediction", type="template", version="0.2";
+CREATE module:multi_olas_prediction SET name="Multi Olas Prediction", description="An implementation of multi olas prediction", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="flow", version="0.1";
+CREATE module:debate_agent SET name="Debate Agent", description="debating agent", author=user:marketagents, url="https://huggingface.co/NapthaAI/debate_agent", type="template", version="0.1";
+CREATE module:debate_protocol SET name="Debate Protocol", description="debating protocol", author=user:marketagents, url="https://huggingface.co/NapthaAI/debate_protocol", type="flow", version="0.1";
+CREATE module:napthaville_module SET name="Napthaville Module", description="implementation of Agentic game", author=user:naptha, url="https://github.com/moarshy/napthaville_module", type="template", version="0.36";
+CREATE module:napthaville_chat SET name="Napthaville Chat", description="implementation of Napthaville chat between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="flow", version="0.4";
+CREATE module:napthaville_move SET name="Napthaville Move", description="implementation of Napthaville move between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="flow", version="0.26";
+CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
 

@@ -5,11 +5,15 @@ import importlib
 import inspect
 import json
 import os
+import sys
 import pytz
 import time
+import shutil
+import subprocess
 import requests
 import traceback
 import importlib
+from pathlib import Path
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
 from packaging import version
@@ -34,6 +38,9 @@ logger = get_logger(__name__)
 # Load environment variables
 load_dotenv(".env")
 os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
+
+if MODULES_PATH not in sys.path:
+    sys.path.append(MODULES_PATH)
 
 @app.task
 def run_flow(flow_run: Dict) -> None:
@@ -95,24 +102,49 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
+def run_poetry_command(command):
+    try:
+        subprocess.run(["poetry"] + command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Poetry command failed: {e.cmd}")
+        logger.error(f"Stdout: {e.stdout}")
+        logger.error(f"Stderr: {e.stderr}")
+        raise
+
 def install_module_if_needed(module_name: str, module_version: str, module_url: str):
     if not module_url:
         raise ValueError(f"Module URL is required for installation of {module_name}")
 
-    logger.info(f"Installing module {module_name} version {module_version}")
+    logger.info(f"Installing/updating module {module_name} version {module_version}")
     
+    module_path = Path(MODULES_PATH) / module_name
+    logger.info(f"Module path exists: {module_path.exists()}")
     try:
-        # Clone the repository
-        clone_repo(
-            tag=module_version, 
-            url=module_url, 
-            module_name=module_name
-        )
-        
-        # Install the module
-        install_module(module_name)
-        
-        logger.info(f"Successfully installed {module_name} version {module_version}")
+        if module_path.exists():
+            logger.info(f"Uninstalling existing {module_name}")
+            run_poetry_command(["remove", module_name])
+            repo = Repo(module_path)
+            logger.info(f"Updating existing repository for {module_name}")
+            repo.remotes.origin.fetch()
+            repo.git.checkout(module_version)
+            logger.info(f"Successfully updated {module_name} to version {module_version}")
+
+        else:
+            # Clone new repository
+            logger.info(f"Cloning new repository for {module_name}")
+            Repo.clone_from(module_url, module_path)
+            repo = Repo(module_path)
+            repo.git.checkout(module_version)
+            logger.info(f"Successfully cloned {module_name} version {module_version}")
+
+        # Reinstall the module
+        logger.info(f"Installing/Reinstalling {module_name}")
+        run_poetry_command(["add", f"{module_path}"])
+
+        logger.info(f"Successfully installed {module_name} version {module_version}")        
+    except GitCommandError as e:
+        logger.error(f"Git operation failed for {module_name}: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"An error occurred while installing {module_name}: {str(e)}")
         raise
@@ -263,5 +295,6 @@ class FlowEngine:
         tn = self.flow_name.replace("-", "_")
         entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
         main_module = importlib.import_module(f"{tn}.run")
+        main_module = importlib.reload(main_module)
         flow_func = getattr(main_module, entrypoint)
         return flow_func, validated_data, cfg
