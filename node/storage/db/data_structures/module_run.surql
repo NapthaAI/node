@@ -34,5 +34,5 @@ DEFINE FIELD created_time ON module_run FLEXIBLE TYPE option<datetime | null>;
 DEFINE FIELD start_processing_time ON module_run FLEXIBLE TYPE option<datetime | null>;
 DEFINE FIELD completed_time ON module_run FLEXIBLE TYPE option<datetime | null>;
 DEFINE FIELD duration ON module_run FLEXIBLE TYPE option<number | null>;
-DEFINE FIELD module_version ON module_run TYPE string DEFAULT "0.1";
-DEFINE FIELD module_url ON module_run TYPE string DEFAULT "";
+DEFINE FIELD module_version ON module_run TYPE option<string | null> DEFAULT "0.1";
+DEFINE FIELD module_url ON module_run TYPE option<string | null> DEFAULT "";
