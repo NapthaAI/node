@@ -2,7 +2,6 @@
 from dotenv import load_dotenv
 import jwt
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
-from naptha_sdk.utils import AsyncMixin
 from node.utils import get_logger
 import os
 from surrealdb import Surreal
@@ -12,7 +11,7 @@ logger = get_logger(__name__)
 load_dotenv()
 
 
-class DB(AsyncMixin):
+class DB():
     """Database class to handle all database operations"""
 
     def __init__(self):
@@ -25,22 +24,19 @@ class DB(AsyncMixin):
         self.surrealdb = Surreal(self.db_url)
         self.is_authenticated = False
         self.initialized = True
-        super().__init__()
 
-    async def __ainit__(self, *args, **kwargs):
-        """Async constructor"""
-        self.hub = await self._authenticated_db()
-
-    async def _authenticated_db(self):
-        try:
-            await self.surrealdb.connect()
-            await self.surrealdb.use(namespace=self.ns, database=self.db)
-            success, token, user_id = await self.signin()
-            self.is_authenticated = True
-            return success, token, user_id
-        except Exception as e:
-            logger.error(f"Authentication failed: {e}")
-            raise
+    async def connect(self):
+        """Connect to the database and authenticate"""
+        if not self.is_authenticated:
+            try:
+                await self.surrealdb.connect()
+                await self.surrealdb.use(namespace=self.ns, database=self.db)
+                success, token, user_id = await self.signin()
+                self.is_authenticated = True
+                return success, token, user_id
+            except Exception as e:
+                logger.error(f"Authentication failed: {e}")
+                raise
 
     async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
@@ -110,14 +106,22 @@ class DB(AsyncMixin):
         return await self.surrealdb.query(query)
 
     async def close(self):
+        """Close the database connection"""
         if self.is_authenticated:
-            await self.surrealdb.close()
-            self.is_authenticated = False
-            logger.info("Database connection closed")
+            try:
+                await self.surrealdb.close()
+            except Exception as e:
+                logger.error(f"Error closing database connection: {e}")
+            finally:
+                self.is_authenticated = False
+                logger.info("Database connection closed")
 
     async def __aenter__(self):
+        """Async enter method for context manager"""
+        await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async exit method for context manager"""
         await self.close()
 

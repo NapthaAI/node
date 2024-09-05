@@ -115,10 +115,10 @@ async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     param module_run: ModuleRun data to update
     """
     logger.info(f"Updating DB with module run: {module_run}")
-    db = DB()
 
     try:
-        updated_module_run = await db.update_module_run(module_run.id, module_run)
+        async with DB() as db:
+            updated_module_run = await db.update_module_run(module_run.id, module_run)
         logger.info(f"Updated module run: {updated_module_run}")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
