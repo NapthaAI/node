@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import jwt
-from node.utils import get_logger
+from node.utils import get_logger, AsyncMixin
 import os
 from surrealdb import Surreal
 from typing import Dict, List, Tuple, Optional
@@ -9,7 +9,7 @@ load_dotenv()
 logger = get_logger(__name__)
 
 
-class Hub:
+class Hub(AsyncMixin):
     def __init__(self, *args, **kwargs):
         local_hub = os.getenv("LOCAL_HUB")
         if local_hub == 'true':
@@ -24,26 +24,14 @@ class Hub:
         self.root_pass = os.getenv("HUB_ROOT_PASS")
 
         self.surrealdb = Surreal(self.hub_url)
-        self.__storedargs = args, kwargs
-        self.async_initialized = False
         self.node_config = None
+        super().__init__()
 
     async def __ainit__(self, *args, **kwargs):
         """Async constructor, you should implement this"""
         success, token, user_id = await self._authenticated_db()
         self.user_id = user_id
         self.token = token
-
-    async def __initobj(self):
-        """Crutch used for __await__ after spawning"""
-        assert not self.async_initialized
-        self.async_initialized = True
-        # pass the parameters to __ainit__ that passed to __init__
-        await self.__ainit__(self.__storedargs[0], self.__storedargs[1])
-        return self
-
-    def __await__(self):
-        return self.__initobj().__await__()
 
     async def _authenticated_db(self):
         try:
@@ -59,15 +47,15 @@ class Hub:
     def _decode_token(self, token: str) -> str:
         return jwt.decode(token, options={"verify_signature": False})["ID"]
 
-    async def signup(self) -> Tuple[bool, Optional[str], Optional[str]]:
+    async def signup(self, username, password) -> Tuple[bool, Optional[str], Optional[str]]:
         user = await self.surrealdb.signup(
             {
                 "NS": self.ns,
                 "DB": self.db,
                 "SC": "user",
-                "name": self.username,
-                "username": self.username,
-                "password": self.password,
+                "name": username,
+                "username": username,
+                "password": password,
                 "invite": "DZHA4ZTK",
             }
         )
@@ -75,6 +63,13 @@ class Hub:
             return False, None, None
         user_id = self._decode_token(user)
         return True, user, user_id
+
+    async def loop_signup(self):
+        success = False
+        while not success:
+            username = input("Enter your username: ")
+            password = input("Enter your password: ")
+            success, _, _ = self.signup(username, password)
 
     async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
