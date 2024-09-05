@@ -266,6 +266,8 @@ CREATE module:napthaville_chat SET name="Napthaville Chat", description="impleme
 CREATE module:napthaville_move SET name="Napthaville Move", description="implementation of Napthaville move between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="flow", version="0.26";
 CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:creator1, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1";
 CREATE module:module_test SET name="Module Test", description="A simple module test", author=user:naptha, url="https://github.com/moarshy/module_test", type="template", version="0.4";
+CREATE module:random_number_agent SET name="Random Number Agent", description="A simple random number agent", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="template", version="0.1";
+CREATE module:random_number_protocol SET name="Random Number Protocol", description="A simple random number protocol", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="template", version="0.1";
 
 CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
 
