@@ -48,15 +48,15 @@ class Hub(AsyncMixin):
     def _decode_token(self, token: str) -> str:
         return jwt.decode(token, options={"verify_signature": False})["ID"]
 
-    async def signup(self, username, password) -> Tuple[bool, Optional[str], Optional[str]]:
+    async def signup(self) -> Tuple[bool, Optional[str], Optional[str]]:
         user = await self.surrealdb.signup(
             {
                 "NS": self.ns,
                 "DB": self.db,
                 "SC": "user",
-                "name": username,
-                "username": username,
-                "password": password,
+                "name": self.username,
+                "username": self.username,
+                "password": self.password,
                 "invite": "DZHA4ZTK",
             }
         )
@@ -64,13 +64,6 @@ class Hub(AsyncMixin):
             return False, None, None
         user_id = self._decode_token(user)
         return True, user, user_id
-
-    async def loop_signup(self):
-        success = False
-        while not success:
-            username = input("Enter your username: ")
-            password = input("Enter your password: ")
-            success, _, _ = self.signup(username, password)
 
     async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
