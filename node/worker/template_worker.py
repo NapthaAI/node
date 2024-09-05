@@ -97,9 +97,6 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         module = importlib.import_module(module_name)
         module_path = os.path.join(MODULES_PATH, module_name)
 
-        if module_path:
-            raise Exception("Error for fun")
-
         if not Path(module_path).exists():
             logger.warning(f"Module directory for {module_name} does not exist")
             return False
