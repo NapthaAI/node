@@ -9,6 +9,10 @@ from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict, Optional
 import yaml
+from websockets.exceptions import ConnectionClosedError
+import asyncio
+from functools import wraps
+
 from node.comms.storage import get_ipns_record
 
 load_dotenv()
@@ -22,6 +26,8 @@ NODE_DIR = CELERY_WORKER_DIR.parent
 MODULES_PATH = f"{NODE_DIR}/{os.getenv('MODULES_PATH')}"
 BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
 BASE_OUTPUT_DIR = NODE_DIR / BASE_OUTPUT_DIR[2:]
+MAX_RETRIES = 3
+RETRY_DELAY = 1
 
 
 def download_from_ipfs(ipfs_hash: str, temp_dir: str) -> str:
@@ -86,6 +92,23 @@ def upload_json_string_to_ipfs(json_string: str) -> str:
     client.pin.add(res)
     return res
 
+def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except ConnectionClosedError as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f"Max retries reached. Last error: {str(e)}")
+                        raise
+                    logger.warning(f"Connection closed. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(delay)
+        return wrapper
+    return decorator
+
+@with_retry()
 async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     """
     Update the DB with the module run status synchronously
@@ -97,10 +120,13 @@ async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     try:
         updated_module_run = await db.update_module_run(module_run.id, module_run)
         logger.info(f"Updated module run: {updated_module_run}")
+    except ConnectionClosedError:
+        # This will be caught by the retry decorator
+        raise
     except Exception as e:
-        logger.error(f"Failed to update DB with module run status: {e}")
-        raise e
-
+        logger.error(f"Failed to update DB with module run status: {str(e)}")
+        raise
+    
 def load_yaml_config(cfg_path):
     with open(cfg_path, "r") as file:
         return yaml.load(file, Loader=yaml.FullLoader)

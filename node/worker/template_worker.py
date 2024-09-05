@@ -1,24 +1,21 @@
-import asyncio
-from datetime import datetime
-from dotenv import load_dotenv
-import importlib
-import inspect
-import json
 import os
 import sys
 import pytz
-import time
-import shutil
-import subprocess
+import json
+import inspect
+import asyncio
 import requests
+import importlib
+import subprocess
 import traceback
 import importlib
-from pathlib import Path
 from git import Repo
-from git.exc import GitCommandError, InvalidGitRepositoryError
-from packaging import version
 from typing import Dict
-from node.worker.main import app
+from pathlib import Path
+from pydantic import BaseModel
+from datetime import datetime
+from dotenv import load_dotenv
+from git.exc import GitCommandError, InvalidGitRepositoryError
 from node.worker.utils import (
     load_yaml_config, 
     MODULES_PATH, 
@@ -28,7 +25,7 @@ from node.worker.utils import (
     upload_to_ipfs, 
     upload_json_string_to_ipfs
 )
-from node.module_manager import clone_repo, install_module
+from node.worker.main import app
 from naptha_sdk.client.node import Node
 from naptha_sdk.schemas import ModuleRun
 from node.utils import get_logger
@@ -42,42 +39,68 @@ os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 if MODULES_PATH not in sys.path:
     sys.path.append(MODULES_PATH)
 
+
 @app.task
 def run_flow(flow_run: Dict) -> None:
-    flow_run = ModuleRun(**flow_run)
-    module_version = f"v{flow_run.module_version}"
-
-    logger.info(f"Received flow run: {flow_run}")
-    logger.info(f"Checking if module {flow_run.module_name} version {module_version} is installed")
-    
-    # Check if module is installed and install if necessary
-    if not is_module_installed(flow_run.module_name, module_version):
-        if not flow_run.module_url:
-            raise ValueError(f"Module URL is required for installation of {flow_run.module_name}")
-        install_module_if_needed(flow_run.module_name, module_version, flow_run.module_url)
-
     loop = asyncio.get_event_loop()
-    workflow_engine = FlowEngine(flow_run)
     try:
-        loop.run_until_complete(workflow_engine.init_run())
-        loop.run_until_complete(workflow_engine.start_run())
-        while True:
-            if workflow_engine.flow_run.status == "error":
-                loop.run_until_complete(workflow_engine.fail())
-                break
-            else:
-                loop.run_until_complete(workflow_engine.complete())
-                break
-            time.sleep(3)
+        loop.run_until_complete(_run_flow_async(flow_run))
     except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-        loop.run_until_complete(workflow_engine.fail())
+        error_msg = f"Error in run_flow: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        loop.run_until_complete(handle_failure(flow_run, error_msg))
+
+async def _run_flow_async(flow_run: Dict) -> None:
+    flow_run_obj = ModuleRun(**flow_run)
+    module_version = f"v{flow_run_obj.module_version}"
+
+    logger.info(f"Received flow run: {flow_run_obj}")
+    logger.info(f"Checking if module {flow_run_obj.module_name} version {module_version} is installed")
+    
+    if not is_module_installed(flow_run_obj.module_name, module_version):
+        logger.info(f"Module {flow_run_obj.module_name} version {module_version} is not installed. Attempting to install...")
+        if not flow_run_obj.module_url:
+            raise ValueError(f"Module URL is required for installation of {flow_run_obj.module_name}")
+        install_module_if_needed(flow_run_obj.module_name, module_version, flow_run_obj.module_url)
+    
+    logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed. Initializing workflow engine...")
+    workflow_engine = FlowEngine(flow_run_obj)
+
+    await workflow_engine.init_run()
+    await workflow_engine.start_run()
+    
+    if workflow_engine.flow_run.status == "completed":
+        await workflow_engine.complete()
+    elif workflow_engine.flow_run.status == "error":
+        await workflow_engine.fail()
+
+async def handle_failure(flow_run: Dict, error_msg: str) -> None:
+    flow_run_obj = ModuleRun(**flow_run)
+    flow_run_obj.status = "error"
+    flow_run_obj.error = True
+    flow_run_obj.error_message = error_msg
+    flow_run_obj.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
+    if hasattr(flow_run_obj, 'start_processing_time') and flow_run_obj.start_processing_time:
+        flow_run_obj.duration = (datetime.fromisoformat(flow_run_obj.completed_time) - 
+                                 datetime.fromisoformat(flow_run_obj.start_processing_time)).total_seconds()
+    else:
+        flow_run_obj.duration = 0
+    
+    try:
+        await update_db_with_status_sync(flow_run_obj)
+    except Exception as db_error:
+        logger.error(f"Failed to update database after error: {str(db_error)}")
 
 def is_module_installed(module_name: str, required_version: str) -> bool:
     try:
         module = importlib.import_module(module_name)
         module_path = os.path.join(MODULES_PATH, module_name)
-        
+
+        if not Path(module_path).exists():
+            logger.warning(f"Module directory for {module_name} does not exist")
+            return False
+            
         try:
             repo = Repo(module_path)
             if repo.head.is_detached:
@@ -95,7 +118,7 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
                 logger.warning(f"No tag found for current commit in {module_name}")
                 return False
         except (InvalidGitRepositoryError, GitCommandError) as e:
-            logger.error(f"Error checking Git repository for {module_name}: {str(e)}")
+            logger.error(f"Git error for {module_name}: {str(e)}")
             return False
         
     except ImportError:
@@ -106,10 +129,11 @@ def run_poetry_command(command):
     try:
         subprocess.run(["poetry"] + command, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        logger.error(f"Poetry command failed: {e.cmd}")
+        error_msg = f"Poetry command failed: {e.cmd}"
+        logger.error(error_msg)
         logger.error(f"Stdout: {e.stdout}")
         logger.error(f"Stderr: {e.stderr}")
-        raise
+        raise RuntimeError(error_msg)
 
 def install_module_if_needed(module_name: str, module_version: str, module_url: str):
     if not module_url:
@@ -143,12 +167,13 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
 
         logger.info(f"Successfully installed {module_name} version {module_version}")        
     except GitCommandError as e:
-        logger.error(f"Git operation failed for {module_name}: {str(e)}")
-        raise
+        error_msg = f"Git operation failed for {module_name}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     except Exception as e:
-        logger.error(f"An error occurred while installing {module_name}: {str(e)}")
-        raise
-
+        error_msg = f"Error installing {module_name}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
 
 class FlowEngine:
     def __init__(self, flow_run: ModuleRun):
@@ -234,11 +259,19 @@ class FlowEngine:
             )
         logger.info(f"Flow run response: {response}")
 
-        if isinstance(response, dict):
+        if isinstance(response, (dict, list, tuple)):
             response = json.dumps(response)
+
+        if isinstance(response, BaseModel):
+            response = response.model_dump_json()
+
+        # if response if not a string, raise an error
+        if not isinstance(response, str):
+            raise ValueError(f"Module/flow response is not a string: {response}. Current response type: {type(response)}")
 
         self.flow_run.results = [response]
         await self.handle_ipfs_output(self.cfg, response)
+        self.flow_run.status = "completed"
 
     async def complete(self):
         self.flow_run.status = "completed"
@@ -250,9 +283,9 @@ class FlowEngine:
         logger.info(f"Flow run completed: {self.flow_run}")
 
     async def fail(self):
-        logger.error(f"Error running template flow_run")
+        logger.error("Error running flow")
         error_details = traceback.format_exc()
-        logger.error(f"Full traceback: {error_details}")
+        logger.error(f"Traceback: {error_details}")
         self.flow_run.status = "error"
         self.flow_run.error = True
         self.flow_run.error_message = error_details
