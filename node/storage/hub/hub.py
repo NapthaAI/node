@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import jwt
-from node.utils import get_logger, AsyncMixin
+from naptha_sdk.utils import AsyncMixin
+from node.utils import get_logger
 import os
 from surrealdb import Surreal
 from typing import Dict, List, Tuple, Optional
