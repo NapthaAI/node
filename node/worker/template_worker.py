@@ -2,6 +2,8 @@ import os
 import sys
 import pytz
 import json
+import fcntl
+import time
 import inspect
 import asyncio
 import requests
@@ -15,6 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_fixed
 from git.exc import GitCommandError, InvalidGitRepositoryError
 from node.worker.utils import (
     load_yaml_config, 
@@ -39,6 +42,21 @@ os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 if MODULES_PATH not in sys.path:
     sys.path.append(MODULES_PATH)
 
+def acquire_lock(lock_file):
+    start_time = time.time()
+    while True:
+        try:
+            lock_fd = open(lock_file, 'w')
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return lock_fd
+        except IOError:
+            if time.time() - start_time > 300:  # 5 minutes timeout
+                raise TimeoutError("Failed to acquire lock after 5 minutes")
+            time.sleep(1)
+
+def release_lock(lock_fd):
+    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    lock_fd.close()
 
 @app.task
 def run_flow(flow_run: Dict) -> None:
@@ -51,6 +69,7 @@ def run_flow(flow_run: Dict) -> None:
         logger.error(f"Traceback: {traceback.format_exc()}")
         loop.run_until_complete(handle_failure(flow_run, error_msg))
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 async def _run_flow_async(flow_run: Dict) -> None:
     flow_run_obj = ModuleRun(**flow_run)
     module_version = f"v{flow_run_obj.module_version}"
@@ -64,7 +83,11 @@ async def _run_flow_async(flow_run: Dict) -> None:
             raise ValueError(f"Module URL is required for installation of {flow_run_obj.module_name}")
         install_module_if_needed(flow_run_obj.module_name, module_version, flow_run_obj.module_url)
     
-    logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed. Initializing workflow engine...")
+    # Verify module installation
+    if not verify_module_installation(flow_run_obj.module_name):
+        raise RuntimeError(f"Module {flow_run_obj.module_name} failed verification after installation")
+    
+    logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed and verified. Initializing workflow engine...")
     workflow_engine = FlowEngine(flow_run_obj)
 
     await workflow_engine.init_run()
@@ -135,6 +158,14 @@ def run_poetry_command(command):
         logger.error(f"Stderr: {e.stderr}")
         raise RuntimeError(error_msg)
 
+def verify_module_installation(module_name: str) -> bool:
+    try:
+        importlib.import_module(f"{module_name}.run")
+        return True
+    except ImportError:
+        return False
+    
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def install_module_if_needed(module_name: str, module_version: str, module_url: str):
     if not module_url:
         raise ValueError(f"Module URL is required for installation of {module_name}")
@@ -143,7 +174,14 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
     
     module_path = Path(MODULES_PATH) / module_name
     logger.info(f"Module path exists: {module_path.exists()}")
+
+    lock_file = Path(MODULES_PATH) / f"{module_name}.lock"
+    lock_fd = None
+
     try:
+        lock_fd = acquire_lock(lock_file)
+        logger.info(f"Acquired lock for {module_name}")
+
         if module_path.exists():
             logger.info(f"Uninstalling existing {module_name}")
             run_poetry_command(["remove", module_name])
@@ -152,7 +190,6 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
             repo.remotes.origin.fetch()
             repo.git.checkout(module_version)
             logger.info(f"Successfully updated {module_name} to version {module_version}")
-
         else:
             # Clone new repository
             logger.info(f"Cloning new repository for {module_name}")
@@ -165,15 +202,19 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
         logger.info(f"Installing/Reinstalling {module_name}")
         run_poetry_command(["add", f"{module_path}"])
 
-        logger.info(f"Successfully installed {module_name} version {module_version}")        
-    except GitCommandError as e:
-        error_msg = f"Git operation failed for {module_name}: {str(e)}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg)
+        # Verify installation
+        if not verify_module_installation(module_name):
+            raise RuntimeError(f"Module {module_name} failed verification after installation")
+
+        logger.info(f"Successfully installed and verified {module_name} version {module_version}")        
     except Exception as e:
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
         raise RuntimeError(error_msg)
+    finally:
+        if lock_fd:
+            release_lock(lock_fd)
+            logger.info(f"Released lock for {module_name}")
 
 class FlowEngine:
     def __init__(self, flow_run: ModuleRun):
