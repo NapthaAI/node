@@ -11,7 +11,6 @@ logger = get_logger(__name__)
 BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 
-# Endpoint to receive a task
 async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
     """
     Create a Task
@@ -21,20 +20,19 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
     try:
         logger.info(f"Received task: {module_run_input}")
 
-        hub = await Hub()
-        module = await hub.list_modules(f"module:{module_run_input.module_name}")
-        logger.info(f"Found module: {module}")
+        async with Hub() as hub:
+            module = await hub.list_modules(f"module:{module_run_input.module_name}")
+            logger.info(f"Found module: {module}")
 
-        if not module:
-            raise Exception("Module not found")
+            if not module:
+                raise Exception("Module not found")
 
-        module_run_input.module_type = module["type"]
-        module_run_input.module_version = module["version"]
-        module_run_input.module_url = module["url"]
+            module_run_input.module_type = module["type"]
+            module_run_input.module_version = module["version"]
+            module_run_input.module_url = module["url"]
 
-
-        if module["type"] == "docker":
-            module_run_input.module_params = DockerParams(**module_run_input.module_params)
+            if module["type"] == "docker":
+                module_run_input.module_params = DockerParams(**module_run_input.module_params)
 
         async with DB() as db:
             module_run = await db.create_module_run(module_run_input)
