@@ -11,7 +11,6 @@ logger = get_logger(__name__)
 BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 
-# Endpoint to receive a task
 async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
     """
     Create a Task
@@ -21,27 +20,26 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
     try:
         logger.info(f"Received task: {module_run_input}")
 
-        hub = await Hub()
-        module = await hub.list_modules(f"module:{module_run_input.module_name}")
-        logger.info(f"Found module: {module}")
+        async with Hub() as hub:
+            module = await hub.list_modules(f"module:{module_run_input.module_name}")
+            logger.info(f"Found module: {module}")
 
-        if not module:
-            raise Exception("Module not found")
+            if not module:
+                raise Exception("Module not found")
 
-        module_run_input.module_type = module["type"]
-        module_run_input.module_version = module["version"]
-        module_run_input.module_url = module["url"]
+            module_run_input.module_type = module["type"]
+            module_run_input.module_version = module["version"]
+            module_run_input.module_url = module["url"]
 
+            if module["type"] == "docker":
+                module_run_input.module_params = DockerParams(**module_run_input.module_params)
 
-        if module["type"] == "docker":
-            module_run_input.module_params = DockerParams(**module_run_input.module_params)
+        async with DB() as db:
+            module_run = await db.create_module_run(module_run_input)
+            logger.info(f"Created module run: {module_run}")
 
-        db = DB()
-        module_run = await db.create_module_run(module_run_input)
-        logger.info(f"Created module run: {module_run}")
-
-        updated_module_run = await db.update_module_run(module_run.id, module_run)
-        logger.info(f"Updated module run: {updated_module_run}")
+            updated_module_run = await db.update_module_run(module_run.id, module_run)
+            logger.info(f"Updated module run: {updated_module_run}")
 
         # Enqueue the module run in Celery
         if module_run.module_type in ["flow", "template"]:
@@ -57,7 +55,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         logger.error(f"Failed to run module: {str(e)}")
         error_details = traceback.format_exc()
         logger.error(f"Full traceback: {error_details}")
-        raise Exception(f"Failed to run module: {module_run}")
+        raise Exception(f"Failed to run module: {module_run_input}")
 
 
 async def check_task(module_run: ModuleRun) -> ModuleRun:
@@ -68,8 +66,8 @@ async def check_task(module_run: ModuleRun) -> ModuleRun:
     """
     logger.info(f"Checking task: {module_run}")
 
-    db = DB()
-    module_run = await db.list_module_runs(module_run.id)
+    async with DB() as db:
+        module_run = await db.list_module_runs(module_run.id)
 
     logger.info(f"Found task: {module_run}")
 

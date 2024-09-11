@@ -1,7 +1,6 @@
 
 from dotenv import load_dotenv
 import jwt
-import asyncio
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger
 import os
@@ -12,47 +11,32 @@ logger = get_logger(__name__)
 load_dotenv()
 
 
-class DB:
+class DB():
     """Database class to handle all database operations"""
 
-    _instance = None
-    _lock = asyncio.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(DB, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self):
-        if not hasattr(self, 'initialized'):
-            self.endpoint = os.getenv("DB_URL")
-            self.ns = os.getenv("DB_NS")
-            self.db = os.getenv("DB_DB")
-            self.username = os.getenv("DB_ROOT_USER")
-            self.password = os.getenv("DB_ROOT_PASS")
-            self.surrealdb = Surreal(self.endpoint)
-            self.is_authenticated = False
-            self.initialized = True
+        self.db_url = os.getenv("DB_URL")
+        self.ns = os.getenv("DB_NS")
+        self.db = os.getenv("DB_DB")
+        self.username = os.getenv("DB_ROOT_USER")
+        self.password = os.getenv("DB_ROOT_PASS")
+
+        self.surrealdb = Surreal(self.db_url)
+        self.is_authenticated = False
+        self.initialized = True
 
     async def connect(self):
+        """Connect to the database and authenticate"""
         if not self.is_authenticated:
-            async with self._lock:
-                if not self.is_authenticated:
-                    await self._authenticated_db()
-
-    async def _authenticated_db(self):
-        try:
-            await self.surrealdb.connect()
-            await self.surrealdb.use(namespace=self.ns, database=self.db)
-            success, token, user_id = await self.signin()
-            if success:
+            try:
+                await self.surrealdb.connect()
+                await self.surrealdb.use(namespace=self.ns, database=self.db)
+                success, token, user_id = await self.signin()
                 self.is_authenticated = True
-                self.user_id, self.token = user_id, token
-            else:
-                raise Exception("Authentication failed")
-        except Exception as e:
-            logger.error(f"Authentication failed: {e}")
-            raise
+                return success, token, user_id
+            except Exception as e:
+                logger.error(f"Authentication failed: {e}")
+                raise
 
     async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
@@ -81,18 +65,15 @@ class DB:
         return (True, user_id) if user_id else (False, None)
 
     async def create_user(self, user_input: Dict) -> Tuple[bool, Optional[Dict]]:
-        await self.connect()
         user = await self.surrealdb.create("user", user_input)
         return user[0]
 
     async def get_user(self, user_input: Dict) -> Optional[Dict]:
-        await self.connect()
         user_id = "user:" + user_input['public_key']
         logger.info(f"Getting user: {user_id}")
         return await self.surrealdb.select(user_id)
 
     async def create_module_run(self, module_run_input: ModuleRunInput) -> ModuleRun:
-        await self.connect()
         logger.info(f"Creating module run: {module_run_input.model_dict()}")
         module_run = await self.surrealdb.create("module_run", module_run_input.model_dict())
         logger.info(f"Created module run: {module_run_input}")
@@ -100,12 +81,10 @@ class DB:
         return ModuleRun(**module_run)
 
     async def update_module_run(self, module_run_id: str, module_run: ModuleRun) -> bool:
-        await self.connect()
         logger.info(f"Updating module run {module_run_id}: {module_run.model_dict()}")
         return await self.surrealdb.update(module_run_id, module_run.model_dict())
 
     async def list_module_runs(self, module_run_id=None) -> List[ModuleRun]:
-        await self.connect()
         logger.info(f'Listing module runs with ID: {module_run_id}')
         if module_run_id is None:
             module_runs = await self.surrealdb.select("module_run")
@@ -116,7 +95,6 @@ class DB:
             return ModuleRun(**module_run)
 
     async def delete_module_run(self, module_run_id: str) -> bool:
-        await self.connect()
         try:
             await self.surrealdb.delete(module_run_id)
             return True
@@ -125,19 +103,25 @@ class DB:
             return False
 
     async def query(self, query: str) -> List:
-        await self.connect()
         return await self.surrealdb.query(query)
 
     async def close(self):
+        """Close the database connection"""
         if self.is_authenticated:
-            await self.surrealdb.close()
-            self.is_authenticated = False
-            logger.info("Database connection closed")
+            try:
+                await self.surrealdb.close()
+            except Exception as e:
+                logger.error(f"Error closing database connection: {e}")
+            finally:
+                self.is_authenticated = False
+                logger.info("Database connection closed")
 
     async def __aenter__(self):
+        """Async enter method for context manager"""
         await self.connect()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async exit method for context manager"""
         await self.close()
 
