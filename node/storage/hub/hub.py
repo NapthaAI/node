@@ -9,75 +9,76 @@ from typing import Dict, List, Tuple, Optional
 load_dotenv()
 logger = get_logger(__name__)
 
-
 class Hub(AsyncMixin):
     def __init__(self, *args, **kwargs):
         local_hub = os.getenv("LOCAL_HUB")
-        if local_hub == 'true':
-            self.hub_url = os.getenv("LOCAL_HUB_URL")
-        else:
-            self.hub_url = os.getenv("PUBLIC_HUB_URL")
+        self.hub_url = os.getenv("LOCAL_HUB_URL") if local_hub == 'true' else os.getenv("PUBLIC_HUB_URL")
         self.ns = os.getenv("HUB_NS")
         self.db = os.getenv("HUB_DB")
         self.username = os.getenv("HUB_USERNAME")
         self.password = os.getenv("HUB_PASSWORD")
-        self.root_user = os.getenv("HUB_ROOT_USER")
-        self.root_pass = os.getenv("HUB_ROOT_PASS")
 
         self.surrealdb = Surreal(self.hub_url)
+        self.is_authenticated = False
         self.node_config = None
+        self.user_id = None
+        self.token = None
         super().__init__()
 
     async def __ainit__(self, *args, **kwargs):
-        """Async constructor, you should implement this"""
-        success, token, user_id = await self._authenticated_db()
-        self.user_id = user_id
-        self.token = token
+        await self.connect()
 
-    async def _authenticated_db(self):
-        try:
-            await self.surrealdb.connect()
-            await self.surrealdb.use(namespace=self.ns, database=self.db)
-            success, token, user_id = await self.signin()
-            self.is_authenticated = True
-            return success, token, user_id
-        except Exception as e:
-            logger.error(f"Authentication failed: {e}")
-            raise
+    async def connect(self):
+        """Connect to the database and authenticate"""
+        if not self.is_authenticated:
+            try:
+                await self.surrealdb.connect()
+                await self.surrealdb.use(namespace=self.ns, database=self.db)
+                success, token, user_id = await self.signin()
+                if success:
+                    self.is_authenticated = True
+                    self.user_id = user_id
+                    self.token = token
+                    return success, token, user_id
+                else:
+                    raise Exception("Authentication failed")
+            except Exception as e:
+                logger.error(f"Connection failed: {e}")
+                raise
 
     def _decode_token(self, token: str) -> str:
-        return jwt.decode(token, options={"verify_signature": False})["ID"]
-
-    async def signup(self) -> Tuple[bool, Optional[str], Optional[str]]:
-        user = await self.surrealdb.signup(
-            {
-                "NS": self.ns,
-                "DB": self.db,
-                "SC": "user",
-                "name": self.username,
-                "username": self.username,
-                "password": self.password,
-                "invite": "DZHA4ZTK",
-            }
-        )
-        if not user:
-            return False, None, None
-        user_id = self._decode_token(user)
-        return True, user, user_id
+        try:
+            return jwt.decode(token, options={"verify_signature": False})["ID"]
+        except jwt.PyJWTError as e:
+            logger.error(f"Token decoding failed: {e}")
+            return None
 
     async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
-            user = await self.surrealdb.signin(
-                {
-                    "NS": self.ns,
-                    "DB": self.db,
-                    "SC": "user",
-                    "username": self.username,
-                    "password": self.password,
-                },
-            )
+            user = await self.surrealdb.signin({
+                "NS": self.ns,
+                "DB": self.db,
+                "SC": "user",
+                "username": self.username,
+                "password": self.password,
+            })
+            user_id = self._decode_token(user)
+            return True, user, user_id
         except Exception as e:
-            logger.error(f"Authentication failed: {e}")
+            logger.error(f"Sign in failed: {e}")
+            return False, None, None
+
+    async def signup(self) -> Tuple[bool, Optional[str], Optional[str]]:
+        user = await self.surrealdb.signup({
+            "NS": self.ns,
+            "DB": self.db,
+            "SC": "user",
+            "name": self.username,
+            "username": self.username,
+            "password": self.password,
+            "invite": "DZHA4ZTK",
+        })
+        if not user:
             return False, None, None
         user_id = self._decode_token(user)
         return True, user, user_id
@@ -101,7 +102,7 @@ class Hub(AsyncMixin):
     async def get_user(self, user_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(user_id)
 
-    async def create_node(self, node: Dict) -> Tuple[bool, Optional[Dict]]:
+    async def create_node(self, node: Dict) -> Dict:
         self.node_config = await self.surrealdb.create("node", node)
         return self.node_config
 
@@ -159,3 +160,25 @@ class Hub(AsyncMixin):
         return await self.surrealdb.query(
             "RELATE $me->requests_to_publish->$auction", publish
         )
+
+    async def close(self):
+        """Close the database connection"""
+        if self.is_authenticated:
+            try:
+                await self.surrealdb.close()
+            except Exception as e:
+                logger.error(f"Error closing database connection: {e}")
+            finally:
+                self.is_authenticated = False
+                self.user_id = None
+                self.token = None
+                logger.info("Database connection closed")
+
+    async def __aenter__(self):
+        """Async enter method for context manager"""
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async exit method for context manager"""
+        await self.close()
