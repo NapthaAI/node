@@ -42,7 +42,26 @@ os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 if MODULES_PATH not in sys.path:
     sys.path.append(MODULES_PATH)
 
+# These functions implement a file-based locking mechanism to ensure that only one process
+# can install or update a module at a time. This prevents conflicts when multiple workers
+# attempt to modify the same module simultaneously.
+
 def acquire_lock(lock_file):
+    """
+    Attempts to acquire a lock on the specified file.
+    
+    This function is used to ensure exclusive access when installing or updating a module.
+    It will retry for up to 5 minutes before timing out.
+    
+    Args:
+        lock_file (str): Path to the lock file.
+    
+    Returns:
+        file object: The locked file descriptor.
+    
+    Raises:
+        TimeoutError: If unable to acquire the lock within 5 minutes.
+    """
     start_time = time.time()
     while True:
         try:
@@ -55,6 +74,15 @@ def acquire_lock(lock_file):
             time.sleep(1)
 
 def release_lock(lock_fd):
+    """
+    Releases the lock on the given file descriptor.
+    
+    This function should be called after the module installation or update is complete
+    to allow other processes to acquire the lock.
+    
+    Args:
+        lock_fd (file object): The locked file descriptor to release.
+    """
     fcntl.flock(lock_fd, fcntl.LOCK_UN)
     lock_fd.close()
 
