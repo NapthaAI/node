@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from node.comms.http_server.orchestration import router as http_server_orchestration_router
-from node.comms.http_server.storage import router as http_server_storage_router
-from node.comms.http_server.task import router as http_server_router
-from node.comms.http_server.user import router as http_server_user_router
+from node.server.http.orchestration import router as http_server_orchestration_router
+from node.server.http.storage import router as http_server_storage_router
+from node.server.http.task import router as http_server_router
+from node.server.http.user import router as http_server_user_router
 from node.utils import get_logger
 
 logger = get_logger(__name__)

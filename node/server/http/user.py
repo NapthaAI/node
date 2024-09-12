@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from node.utils import get_logger
 from typing import Dict
-from node.comms.user import register_user, check_user
+from node.server.user import register_user, check_user
 
 logger = get_logger(__name__)
 

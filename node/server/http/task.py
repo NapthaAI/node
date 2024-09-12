@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from naptha_sdk.schemas import  ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
-from node.comms.task import create_task, check_task
+from node.server.task import create_task, check_task
 
 
 logger = get_logger(__name__)

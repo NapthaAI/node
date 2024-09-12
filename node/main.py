@@ -2,8 +2,8 @@ import asyncio
 from dotenv import load_dotenv
 from pathlib import Path
 
-from node.comms.http_server.server import HTTPServer
-from node.comms.ws_server.server import WebSocketServer
+from node.server.http.server import HTTPServer
+from node.server.ws.server import WebSocketServer
 from node.module_manager import setup_modules_from_config
 from node.storage.db.init_db import init_db
 from node.storage.hub.hub import Hub

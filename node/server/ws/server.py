@@ -2,10 +2,10 @@ import asyncio
 import json
 import websockets
 
-from node.comms.ws_server.task import create_task_ws, check_task_ws
-from node.comms.ws_server.user import register_user_ws, check_user_ws
-from node.comms.ws_server.orchestration import create_task_run_ws, update_task_run_ws
-from node.comms.ws_server.storage import write_to_ipfs_ws, read_from_ipfs_or_ipns, write_storage_ws, read_storage_ws
+from node.server.ws.task import create_task_ws, check_task_ws
+from node.server.ws.user import register_user_ws, check_user_ws
+from node.server.ws.orchestration import create_task_run_ws, update_task_run_ws
+from node.server.ws.storage import write_to_ipfs_ws, read_from_ipfs_or_ipns, write_storage_ws, read_storage_ws
 from node.utils import get_logger
 
 

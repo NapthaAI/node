@@ -3,7 +3,7 @@ import base64
 from pydantic import BaseModel
 from fastapi import UploadFile
 from node.utils import get_logger, get_config
-from node.comms.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
+from node.server.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from fastapi import WebSocket
 import io
 import os

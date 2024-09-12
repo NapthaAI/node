@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Form
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from node.utils import get_logger, get_config
-from node.comms.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
+from node.server.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 
 
 logger = get_logger(__name__)
