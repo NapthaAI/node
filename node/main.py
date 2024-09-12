@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from node.payments import setup_payments_from_config
 from node.storage.db.init_db import init_db
 from node.storage.hub.hub import Hub
 
@@ -178,6 +179,8 @@ async def on_startup():
         uri = f"{node_details['routing']}/ws/{node[0]['id'].split(':')[-1]}"
         asyncio.create_task(websocket_handler(uri))
 
+    # Setup payments
+    setup_payments_from_config(config)
 
 # Unregister the node with the hub on shutdown
 @app.on_event("shutdown")

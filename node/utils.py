@@ -87,6 +87,13 @@ def get_config():
     config["HUB_USERNAME"] = os.getenv("HUB_USERNAME")
     config["HUB_PASSWORD"] = os.getenv("HUB_PASSWORD")
     config["DOCKER_JOBS"] = os.getenv("DOCKER_JOBS", "False")
+
+    # payments config
+    config["WEB3_PROVIDER_URL"] = os.getenv("WEB3_PROVIDER_URL")
+    config["PAIDPLAN_DID"] = os.getenv("PAIDPLAN_DID")
+    config["FREEPLAN_DID"] = os.getenv("FREEPLAN_DID")
+    config["MARKETPLACE_AUTH_TOKEN"] = os.getenv("MARKETPLACE_AUTH_TOKEN")
+    config["SESSION_KEY"] = os.getenv("SESSION_KEY")
     return config
 
 
