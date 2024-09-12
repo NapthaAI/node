@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import logging
-from node.schemas import NodeConfigSchema
+from node.schemas import NodeConfig
 from node.user import get_public_key
 import os
 import platform
@@ -92,7 +92,7 @@ def get_config():
 
 def get_node_config(config):
     """Get the node configuration."""
-    node_config = NodeConfigSchema(
+    node_config = NodeConfig(
         public_key=config["PUBLIC_KEY"],
         ip=config["NODE_IP"],
         port=config["NODE_PORT"],
@@ -103,7 +103,6 @@ def get_node_config(config):
         os=config["OS_INFO"],
         arch=config["ARCH_INFO"],
         ram=config["RAM_INFO"],
-        id=None,
         docker_jobs=config["DOCKER_JOBS"],
     )
     return node_config

@@ -5,6 +5,7 @@ from node.utils import get_logger
 import os
 from surrealdb import Surreal
 from typing import Dict, List, Tuple, Optional
+from node.schemas import NodeConfig
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -20,7 +21,6 @@ class Hub(AsyncMixin):
 
         self.surrealdb = Surreal(self.hub_url)
         self.is_authenticated = False
-        self.node_config = None
         self.user_id = None
         self.token = None
         super().__init__()
@@ -102,9 +102,12 @@ class Hub(AsyncMixin):
     async def get_user(self, user_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(user_id)
 
-    async def create_node(self, node: Dict) -> Dict:
-        self.node_config = await self.surrealdb.create("node", node)
-        return self.node_config
+    async def create_node(self, node_config: NodeConfig) -> Dict:
+        node_config.owner = self.user_id
+        self.node_config = await self.surrealdb.create("node", node_config)
+        if self.node_config is None:
+            raise Exception("Failed to register node")
+        return self.node_config[0]
 
     async def get_node(self, node_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(node_id)
