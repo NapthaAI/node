@@ -377,7 +377,7 @@ darwin_install_docker() {
 
 # Function to start RabbitMQ on Linux
 linux_start_rabbitmq() {
-    echo "Starting RabbitMQ on Linux..." | log_with_service_name "RabbitMQ" $GREEN
+    echo "Starting RabbitMQ on Linux..." | log_with_service_name "RabbitMQ" $PINK
     # Load the .env file
     set -a
     source .env
@@ -403,12 +403,12 @@ linux_start_rabbitmq() {
         sudo rabbitmqctl set_user_tags "$RMQ_USER" administrator
         sudo rabbitmqctl set_permissions -p / "$RMQ_USER" ".*" ".*" ".*"
     fi
-    echo "RabbitMQ started with management console on default port." | log_with_service_name "RabbitMQ" $GREEN
+    echo "RabbitMQ started with management console on default port." | log_with_service_name "RabbitMQ" $PINK
 }
 
 # Function to start RabbitMQ on macOS
 darwin_start_rabbitmq() {
-    echo "Starting RabbitMQ on macOS..." | log_with_service_name "RabbitMQ" $GREEN
+    echo "Starting RabbitMQ on macOS..." | log_with_service_name "RabbitMQ" $PINK
 
     # Load the .env file
     set -a
@@ -434,7 +434,7 @@ darwin_start_rabbitmq() {
         rabbitmqctl set_permissions -p / "$RMQ_USER" ".*" ".*" ".*"
     fi
 
-    echo "RabbitMQ started with management console on default port." | log_with_service_name "RabbitMQ" $GREEN
+    echo "RabbitMQ started with management console on default port." | log_with_service_name "RabbitMQ" $PINK
 }
 
 # Function to set up poetry within Miniforge environment
@@ -514,6 +514,14 @@ start_hub_surrealdb() {
         chmod +x "$INIT_PYTHON_PATH"
 
         poetry run python "$INIT_PYTHON_PATH"
+
+        # Check if Hub DB is running
+        if curl -s http://localhost:$HUB_DB_PORT/health > /dev/null; then
+            echo "Hub DB is running successfully." | log_with_service_name "HubDB" $GREEN
+        else
+            echo "Hub DB failed to start. Please check the logs." | log_with_service_name "HubDB" $RED
+            exit 1
+        fi
     else
         echo "Not running Hub DB locally..." | log_with_service_name "HubDB" $RED
     fi
@@ -627,8 +635,8 @@ linux_start_node() {
     echo "Starting Node..." | log_with_service_name "Node" $BLUE
 
     # Get the port from the .env file
-    port=${NODE_PORT:-3000} # Default to 3000 if not set
-    echo "Port: $port"
+    port=${NODE_PORT:-7001} # Default to 7001 if not set
+    echo "Node Port: $port" | log_with_service_name "Node" $BLUE
 
     # Check if the port is already in use
     # if lsof -i :$port &> /dev/null; then
@@ -636,7 +644,7 @@ linux_start_node() {
     #     exit 1
     # fi
 
-    echo "Starting Node application..." | log_with_service_name "Node" "info"
+    echo "Starting Node application..." | log_with_service_name "Node" "info" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -660,9 +668,9 @@ linux_start_node() {
         sudo systemctl enable nodeapp
         sudo systemctl start nodeapp
 
-        echo "Node application service started successfully." | log_with_service_name "Node" "info"
+        echo "Node application service started successfully." | log_with_service_name "Node" "info" $BLUE
     else
-        echo "The systemd service file does not exist in the expected location." | log_with_service_name "Node" "error"
+        echo "The systemd service file does not exist in the expected location." | log_with_service_name "Node" "error" $BLUE
         exit 1
     fi
 }
@@ -675,7 +683,7 @@ darwin_start_node() {
     port=${NODE_PORT:-3000} # Default to 3000 if not set
     echo "Port: $port"
 
-    echo "Starting Node application..." | log_with_service_name "Node" "info"
+    echo "Starting Node application..." | log_with_service_name "Node" "info" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -727,7 +735,7 @@ EOF
     launchctl load ~/Library/LaunchAgents/$PLIST_FILE
     launchctl start com.example.nodeapp
 
-    echo "Node application service started successfully." | log_with_service_name "Node" "info"
+    echo "Node application service started successfully." | log_with_service_name "Node" "info" $BLUE
 }
 
 # Function to start the Celery worker
@@ -837,11 +845,11 @@ EOF
     launchctl load ~/Library/LaunchAgents/com.example.celeryworker.plist
     launchctl start com.example.celeryworker
 
-    echo "Celery worker service started successfully." | log_with_service_name "Celery" "info"
+    echo "Celery worker service started successfully." | log_with_service_name "Celery" "info" $GREEN
 }
 
 print_logo(){
-    echo """
+    printf """
                  █▀█                  
               ▄▄▄▀█▀            
               █▄█ █    █▀█        
@@ -854,9 +862,12 @@ print_logo(){
       █  ▀█▄  ▀█▄ █ ▄█▀▀ ▄█▀  █      ██║ ╚████║██║  ██║██║        ██║   ██║  ██║██║  ██║
        ▀█▄ ▀▀█  █ █ █ ▄██▀ ▄█▀       ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
          ▀█▄ █  █ █ █ █  ▄█▀                         Decentralized Multi-Agent Workflows
-            ▀█  █ █ █ █ ▌▀                                                 www.naptha.ai
+            ▀█  █ █ █ █ ▌▀                                                 \e]8;;https://www.naptha.ai\e\\www.naptha.ai\e]8;;\e\\
               ▀▀█ █ ██▀▀                                                          
     """
+    echo -e "\n"
+    printf "✨ ✨ ✨ Launching... While you wait, please star our repo \e]8;;https://github.com/NapthaAI/node\e\\https://github.com/NapthaAI/node\e]8;;\e\\ ✨ ✨ ✨"
+    echo -e "\n"
 }
 
 os="$(uname)"

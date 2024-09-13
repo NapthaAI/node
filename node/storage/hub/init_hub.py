@@ -1,6 +1,8 @@
+import asyncio
 import os
 import subprocess
 from dotenv import load_dotenv
+from node.storage.hub.hub import Hub
 from node.utils import get_logger
 import time
 
@@ -50,7 +52,7 @@ def import_surql():
             raise
 
 
-def init_hub():
+async def init_hub():
     """Initialize the database"""
     logger.info("Initializing database")
 
@@ -87,6 +89,8 @@ def init_hub():
     logger.info("Database initialized")
     import_surql()
 
+    async with Hub() as hub:
+        _, user_id = await hub.user_setup_flow()
 
 if __name__ == "__main__":
-    init_hub()
+    asyncio.run(init_hub())

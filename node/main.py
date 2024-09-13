@@ -33,8 +33,8 @@ async def run_node():
     create_output_dir(config["BASE_OUTPUT_DIR"])
     setup_modules_from_config(Path(f"{PARENT_DIR}/storage/hub/packages.json"))
 
-    hub = await Hub()
-    node_config = await hub.create_node(node_config)
+    async with Hub() as hub:
+        node_config = await hub.create_node(node_config)
 
     if not node_config["ip"]:
         logger.info("Node is indirect")

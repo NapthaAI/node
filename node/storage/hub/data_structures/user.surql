@@ -1,6 +1,6 @@
 DEFINE TABLE user SCHEMAFULL
     PERMISSIONS
-        FOR select FULL
+        FOR select, create FULL
         FOR update, delete WHERE id = $auth.id;
 
 DEFINE FIELD name ON user TYPE string ASSERT string::len($value) >= 2;
