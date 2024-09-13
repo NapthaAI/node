@@ -107,142 +107,14 @@ CREATE user:marketagents SET
     username="marketagents", 
     password=crypto::argon2::generate("great-password")
 ;
-CREATE user:seller1 SET
-    name = "Test Seller 1",
-    username = "seller1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:creator1 SET
-    name = "Test Creator 1",
-    username = "creator1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:buyer1 SET
-    name="Test Buyer 1",
-    username="buyer1",
-    password=crypto::argon2::generate("buyer1pass")
-;
-CREATE user:aiconsumer1 SET
-    name = "AI Consumer 1",
-    username = "aiconsumer1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:aideveloper1 SET
-    name = "AI Developer 1",
-    username = "aideveloper1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:nodeoperator1 SET
-    name = "Node Operator 1",
-    username = "nodeoperator1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:bittensor1 SET
-    name = "Bittensor User",
-    username = "bittensor1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:olas1 SET
-    name = "Olas User",
-    username = "olas1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:ocean1 SET
-    name = "Ocean User",
-    username = "ocean1",
-    password = crypto::argon2::generate("great-password")
-;
-CREATE user:chainlink1 SET
-    name = "Chainlink User",
-    username = "chainlink1",
-    password = crypto::argon2::generate("great-password")
-;
 
 -- ORGANIZATIONS
 CREATE organization:naptha SET name="Naptha", image="https://richardblythman.github.io/image-api/algovera/algovera-whiteBackground.png?w=200&amp;h=200&amp;f=face", owner=user:seller1;
 RELATE user:seller1->is_associated_with->organization:naptha;
 
--- TASKS 
-CREATE lot:dateqa SET name="Subnet 1: Date Question", description="Get help answering a specific date-based question.", author=user:bittensor1;
-CREATE lot:debugging SET name="Subnet 1: Code Debugging", description="Get help with debugging a coding problem.", author=user:bittensor1;
-CREATE lot:instruction SET name="Subnet 1: Generic Instruction Following", description="Follow general instructions.", author=user:bittensor1;
-CREATE lot:math SET name="Subnet 1: Math Solving", description="Get help solving a math problem.", author=user:bittensor1;
-CREATE lot:qa SET name="Subnet 1: Question Answering", description="Answering questions.", author=user:bittensor1;
-CREATE lot:summarization SET name="Subnet 1: Summarization", description="Summarizing text.", author=user:bittensor1;
-CREATE lot:prediction SET name="Prediction Agents", description="Research and make predictions on Gnosis prediction markets.", author=user:olas1;
-CREATE lot:governance SET name="Governance Agents", description="Read governance proposals and take part in voting.", author=user:olas1;
-CREATE lot:predictoor SET name="Predictoor", description="Forecast prices of cryptocurrencies.", author=user:ocean1;
-CREATE lot:developer SET name="Developer Assistant", description="Solve coding query with Chainlink libraries.", author=user:chainlink1;
-
-CREATE lot:worldsim SET name="Virtual World Simulation", description="Run agents that simulate believable human behavior", author=user:naptha,
-  request="syntax = \"proto3\";
-  
-  message Request {
-        string prompt = 1;
-  }",
-  reply="syntax = \"proto3\";
-  
-  message Reply {
-        string answer = 1;
-  }"
-;
-
-RELATE lot:worldsim->is_associated_with->organization:naptha;
-RELATE lot:worldsim->is_tagged->tag:general;
-RELATE lot:worldsim->in_category->category:human_behavior;
-RELATE lot:worldsim->has_license->license:apache2;
+CREATE organization:marketagents SET name="MarketAgents", image="https://richardblythman.github.io/image-api/algovera/algovera-whiteBackground.png?w=200&amp;h=200&amp;f=face", owner=user:marketagents;
 
 -- RFPs
-CREATE auction:rfp1 SET 
-    consigner=user:bittensor1,
-    buy_it_now_price=10.0,    
-    listing=lot:dateqa
-;
-CREATE auction:rfp2 SET
-    consigner=user:bittensor1,
-    buy_it_now_price=20.0,    
-    listing=lot:debugging
-;
-CREATE auction:rfp3 SET
-    consigner=user:bittensor1,
-    buy_it_now_price=15.0,    
-    listing=lot:instruction
-;
-CREATE auction:rfp4 SET
-    consigner=user:bittensor1,
-    buy_it_now_price=50.0,    
-    listing=lot:math
-;
-CREATE auction:rfp5 SET
-    consigner=user:bittensor1,
-    buy_it_now_price=15.0,    
-    listing=lot:qa
-;
-CREATE auction:rfp6 SET
-    consigner=user:bittensor1,
-    buy_it_now_price=25.0,    
-    listing=lot:summarization
-;
-CREATE auction:rfp7 SET
-    consigner=user:olas1,
-    buy_it_now_price=50.0,    
-    listing=lot:prediction
-;
-CREATE auction:rfp8 SET
-    consigner=user:olas1,
-    buy_it_now_price=50.0,    
-    listing=lot:governance
-;
-CREATE auction:rfp9 SET
-    consigner=user:ocean1,
-    buy_it_now_price=25.0,    
-    listing=lot:predictoor
-;
-CREATE auction:rfp10 SET
-    consigner=user:chainlink1,
-    buy_it_now_price=50.0,    
-    listing=lot:developer
-;
 CREATE auction:auction1 SET consigner=user:seller1, buy_it_now_price=10.0, listing=lot:worldsim;
 RELATE user:seller1->requests_to_publish->auction:auction1;
 
@@ -269,8 +141,7 @@ CREATE module:module_test SET name="Module Test", description="A simple module t
 CREATE module:random_number_agent SET name="Random Number Agent", description="A simple random number agent", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="template", version="0.1";
 CREATE module:random_number_protocol SET name="Random Number Protocol", description="A simple random number protocol", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="template", version="0.1";
 
-CREATE organization:developer SET name="Developer Assistant", image="Solve coding query with Chainlink libraries.", owner=user:chainlink1;
-
+-- NODES
 CREATE node:naptha0 SET
     public_key="18837f9faec9a02744d308f935f1b05e8ff2fc355172e875c24366491625d932f36b34a4fa80bac58db635d5eddc87659c2b3fa700a1775eb4c43da6b0ec270d",
     ip="http://node.naptha.ai",
