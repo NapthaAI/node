@@ -4,6 +4,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+PINK='\033[0;35m'
 NC='\033[0m'
 
 # Function for prefixed logging
@@ -209,7 +210,7 @@ darwin_install_miniforge() {
 # Fuction to clean the node
 linux_clean_node() {
     # Eccho start cleaning
-    echo "Cleaning node..." | log_with_service_name "Node" $NC
+    echo "Cleaning node..." | log_with_service_name "Node" $BLUE
 
     # Remove node/modules if it exists
     if [ -d "node/modules" ]; then
@@ -225,12 +226,12 @@ linux_clean_node() {
 
 darwin_clean_node() {
     # Echo start cleaning
-    echo "Cleaning node..." | log_with_service_name "Node" $NC
+    echo "Cleaning node..." | log_with_service_name "Node" $BLUE
 
     # Remove node_modules if it exists
     if [ -d "node_modules" ]; then
         rm -rf node_modules
-        echo "Removed node_modules directory." | log_with_service_name "Node" $NC
+        echo "Removed node_modules directory." | log_with_service_name "Node" $BLUE
     fi
 
     # Check if Homebrew is installed
@@ -249,10 +250,10 @@ darwin_clean_node() {
 
     # Run make pyproject-clean
     if [ -f "Makefile" ]; then
-        echo "Running make pyproject-clean..." | log_with_service_name "Node" $NC
+        echo "Running make pyproject-clean..." | log_with_service_name "Node" $BLUE
         make pyproject-clean
     else
-        echo "Makefile not found. Skipping make pyproject-clean." | log_with_service_name "Node" $NC
+        echo "Makefile not found. Skipping make pyproject-clean." | log_with_service_name "Node" $BLUE
     fi
 }
 
@@ -506,24 +507,38 @@ install_python312() {
 
 # Function to start the Hub SurrealDB
 start_hub_surrealdb() {
+    PWD=$(pwd)
     if [ "$LOCAL_HUB" = true ]; then
         echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
         
-        PWD=$(pwd)
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
         chmod +x "$INIT_PYTHON_PATH"
 
-        poetry run python "$INIT_PYTHON_PATH"
+        poetry run python "$INIT_PYTHON_PATH" 2>&1
+        PYTHON_EXIT_STATUS=$?
+
+        if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
+            echo "Hub DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDB" $RED
+            exit 1
+        fi
 
         # Check if Hub DB is running
         if curl -s http://localhost:$HUB_DB_PORT/health > /dev/null; then
-            echo "Hub DB is running successfully." | log_with_service_name "HubDB" $GREEN
+            echo "Hub DB is running successfully." | log_with_service_name "HubDB" $RED
         else
             echo "Hub DB failed to start. Please check the logs." | log_with_service_name "HubDB" $RED
             exit 1
         fi
     else
         echo "Not running Hub DB locally..." | log_with_service_name "HubDB" $RED
+    fi
+
+    poetry run python "$PWD/node/storage/hub/init_hub.py" --user 2>&1
+    PYTHON_EXIT_STATUS=$?
+
+    if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
+        echo "Hub DB sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDB" $RED
+        exit 1
     fi
 }
 
@@ -644,7 +659,7 @@ linux_start_node() {
     #     exit 1
     # fi
 
-    echo "Starting Node application..." | log_with_service_name "Node" "info" $BLUE
+    echo "Starting Node application..." | log_with_service_name "Node" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -668,7 +683,7 @@ linux_start_node() {
         sudo systemctl enable nodeapp
         sudo systemctl start nodeapp
 
-        echo "Node application service started successfully." | log_with_service_name "Node" "info" $BLUE
+        echo "Node application service started successfully." | log_with_service_name "Node" $BLUE
     else
         echo "The systemd service file does not exist in the expected location." | log_with_service_name "Node" "error" $BLUE
         exit 1
@@ -683,7 +698,7 @@ darwin_start_node() {
     port=${NODE_PORT:-3000} # Default to 3000 if not set
     echo "Port: $port"
 
-    echo "Starting Node application..." | log_with_service_name "Node" "info" $BLUE
+    echo "Starting Node application..." | log_with_service_name "Node" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -735,7 +750,7 @@ EOF
     launchctl load ~/Library/LaunchAgents/$PLIST_FILE
     launchctl start com.example.nodeapp
 
-    echo "Node application service started successfully." | log_with_service_name "Node" "info" $BLUE
+    echo "Node application service started successfully." | log_with_service_name "Node" $BLUE
 }
 
 # Function to start the Celery worker
@@ -845,7 +860,7 @@ EOF
     launchctl load ~/Library/LaunchAgents/com.example.celeryworker.plist
     launchctl start com.example.celeryworker
 
-    echo "Celery worker service started successfully." | log_with_service_name "Celery" "info" $GREEN
+    echo "Celery worker service started successfully." | log_with_service_name "Celery" $GREEN
 }
 
 print_logo(){
