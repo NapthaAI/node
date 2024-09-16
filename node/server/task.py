@@ -1,13 +1,15 @@
+from dotenv import load_dotenv
 from node.worker.docker_worker import execute_docker_module
 from node.worker.template_worker import run_flow
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
+import os
 import traceback
 
 logger = get_logger(__name__)
-
+load_dotenv()
 BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 
@@ -21,6 +23,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         logger.info(f"Received task: {module_run_input}")
 
         async with Hub() as hub:
+            success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
             module = await hub.list_modules(f"module:{module_run_input.module_name}")
             logger.info(f"Found module: {module}")
 

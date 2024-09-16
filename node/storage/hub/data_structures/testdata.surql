@@ -104,6 +104,7 @@ CREATE user:naptha SET
     public_key="d3f40913bf024fbc0e7e17c298b5fa03c3518039bf71c170faf74c0694caad60503146befe78e62794c33bf7fe991175da838609c70d79d5e85bb9b1aa965a11"
 
 ;
+--private_key="60a632f3e0875111199c4323a1b010bc4808e2a252b21ff366968cfc25af6444"
 
 -- ORGANIZATIONS
 CREATE organization:naptha SET name="Naptha", image="https://richardblythman.github.io/image-api/algovera/algovera-whiteBackground.png?w=200&amp;h=200&amp;f=face", owner=user:naptha1;
