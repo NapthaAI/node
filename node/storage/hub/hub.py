@@ -1,13 +1,13 @@
+import asyncio
 from dotenv import load_dotenv
 import jwt
-from naptha_sdk.utils import AsyncMixin
-from node.utils import get_logger
 import os
-from surrealdb import Surreal
-from typing import Dict, List, Tuple, Optional
+from naptha_sdk.utils import AsyncMixin
 from node.schemas import NodeConfig
-from node.utils import add_credentials_to_env
+from node.utils import get_logger
+from surrealdb import Surreal
 import traceback
+from typing import Dict, List, Optional, Tuple
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -47,10 +47,6 @@ class Hub(AsyncMixin):
 
     async def signin(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
-            await self.surrealdb.connect()
-            await self.surrealdb.use(namespace=self.ns, database=self.db)
-            logger.info(f"Signing in user: {username}")
-            logger.info(f"Password: {password}")
             user = await self.surrealdb.signin(
                 {
                     "NS": self.ns,
@@ -60,7 +56,6 @@ class Hub(AsyncMixin):
                     "password": password,
                 },
             )
-            logger.info(f"User: {user}")
             self.user_id = self._decode_token(user)
             self.token = user
             self.is_authenticated = True
@@ -192,33 +187,3 @@ class Hub(AsyncMixin):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async exit method for context manager"""
         await self.close()
-
-    async def user_setup_flow(self):
-        username, password = os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
-        logger.info(f"Checking if user exists... User: user:{username}")
-        user = await self.get_user(f"user:{username}")
-        logger.info(f"User: {user}")
-        if not user:
-            logger.info("User does not exist...")
-            create_new = input("Would you like to create a new user? (yes/no): ").lower()
-            if create_new == 'yes':
-                logger.info("Creating new user...")
-                while True:
-                    username = input("Enter username: ")
-                    password = input("Enter password: ")
-                    success, token, user_id = await self.signup(username, password)
-                    add_credentials_to_env(username, password)
-                    if success:
-                        logger.info("Sign up successful!")
-                        return token, user_id
-            else:
-                raise Exception("User does not exist and new user creation was declined.")
-
-        logger.info("User exists. Attempting to sign in...")
-        success, token, user_id = await self.signin(username, password)
-        if success:
-            logger.info("Sign in successful!")
-            return token, user_id
-        else:
-            logger.error("Sign in failed.")
-            raise Exception("Sign in failed.")
