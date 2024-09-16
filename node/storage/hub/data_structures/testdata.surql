@@ -102,11 +102,13 @@ CREATE user:naptha SET
     username="naptha1", 
     password=crypto::argon2::generate("great-password"),
     public_key="d3f40913bf024fbc0e7e17c298b5fa03c3518039bf71c170faf74c0694caad60503146befe78e62794c33bf7fe991175da838609c70d79d5e85bb9b1aa965a11"
+
 ;
 
 -- ORGANIZATIONS
 CREATE organization:naptha SET name="Naptha", image="https://richardblythman.github.io/image-api/algovera/algovera-whiteBackground.png?w=200&amp;h=200&amp;f=face", owner=user:naptha1;
 RELATE user:seller1->is_associated_with->organization:naptha;
+
 
 -- MODULEs
 CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:naptha, url="https://github.com/NapthaAI/module_hello_world", type="template", version="0.11";
@@ -130,6 +132,9 @@ CREATE module:docker_hello_world SET name="Hello World Docker", description="A s
 CREATE module:module_test SET name="Module Test", description="A simple module test", author=user:naptha, url="https://github.com/moarshy/module_test", type="template", version="0.4";
 CREATE module:random_number_agent SET name="Random Number Agent", description="A simple random number agent", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="template", version="0.1";
 CREATE module:random_number_protocol SET name="Random Number Protocol", description="A simple random number protocol", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="template", version="0.1";
+
+
+-- NODES
 
 CREATE node:naptha0 SET
     public_key="18837f9faec9a02744d308f935f1b05e8ff2fc355172e875c24366491625d932f36b34a4fa80bac58db635d5eddc87659c2b3fa700a1775eb4c43da6b0ec270d",

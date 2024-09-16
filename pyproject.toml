@@ -37,7 +37,7 @@ pyyaml = "^6.0.1"
 protobuf = "^4.25.2"
 ecdsa = "^0.19.0"
 ipfshttpclient = "^0.7.0"
-tenacity = "^9.0.0"
+tenacity = "^8.4.1"
 
 [tool.poetry.dependencies.naptha-sdk]
 git = "https://github.com/NapthaAI/naptha-sdk.git"
