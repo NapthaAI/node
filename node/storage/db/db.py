@@ -73,6 +73,15 @@ class DB():
         logger.info(f"Getting user: {user_id}")
         return await self.surrealdb.select(user_id)
 
+    async def get_user_by_public_key(self, public_key: str) -> Optional[Dict]:
+        result = await self.surrealdb.query(
+            "SELECT * FROM user WHERE public_key = $public_key LIMIT 1",
+            {"public_key": public_key}
+        )
+        if result and result[0]["result"]:
+            return result[0]["result"][0]
+        return None
+
     async def create_module_run(self, module_run_input: ModuleRunInput) -> ModuleRun:
         logger.info(f"Creating module run: {module_run_input.model_dict()}")
         module_run = await self.surrealdb.create("module_run", module_run_input.model_dict())

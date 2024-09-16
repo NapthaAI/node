@@ -1,10 +1,13 @@
+import asyncio
 from dotenv import load_dotenv
 import jwt
-from naptha_sdk.utils import AsyncMixin
-from node.utils import get_logger
 import os
+from naptha_sdk.utils import AsyncMixin
+from node.schemas import NodeConfig
+from node.utils import get_logger
 from surrealdb import Surreal
-from typing import Dict, List, Tuple, Optional
+import traceback
+from typing import Dict, List, Optional, Tuple
 
 load_dotenv()
 logger = get_logger(__name__)
@@ -15,12 +18,9 @@ class Hub(AsyncMixin):
         self.hub_url = os.getenv("LOCAL_HUB_URL") if local_hub == 'true' else os.getenv("PUBLIC_HUB_URL")
         self.ns = os.getenv("HUB_NS")
         self.db = os.getenv("HUB_DB")
-        self.username = os.getenv("HUB_USERNAME")
-        self.password = os.getenv("HUB_PASSWORD")
 
         self.surrealdb = Surreal(self.hub_url)
         self.is_authenticated = False
-        self.node_config = None
         self.user_id = None
         self.token = None
         super().__init__()
@@ -34,14 +34,6 @@ class Hub(AsyncMixin):
             try:
                 await self.surrealdb.connect()
                 await self.surrealdb.use(namespace=self.ns, database=self.db)
-                success, token, user_id = await self.signin()
-                if success:
-                    self.is_authenticated = True
-                    self.user_id = user_id
-                    self.token = token
-                    return success, token, user_id
-                else:
-                    raise Exception("Authentication failed")
             except Exception as e:
                 logger.error(f"Connection failed: {e}")
                 raise
@@ -53,58 +45,71 @@ class Hub(AsyncMixin):
             logger.error(f"Token decoding failed: {e}")
             return None
 
-    async def signin(self) -> Tuple[bool, Optional[str], Optional[str]]:
+    async def signin(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
-            user = await self.surrealdb.signin({
-                "NS": self.ns,
-                "DB": self.db,
-                "SC": "user",
-                "username": self.username,
-                "password": self.password,
-            })
-            user_id = self._decode_token(user)
-            return True, user, user_id
+            user = await self.surrealdb.signin(
+                {
+                    "NS": self.ns,
+                    "DB": self.db,
+                    "SC": "user",
+                    "username": username,
+                    "password": password,
+                },
+            )
+            self.user_id = self._decode_token(user)
+            self.token = user
+            self.is_authenticated = True
+            return True, user, self.user_id
         except Exception as e:
             logger.error(f"Sign in failed: {e}")
+            logger.error(traceback.format_exc())
             return False, None, None
 
-    async def signup(self) -> Tuple[bool, Optional[str], Optional[str]]:
+    async def signup(self, username: str, password: str, public_key: str) -> Tuple[bool, Optional[str], Optional[str]]:
+
         user = await self.surrealdb.signup({
             "NS": self.ns,
             "DB": self.db,
             "SC": "user",
-            "name": self.username,
-            "username": self.username,
-            "password": self.password,
+            "name": username,
+            "username": username,
+            "password": password,
             "invite": "DZHA4ZTK",
+            "public_key": public_key,
         })
         if not user:
             return False, None, None
-        user_id = self._decode_token(user)
-        return True, user, user_id
-
-    async def signin_or_signup(self):
-        logger.info("Attempting to sign in...")
-        success, token, user_id = await self.signin()
-        if success:
-            logger.info("Sign in successful!")
-            return token, user_id
-        else:
-            logger.info("Sign in failed. Attempting to sign up...")
-            success, token, user_id = await self.signup()
-            if success:
-                logger.info("Sign up successful!")
-                return token, user_id
-            else:
-                logger.error("Sign up failed.")
-                raise Exception("Sign up failed.")
+        self.user_id = self._decode_token(user)
+        return True, user, self.user_id
 
     async def get_user(self, user_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(user_id)
 
-    async def create_node(self, node: Dict) -> Dict:
-        self.node_config = await self.surrealdb.create("node", node)
-        return self.node_config
+    async def get_user_by_username(self, username: str) -> Optional[Dict]:
+        result = await self.surrealdb.query(
+            "SELECT * FROM user WHERE username = $username LIMIT 1",
+            {"username": username}
+        )
+        if result and result[0]["result"]:
+            return result[0]["result"][0]
+        return None
+
+    async def get_user_by_public_key(self, public_key: str) -> Optional[Dict]:
+        result = await self.surrealdb.query(
+            "SELECT * FROM user WHERE public_key = $public_key LIMIT 1",
+            {"public_key": public_key}
+        )
+        if result and result[0]["result"]:
+            return result[0]["result"][0]
+        return None
+
+    async def create_node(self, node_config: NodeConfig) -> Dict:
+        node_config.owner = self.user_id
+        logger.info(f"Creating node: {node_config}")
+        self.node_config = await self.surrealdb.create("node", node_config)
+        if self.node_config is None:
+            raise Exception("Failed to register node")
+        return self.node_config[0]
 
     async def get_node(self, node_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(node_id)

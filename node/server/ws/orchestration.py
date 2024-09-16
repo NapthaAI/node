@@ -1,11 +1,15 @@
 import json
-from node.comms.task import create_task, check_task
+from node.utils import get_logger
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
+from node.server.orchestration import create_task_run, update_task_run
+
+logger = get_logger(__name__)
 
 
-async def create_task_ws(websocket, message: dict) -> ModuleRun:
+
+async def create_task_run_ws(websocket, message: dict) -> ModuleRun:
     """
-    Create a task and return the task
+    Create a task run via a websocket connection.
     """
     target_node_id = message['source_node']
     source_node_id = message['target_node']
@@ -15,18 +19,20 @@ async def create_task_ws(websocket, message: dict) -> ModuleRun:
         'source_node': source_node_id
     }
     try:
-        module_run_input = ModuleRunInput(**params)
-        result = await create_task(module_run_input)
-        response['params'] = result.model_dict()
+        module_run_input = ModuleRunInput(
+            **params
+        )
+        module_run = await create_task_run(module_run_input)
+        response['params'] = module_run.model_dict()
         await websocket.send(json.dumps(response))
     except Exception as e:
         response['params'] = {'error': str(e)}
         await websocket.send(json.dumps(response))
 
 
-async def check_task_ws(websocket, message: dict) -> ModuleRun:
+async def update_task_run_ws(websocket, message: dict) -> ModuleRun:
     """
-    Check a task and return the task
+    Update a task run via a websocket connection.
     """
     target_node_id = message['source_node']
     source_node_id = message['target_node']
@@ -37,9 +43,12 @@ async def check_task_ws(websocket, message: dict) -> ModuleRun:
     }
     module_run = ModuleRun(**params)
     try:
-        result = await check_task(module_run)
-        response['params'] = result.model_dict()
+        module_run = ModuleRun(**params)
+        module_run = await update_task_run(module_run)
+        response['params'] = module_run.model_dict()
         await websocket.send(json.dumps(response))
     except Exception as e:
         response['params'] = {'error': str(e)}
         await websocket.send(json.dumps(response))
+
+    

@@ -18,10 +18,9 @@ async def register_user(user_input: Dict) -> Dict:
 
 async def check_user(user_input: Dict) -> Dict:
     logger.info(f"Received request to check user.")
-    user_input['id'] = f"user:{user_input['public_key']}"
 
     async with DB() as db:
-        user = await db.get_user(user_input)
+        user = await db.get_user_by_public_key(user_input['public_key'])
 
     if user is not None:
         logger.info(f"Found user: {user}")

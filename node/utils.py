@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import logging
-from node.schemas import NodeConfigSchema
+from node.schemas import NodeConfig
 from node.user import get_public_key
 import os
 import platform
@@ -92,7 +92,7 @@ def get_config():
 
 def get_node_config(config):
     """Get the node configuration."""
-    node_config = NodeConfigSchema(
+    node_config = NodeConfig(
         public_key=config["PUBLIC_KEY"],
         ip=config["NODE_IP"],
         port=config["NODE_PORT"],
@@ -103,7 +103,6 @@ def get_node_config(config):
         os=config["OS_INFO"],
         arch=config["ARCH_INFO"],
         ram=config["RAM_INFO"],
-        id=None,
         docker_jobs=config["DOCKER_JOBS"],
     )
     return node_config
@@ -157,6 +156,36 @@ def run_subprocess(cmd: List) -> str:
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         raise
+
+def add_credentials_to_env(username, password):
+    env_file_path = os.path.join(os.getcwd(), '.env')
+    updated_lines = []
+    hub_user_found = False
+    hub_pass_found = False
+
+    # Read the existing .env file
+    with open(env_file_path, 'r') as env_file:
+        for line in env_file:
+            if line.startswith('HUB_USERNAME='):
+                updated_lines.append(f"HUB_USERNAME={username}\n")
+                hub_user_found = True
+            elif line.startswith('HUB_PASSWORD='):
+                updated_lines.append(f"HUB_PASSWORD={password}\n")
+                hub_pass_found = True
+            else:
+                updated_lines.append(line)
+
+    # Append new credentials if not found
+    if not hub_user_found:
+        updated_lines.append(f"HUB_USERNAME={username}\n")
+    if not hub_pass_found:
+        updated_lines.append(f"HUB_PASSWORD={password}\n")
+
+    # Write the updated content back to the .env file
+    with open(env_file_path, 'w') as env_file:
+        env_file.writelines(updated_lines)
+
+    print("Your credentials have been updated in the .env file. You can now use these credentials to authenticate in future sessions.")
 
 if __name__ == "__main__":
     config = get_config()

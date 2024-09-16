@@ -1,7 +1,7 @@
 from typing import List, Union
 from pydantic import BaseModel, Field
 
-class NodeConfigSchema(BaseModel):
+class NodeConfig(BaseModel):
     public_key: str
     num_gpus: int
     vram: int
@@ -10,7 +10,6 @@ class NodeConfigSchema(BaseModel):
     ram: int
     ollama_models: List[str]
     docker_jobs: bool
-    id: Union[str, None] = Field(default=None)
     ip: Union[str, None] = Field(default=None)
     port: Union[int, None] = Field(default=None)
     routing: Union[str, None] = Field(default=None)
