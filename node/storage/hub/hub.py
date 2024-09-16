@@ -70,13 +70,17 @@ class Hub(AsyncMixin):
             logger.error(traceback.format_exc())
             return False, None, None
 
-    async def signup(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
-        user = await self.surrealdb.create("user", {
-            "id": f"user:{username}",
+    async def signup(self, username: str, password: str, public_key: str) -> Tuple[bool, Optional[str], Optional[str]]:
+
+        user = await self.surrealdb.signup({
+            "NS": self.ns,
+            "DB": self.db,
+            "SC": "user",
             "name": username,
             "username": username,
             "password": password,
             "invite": "DZHA4ZTK",
+            "public_key": public_key,
         })
         if not user:
             return False, None, None
