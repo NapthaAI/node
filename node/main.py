@@ -34,6 +34,7 @@ async def run_node():
     setup_modules_from_config(Path(f"{PARENT_DIR}/storage/hub/packages.json"))
 
     async with Hub() as hub:
+        success, user, user_id = await hub.signin(config["HUB_USERNAME"], config["HUB_PASSWORD"])
         node_config = await hub.create_node(node_config)
 
     if not node_config["ip"]:

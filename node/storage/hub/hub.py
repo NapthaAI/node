@@ -84,11 +84,29 @@ class Hub(AsyncMixin):
         })
         if not user:
             return False, None, None
-        user_id = self._decode_token(user)
-        return True, user, user_id
+        self.user_id = self._decode_token(user)
+        return True, user, self.user_id
 
     async def get_user(self, user_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(user_id)
+
+    async def get_user_by_username(self, username: str) -> Optional[Dict]:
+        result = await self.surrealdb.query(
+            "SELECT * FROM user WHERE username = $username LIMIT 1",
+            {"username": username}
+        )
+        if result and result[0]["result"]:
+            return result[0]["result"][0]
+        return None
+
+    async def get_user_by_public_key(self, public_key: str) -> Optional[Dict]:
+        result = await self.surrealdb.query(
+            "SELECT * FROM user WHERE public_key = $public_key LIMIT 1",
+            {"public_key": public_key}
+        )
+        if result and result[0]["result"]:
+            return result[0]["result"][0]
+        return None
 
     async def create_node(self, node_config: NodeConfig) -> Dict:
         node_config.owner = self.user_id
