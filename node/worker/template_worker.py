@@ -4,6 +4,7 @@ import pytz
 import json
 import fcntl
 import time
+import functools
 import inspect
 import asyncio
 import requests
@@ -69,14 +70,16 @@ def file_lock(lock_file, timeout=30):
 
 @app.task
 def run_flow(flow_run: Dict) -> None:
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(_run_flow_async(flow_run))
-    except Exception as e:
-        error_msg = f"Error in run_flow: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        loop.run_until_complete(handle_failure(flow_run, error_msg))
+    async def run_flow_wrapper():
+        try:
+            await _run_flow_async(flow_run)
+        except Exception as e:
+            error_msg = f"Error in run_flow: {str(e)}"
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            await handle_failure(flow_run, error_msg)
+
+    asyncio.run(run_flow_wrapper())
 
 async def install_module_if_not_present(flow_run_obj, module_version):
     module_name = flow_run_obj.module_name
@@ -239,6 +242,15 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
             error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
         raise RuntimeError(error_msg) from e
 
+async def maybe_async_call(func, *args, **kwargs):
+    if inspect.iscoroutinefunction(func):
+        # If it's an async function, await it directly
+        return await func(*args, **kwargs)
+    else:
+        # If it's a sync function, run it in an executor to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+
 class FlowEngine:
     def __init__(self, flow_run: ModuleRun):
         self.flow_run = flow_run
@@ -305,31 +317,28 @@ class FlowEngine:
         self.flow_run.status = "running"
         await update_db_with_status_sync(module_run=self.flow_run)
 
-        if inspect.iscoroutinefunction(self.flow_func):
-            response = await self.flow_func(
+        try:
+            response = await maybe_async_call(
+                self.flow_func,
                 inputs=self.validated_data, 
                 worker_nodes=self.worker_nodes,
                 orchestrator_node=self.orchestrator_node, 
                 flow_run=self.flow_run, 
                 cfg=self.cfg
             )
-        else:
-            response = self.flow_func(
-                inputs=self.validated_data, 
-                worker_nodes=self.worker_nodes,
-                orchestrator_node=self.orchestrator_node, 
-                flow_run=self.flow_run, 
-                cfg=self.cfg
-            )
+        except Exception as e:
+            logger.error(f"Error running flow: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+
         logger.info(f"Flow run response: {response}")
 
+        # Process the response as before
         if isinstance(response, (dict, list, tuple)):
             response = json.dumps(response)
-
-        if isinstance(response, BaseModel):
+        elif isinstance(response, BaseModel):
             response = response.model_dump_json()
 
-        # if response if not a string, raise an error
         if not isinstance(response, str):
             raise ValueError(f"Module/flow response is not a string: {response}. Current response type: {type(response)}")
 
