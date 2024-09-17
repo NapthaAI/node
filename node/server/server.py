@@ -14,14 +14,13 @@ async def run_server():
     config = get_config()
     node_config = get_node_config(config)
 
-
-    if not node_config["ip"]:
+    if not node_config.ip:
         logger.info("Node is indirect")
-        uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config['id'].split(':')[-1]}"
+        uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config.id.split(':')[-1]}"
         websocket_server = WebSocketServer(uri)
         websocket_server.launch_server()
 
-    http_server = HTTPServer(os.getenv("IP"), os.getenv("PORT"), os.getenv("ID"))
+    http_server = HTTPServer(os.getenv("NODE_IP"), int(os.getenv("NODE_PORT")))
     try:
         await http_server.launch_server()
     except Exception as e:
