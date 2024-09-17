@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 load_dotenv()
 
 WS_PAYLOAD_THRESHOLD = 1024*1024 # 1MB
-MAX_WS_PAYLOAD = 1024*1024*5 # 5MB
+MAX_WS_PAYLOAD = 1024*1024*15 # 15MB
 
 class DB():
     """Database class to handle all database operations"""
