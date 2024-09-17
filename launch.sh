@@ -542,6 +542,31 @@ start_hub_surrealdb() {
     fi
 }
 
+start_local_surrealdb() {
+    PWD=$(pwd)
+
+    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    
+    INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
+    chmod +x "$INIT_PYTHON_PATH"
+
+    poetry run python "$INIT_PYTHON_PATH" 2>&1
+    PYTHON_EXIT_STATUS=$?
+
+    if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        exit 1
+    fi
+
+    # Check if Local DB is running
+    if curl -s http://localhost:$SURREALDB_PORT/health > /dev/null; then
+        echo "Local DB is running successfully." | log_with_service_name "LocalDB" $RED
+    else
+        echo "Local DB failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        exit 1
+    fi
+}
+
 # Function to check and copy the .env file
 check_and_copy_env() {
     if [ ! -f .env ]; then
@@ -927,6 +952,7 @@ if [ "$os" = "Darwin" ]; then
     check_and_set_stability_key
     load_env_file
     start_hub_surrealdb
+    start_local_surrealdb
     darwin_start_servers
     darwin_start_celery_worker
 else
@@ -944,6 +970,7 @@ else
     check_and_set_stability_key
     load_env_file
     start_hub_surrealdb
+    start_local_surrealdb
     linux_start_servers
     linux_start_celery_worker
 fi

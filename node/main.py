@@ -24,8 +24,6 @@ async def run_node():
     (for indirect nodes) or an HTTP server (for direct nodes). It also handles graceful
     shutdown of the node.
     """
-    init_db()
-
     load_dotenv(".env.node")
     config = get_config()
     node_config = get_node_config(config)
