@@ -114,7 +114,7 @@ async def update_db_with_status_sync(module_run: ModuleRun) -> None:
     Update the DB with the module run status synchronously
     param module_run: ModuleRun data to update
     """
-    logger.info(f"Updating DB with module run: {module_run}")
+    logger.info("Updating DB with module run")
 
     try:
         async with DB() as db:
