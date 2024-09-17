@@ -17,7 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
 from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_fixed
+from contextlib import contextmanager
 from git.exc import GitCommandError, InvalidGitRepositoryError
 from node.worker.utils import (
     load_yaml_config, 
@@ -42,49 +42,30 @@ os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 if MODULES_PATH not in sys.path:
     sys.path.append(MODULES_PATH)
 
-# These functions implement a file-based locking mechanism to ensure that only one process
-# can install or update a module at a time. This prevents conflicts when multiple workers
-# attempt to modify the same module simultaneously.
+class LockAcquisitionError(Exception):
+    pass
 
-def acquire_lock(lock_file):
-    """
-    Attempts to acquire a lock on the specified file.
-    
-    This function is used to ensure exclusive access when installing or updating a module.
-    It will retry for up to 30 seconds before timing out.
-    
-    Args:
-        lock_file (str): Path to the lock file.
-    
-    Returns:
-        file object: The locked file descriptor.
-    
-    Raises:
-        TimeoutError: If unable to acquire the lock within 30 seconds.
-    """
-    start_time = time.time()
-    while True:
-        try:
-            lock_fd = open(lock_file, 'w')
-            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return lock_fd
-        except IOError:
-            if time.time() - start_time > 30:  # 30 seconds timeout
-                raise TimeoutError("Failed to acquire lock after 30 seconds")
-            time.sleep(1)
+@contextmanager
+def file_lock(lock_file, timeout=30):
+    lock_fd = None
+    try:
+        start_time = time.time()
+        while True:
+            try:
+                lock_fd = open(lock_file, 'w')
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except IOError:
+                if time.time() - start_time > timeout:
+                    raise LockAcquisitionError(f"Failed to acquire lock after {timeout} seconds")
+                time.sleep(1)
+        
+        yield lock_fd
 
-def release_lock(lock_fd):
-    """
-    Releases the lock on the given file descriptor.
-    
-    This function should be called after the module installation or update is complete
-    to allow other processes to acquire the lock.
-    
-    Args:
-        lock_fd (file object): The locked file descriptor to release.
-    """
-    fcntl.flock(lock_fd, fcntl.LOCK_UN)
-    lock_fd.close()
+    finally:
+        if lock_fd:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
 
 @app.task
 def run_flow(flow_run: Dict) -> None:
@@ -100,32 +81,32 @@ def run_flow(flow_run: Dict) -> None:
 async def install_module_if_not_present(flow_run_obj, module_version):
     module_name = flow_run_obj.module_name
     lock_file = Path(MODULES_PATH) / f"{module_name}.lock"
-    lock_fd = None
 
     try:
-        lock_fd = acquire_lock(lock_file)
-        logger.info(f"Acquired lock for {module_name}")
+        with file_lock(lock_file):
+            logger.info(f"Acquired lock for {module_name}")
 
-        if not is_module_installed(module_name, module_version):
-            logger.info(f"Module {module_name} version {module_version} is not installed. Attempting to install...")
-            if not flow_run_obj.module_url:
-                raise ValueError(f"Module URL is required for installation of {module_name}")
-            install_module_if_needed(module_name, module_version, flow_run_obj.module_url)
-        
-        # Verify module installation
-        if not verify_module_installation(module_name):
-            raise RuntimeError(f"Module {module_name} failed verification after installation")
-        
-        logger.info(f"Module {module_name} version {module_version} is installed and verified")
+            if not is_module_installed(module_name, module_version):
+                logger.info(f"Module {module_name} version {module_version} is not installed. Attempting to install...")
+                if not flow_run_obj.module_url:
+                    raise ValueError(f"Module URL is required for installation of {module_name}")
+                install_module_if_needed(module_name, module_version, flow_run_obj.module_url)
+            
+            # Verify module installation
+            if not verify_module_installation(module_name):
+                raise RuntimeError(f"Module {module_name} failed verification after installation")
+            
+            logger.info(f"Module {module_name} version {module_version} is installed and verified")
+
+    except LockAcquisitionError as e:
+        error_msg = f"Failed to acquire lock for module {module_name}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Failed to install or verify module {module_name}: {str(e)}"
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
-    finally:
-        if lock_fd:
-            release_lock(lock_fd)
-            logger.info(f"Released lock for {module_name}")
-    
+
 async def _run_flow_async(flow_run: Dict) -> None:
     flow_run_obj = ModuleRun(**flow_run)
     module_version = f"v{flow_run_obj.module_version}"
@@ -189,7 +170,6 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
             
             if current_tag:
                 logger.info(f"Module {module_name} is at tag: {current_tag}")
-                # Remove 'v' prefix if present for comparison
                 current_version = current_tag[1:] if current_tag.startswith('v') else current_tag
                 required_version = required_version[1:] if required_version.startswith('v') else required_version
                 return current_version == required_version
@@ -206,7 +186,8 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
 
 def run_poetry_command(command):
     try:
-        subprocess.run(["poetry"] + command, check=True, capture_output=True, text=True)
+        result = subprocess.run(["poetry"] + command, check=True, capture_output=True, text=True)
+        return result.stdout
     except subprocess.CalledProcessError as e:
         error_msg = f"Poetry command failed: {e.cmd}"
         logger.error(error_msg)
@@ -229,10 +210,8 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
 
     try:
         if module_path.exists():
-            logger.info(f"Uninstalling existing {module_path}")
-            # run_poetry_command(["remove", f"{module_path}"])
-            repo = Repo(module_path)
             logger.info(f"Updating existing repository for {module_name}")
+            repo = Repo(module_path)
             repo.remotes.origin.fetch()
             repo.git.checkout(module_version)
             logger.info(f"Successfully updated {module_name} to version {module_version}")
