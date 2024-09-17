@@ -51,7 +51,7 @@ def acquire_lock(lock_file):
     Attempts to acquire a lock on the specified file.
     
     This function is used to ensure exclusive access when installing or updating a module.
-    It will retry for up to 5 minutes before timing out.
+    It will retry for up to 30 seconds before timing out.
     
     Args:
         lock_file (str): Path to the lock file.
@@ -60,7 +60,7 @@ def acquire_lock(lock_file):
         file object: The locked file descriptor.
     
     Raises:
-        TimeoutError: If unable to acquire the lock within 5 minutes.
+        TimeoutError: If unable to acquire the lock within 30 seconds.
     """
     start_time = time.time()
     while True:
@@ -69,8 +69,8 @@ def acquire_lock(lock_file):
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             return lock_fd
         except IOError:
-            if time.time() - start_time > 300:  # 5 minutes timeout
-                raise TimeoutError("Failed to acquire lock after 5 minutes")
+            if time.time() - start_time > 30:  # 30 seconds timeout
+                raise TimeoutError("Failed to acquire lock after 30 seconds")
             time.sleep(1)
 
 def release_lock(lock_fd):
@@ -97,7 +97,35 @@ def run_flow(flow_run: Dict) -> None:
         logger.error(f"Traceback: {traceback.format_exc()}")
         loop.run_until_complete(handle_failure(flow_run, error_msg))
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+async def install_module_if_not_present(flow_run_obj, module_version):
+    module_name = flow_run_obj.module_name
+    lock_file = Path(MODULES_PATH) / f"{module_name}.lock"
+    lock_fd = None
+
+    try:
+        lock_fd = acquire_lock(lock_file)
+        logger.info(f"Acquired lock for {module_name}")
+
+        if not is_module_installed(module_name, module_version):
+            logger.info(f"Module {module_name} version {module_version} is not installed. Attempting to install...")
+            if not flow_run_obj.module_url:
+                raise ValueError(f"Module URL is required for installation of {module_name}")
+            install_module_if_needed(module_name, module_version, flow_run_obj.module_url)
+        
+        # Verify module installation
+        if not verify_module_installation(module_name):
+            raise RuntimeError(f"Module {module_name} failed verification after installation")
+        
+        logger.info(f"Module {module_name} version {module_version} is installed and verified")
+    except Exception as e:
+        error_msg = f"Failed to install or verify module {module_name}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+    finally:
+        if lock_fd:
+            release_lock(lock_fd)
+            logger.info(f"Released lock for {module_name}")
+    
 async def _run_flow_async(flow_run: Dict) -> None:
     flow_run_obj = ModuleRun(**flow_run)
     module_version = f"v{flow_run_obj.module_version}"
@@ -105,15 +133,15 @@ async def _run_flow_async(flow_run: Dict) -> None:
     logger.info(f"Received flow run: {flow_run_obj}")
     logger.info(f"Checking if module {flow_run_obj.module_name} version {module_version} is installed")
     
-    if not is_module_installed(flow_run_obj.module_name, module_version):
-        logger.info(f"Module {flow_run_obj.module_name} version {module_version} is not installed. Attempting to install...")
-        if not flow_run_obj.module_url:
-            raise ValueError(f"Module URL is required for installation of {flow_run_obj.module_name}")
-        install_module_if_needed(flow_run_obj.module_name, module_version, flow_run_obj.module_url)
-    
-    # Verify module installation
-    if not verify_module_installation(flow_run_obj.module_name):
-        raise RuntimeError(f"Module {flow_run_obj.module_name} failed verification after installation")
+    try:
+        await install_module_if_not_present(flow_run_obj, module_version)
+    except Exception as e:
+        error_msg = f"Failed to install or verify module {flow_run_obj.module_name}: {str(e)}"
+        logger.error(error_msg)
+        if "Dependency conflict detected" in str(e):
+            logger.error("This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the module and the main project.")
+        await handle_failure(flow_run, error_msg)
+        return
     
     logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed and verified. Initializing workflow engine...")
     workflow_engine = FlowEngine(flow_run_obj)
@@ -193,26 +221,16 @@ def verify_module_installation(module_name: str) -> bool:
     except ImportError:
         return False
     
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def install_module_if_needed(module_name: str, module_version: str, module_url: str):
-    if not module_url:
-        raise ValueError(f"Module URL is required for installation of {module_name}")
-
     logger.info(f"Installing/updating module {module_name} version {module_version}")
     
     module_path = Path(MODULES_PATH) / module_name
     logger.info(f"Module path exists: {module_path.exists()}")
 
-    lock_file = Path(MODULES_PATH) / f"{module_name}.lock"
-    lock_fd = None
-
     try:
-        lock_fd = acquire_lock(lock_file)
-        logger.info(f"Acquired lock for {module_name}")
-
         if module_path.exists():
-            logger.info(f"Uninstalling existing {module_name}")
-            run_poetry_command(["remove", module_name])
+            logger.info(f"Uninstalling existing {module_path}")
+            # run_poetry_command(["remove", f"{module_path}"])
             repo = Repo(module_path)
             logger.info(f"Updating existing repository for {module_name}")
             repo.remotes.origin.fetch()
@@ -228,21 +246,19 @@ def install_module_if_needed(module_name: str, module_version: str, module_url: 
 
         # Reinstall the module
         logger.info(f"Installing/Reinstalling {module_name}")
-        run_poetry_command(["add", f"{module_path}"])
+        installation_output = run_poetry_command(["add", f"{module_path}"])
+        logger.info(f"Installation output: {installation_output}")
 
-        # Verify installation
         if not verify_module_installation(module_name):
             raise RuntimeError(f"Module {module_name} failed verification after installation")
 
-        logger.info(f"Successfully installed and verified {module_name} version {module_version}")        
+        logger.info(f"Successfully installed and verified {module_name} version {module_version}")
     except Exception as e:
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
-        raise RuntimeError(error_msg)
-    finally:
-        if lock_fd:
-            release_lock(lock_fd)
-            logger.info(f"Released lock for {module_name}")
+        if "Dependency conflict detected" in str(e):
+            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
+        raise RuntimeError(error_msg) from e
 
 class FlowEngine:
     def __init__(self, flow_run: ModuleRun):
@@ -276,7 +292,7 @@ class FlowEngine:
         }
 
     async def init_run(self):
-        logger.info(f"Initializing flow run: {self.flow_run}")
+        logger.info("Initializing flow run")
         self.flow_run.status = "processing"
         self.flow_run.start_processing_time = datetime.now(pytz.utc).isoformat()
         await update_db_with_status_sync(module_run=self.flow_run)
@@ -306,7 +322,7 @@ class FlowEngine:
                 self.flow_run.results = [out_msg]
 
     async def start_run(self):
-        logger.info(f"Starting flow run: {self.flow_run}")
+        logger.info("Starting flow run")
         self.flow_run.status = "running"
         await update_db_with_status_sync(module_run=self.flow_run)
 
@@ -349,7 +365,7 @@ class FlowEngine:
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
         self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
         await update_db_with_status_sync(module_run=self.flow_run)
-        logger.info(f"Flow run completed: {self.flow_run}")
+        logger.info(f"Flow run completed")
 
     async def fail(self):
         logger.error("Error running flow")

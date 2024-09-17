@@ -7,6 +7,7 @@ from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
 import os
 import traceback
+from fastapi import HTTPException
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -28,7 +29,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
             logger.info(f"Found module: {module}")
 
             if not module:
-                raise Exception("Module not found")
+                raise HTTPException(status_code=404, detail="Module not found")
 
             module_run_input.module_type = module["type"]
             module_run_input.module_version = module["version"]
@@ -39,10 +40,10 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
 
         async with DB() as db:
             module_run = await db.create_module_run(module_run_input)
-            logger.info(f"Created module run: {module_run}")
+            logger.info("Created module run")
 
             updated_module_run = await db.update_module_run(module_run.id, module_run)
-            logger.info(f"Updated module run: {updated_module_run}")
+            logger.info("Updated module run")
 
         # Enqueue the module run in Celery
         if module_run.module_type in ["flow", "template"]:
@@ -50,7 +51,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         elif module_run.module_type == "docker":
             execute_docker_module.delay(module_run.dict())
         else:
-            raise Exception("Invalid module type")
+            raise HTTPException(status_code=400, detail="Invalid module type")
 
         return module_run
 
@@ -58,7 +59,7 @@ async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
         logger.error(f"Failed to run module: {str(e)}")
         error_details = traceback.format_exc()
         logger.error(f"Full traceback: {error_details}")
-        raise Exception(f"Failed to run module: {module_run_input}")
+        raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run_input}")
 
 
 async def check_task(module_run: ModuleRun) -> ModuleRun:
@@ -67,24 +68,38 @@ async def check_task(module_run: ModuleRun) -> ModuleRun:
     :param module_run: ModuleRun details
     :return: Status
     """
-    logger.info(f"Checking task: {module_run}")
+    try:
+        logger.info("Checking task")
+        id_ = module_run.id
+        if id_ is None:
+            raise HTTPException(status_code=400, detail="Module run ID is required")
 
-    async with DB() as db:
-        module_run = await db.list_module_runs(module_run.id)
+        async with DB() as db:
+            module_run = await db.list_module_runs(id_)
 
-    logger.info(f"Found task: {module_run}")
+        if not module_run:
+            raise HTTPException(status_code=404, detail="Task not found")
 
-    status = module_run.status
-    logger.info(f"Found task status: {status}")
+        status = module_run.status
+        logger.info(f"Found task status: {status}")
 
-    response = None
-    if module_run.status == "completed":
-        logger.info(f"Task completed. Returning output: {module_run.results}")
-        response = module_run.results
+        if module_run.status == "completed":
+            logger.info(f"Task completed. Returning output: {module_run.results}")
+            response = module_run.results
+        elif module_run.status == "error":
+            logger.info(f"Task failed. Returning error: {module_run.error_message}")
+            response = module_run.error_message
+        else:
+            response = None
+
         logger.info(f"Response: {response}")
-    elif module_run.status == "error":
-        logger.info(f"Task failed. Returning error: {module_run.error_message}")
-        response = module_run.error_message
-        logger.info(f"Response: {response}")
 
-    return module_run
+        return module_run
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to check task: {str(e)}")
+        logger.debug(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal server error occurred while checking task")
+
