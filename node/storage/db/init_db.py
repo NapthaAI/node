@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
-from node.utils import get_logger
+from node.module_manager import setup_modules_from_config
+from node.utils import create_output_dir, get_logger
 import os
+from pathlib import Path
 import subprocess
 import time
 
@@ -9,6 +11,7 @@ logger = get_logger(__name__)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 surql_path = os.path.join(file_path, "data_structures")
+root_dir = Path(file_path).parent.parent
 
 
 logger.info(f"DB root pass: {os.getenv('DB_ROOT_PASS')}")
@@ -86,6 +89,9 @@ def init_db():
     time.sleep(5)
     logger.info("Database initialized")
     import_surql()
+
+    create_output_dir(os.getenv('BASE_OUTPUT_DIR'))
+    setup_modules_from_config(Path(f"{root_dir}/storage/hub/packages.json"))
 
 
 if __name__ == "__main__":

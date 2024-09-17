@@ -1,47 +1,27 @@
 import asyncio
 from dotenv import load_dotenv
+import os
 from pathlib import Path
 
 from node.server.http.server import HTTPServer
 from node.server.ws.server import WebSocketServer
-from node.module_manager import setup_modules_from_config
-from node.storage.db.init_db import init_db
-from node.storage.hub.hub import Hub
-from node.utils import get_logger, get_config, get_node_config, create_output_dir
-
+from node.utils import get_logger, get_config, get_node_config
 
 logger = get_logger(__name__)
+load_dotenv()
 
-FILE_PATH = Path(__file__).resolve()
-PARENT_DIR = FILE_PATH.parent
-
-
-async def run_node():
-    """
-    Main function for running the node. This function initializes the database,
-    loads environment variables, sets up the node configuration, initializes modules,
-    creates a Hub instance, registers the node, and launches either a WebSocket server
-    (for indirect nodes) or an HTTP server (for direct nodes). It also handles graceful
-    shutdown of the node.
-    """
-    load_dotenv(".env.node")
+async def run_server():
     config = get_config()
     node_config = get_node_config(config)
 
-    create_output_dir(config["BASE_OUTPUT_DIR"])
-    setup_modules_from_config(Path(f"{PARENT_DIR}/storage/hub/packages.json"))
-
-    async with Hub() as hub:
-        success, user, user_id = await hub.signin(config["HUB_USERNAME"], config["HUB_PASSWORD"])
-        node_config = await hub.create_node(node_config)
 
     if not node_config["ip"]:
         logger.info("Node is indirect")
-        uri = f"{node_config['routing']}/ws/{node_config['id'].split(':')[-1]}"
+        uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config['id'].split(':')[-1]}"
         websocket_server = WebSocketServer(uri)
         websocket_server.launch_server()
 
-    http_server = HTTPServer(node_config["ip"], node_config["port"], node_config["id"])
+    http_server = HTTPServer(os.getenv("IP"), os.getenv("PORT"), os.getenv("ID"))
     try:
         await http_server.launch_server()
     except Exception as e:
@@ -72,4 +52,4 @@ async def on_shutdown():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_node())
+    asyncio.run(run_server())

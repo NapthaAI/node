@@ -689,7 +689,7 @@ linux_start_servers() {
     # Define paths
     USER_NAME=$(whoami)
     CURRENT_DIR=$(pwd)
-    PYTHON_APP_PATH="$CURRENT_DIR/.venv/bin/poetry run python main.py"
+    PYTHON_APP_PATH="$CURRENT_DIR/.venv/bin/poetry run python server/server.py"
     WORKING_DIR="$CURRENT_DIR/node"
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
     SERVICE_FILE="nodeapp.service"
@@ -753,7 +753,7 @@ darwin_start_servers() {
         <string>$PYTHON_APP_PATH</string>
         <string>run</string>
         <string>python</string>
-        <string>main.py</string>
+        <string>server/server.py</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$WORKING_DIR</string>

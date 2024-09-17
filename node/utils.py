@@ -110,6 +110,7 @@ def get_node_config(config):
 
 def create_output_dir(base_output_dir):
     """Create the output directory for the node."""
+    logger.info(f"Creating output directory: {base_output_dir}")
     if base_output_dir is None:
         raise Exception("base_output_dir not found in environment")
 
