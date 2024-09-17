@@ -645,7 +645,7 @@ load_env_file() {
     fi
 }
 
-linux_start_node() {
+linux_start_servers() {
     # Echo start Node
     echo "Starting Node..." | log_with_service_name "Node" $BLUE
 
@@ -659,7 +659,7 @@ linux_start_node() {
     #     exit 1
     # fi
 
-    echo "Starting Node application..." | log_with_service_name "Node" $BLUE
+    echo "Starting Node application..." | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -683,22 +683,22 @@ linux_start_node() {
         sudo systemctl enable nodeapp
         sudo systemctl start nodeapp
 
-        echo "Node application service started successfully." | log_with_service_name "Node" $BLUE
+        echo "Node application service started successfully." | log_with_service_name "Server" $BLUE
     else
-        echo "The systemd service file does not exist in the expected location." | log_with_service_name "Node" "error" $BLUE
+        echo "The systemd service file does not exist in the expected location." | log_with_service_name "Server" $BLUE
         exit 1
     fi
 }
 
-darwin_start_node() {
+darwin_start_servers() {
     # Echo start Node
-    echo "Starting Node..." | log_with_service_name "Node" $BLUE
+    echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
-    # Get the port from the .env file
-    port=${NODE_PORT:-3000} # Default to 3000 if not set
-    echo "Port: $port"
-
-    echo "Starting Node application..." | log_with_service_name "Node" $BLUE
+    # Get the port and number of servers from the .env file
+    port=${NODE_PORT:-7001} # Default to 7001 if not set
+    num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
+    echo "Port: $port" | log_with_service_name "Server" $BLUE
+    echo "Number of servers: $num_servers" | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -706,17 +706,23 @@ darwin_start_node() {
     PYTHON_APP_PATH="$CURRENT_DIR/.venv/bin/poetry"
     WORKING_DIR="$CURRENT_DIR/node"
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
-    PLIST_FILE="com.example.nodeapp.plist"
     SURRREALDB_PATH="/usr/local/bin"
 
-    # Create the launchd plist file for nodeapp
-    cat <<EOF > ~/Library/LaunchAgents/$PLIST_FILE
+    for ((i=0; i<num_servers; i++))
+    do
+        server_port=$((port + i))
+        PLIST_FILE="com.example.nodeapp_$i.plist"
+
+        echo "Starting application server $i on port $server_port..." | log_with_service_name "Server" $BLUE
+
+        # Create the launchd plist file for nodeapp
+        cat <<EOF > ~/Library/LaunchAgents/$PLIST_FILE
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.example.nodeapp</string>
+    <string>com.example.nodeapp_$i</string>
     <key>ProgramArguments</key>
     <array>
         <string>$PYTHON_APP_PATH</string>
@@ -732,25 +738,44 @@ darwin_start_node() {
         <string>$ENVIRONMENT_FILE_PATH</string>
         <key>PATH</key>
         <string>$SURRREALDB_PATH:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>NODE_PORT</key>
+        <string>$server_port</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp.out</string>
+    <string>/tmp/nodeapp_$i.out</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp.err</string>
+    <string>/tmp/nodeapp_$i.err</string>
 </dict>
 </plist>
 EOF
 
-    # Load and start the nodeapp service
-    # launchctl unload ~/Library/LaunchAgents/$PLIST_FILE
-    launchctl load ~/Library/LaunchAgents/$PLIST_FILE
-    launchctl start com.example.nodeapp
+        # Check if the plist file was created successfully
+        if [ ! -f ~/Library/LaunchAgents/$PLIST_FILE ]; then
+            echo "Failed to create plist file for server $i" | log_with_service_name "Server" $RED
+            continue
+        fi
 
-    echo "Node application service started successfully." | log_with_service_name "Node" $BLUE
+        # Validate the plist file
+        if ! plutil -lint ~/Library/LaunchAgents/$PLIST_FILE > /dev/null 2>&1; then
+            echo "Invalid plist file for server $i" | log_with_service_name "Server" $RED
+            continue
+        fi
+
+        # Load and start the nodeapp service
+        if launchctl load ~/Library/LaunchAgents/$PLIST_FILE; then
+            echo "Node application $i service started successfully on port $server_port." | log_with_service_name "Server" $BLUE
+        else
+            echo "Failed to start Node application $i service on port $server_port." | log_with_service_name "Server" $RED
+        fi
+
+        launchctl start com.example.nodeapp_$i
+
+        echo "Node application $i service started successfully on port $server_port." | log_with_service_name "Server" $BLUE
+    done
 }
 
 # Function to start the Celery worker
@@ -902,7 +927,7 @@ if [ "$os" = "Darwin" ]; then
     check_and_set_stability_key
     load_env_file
     start_hub_surrealdb
-    darwin_start_node
+    darwin_start_servers
     darwin_start_celery_worker
 else
     print_logo
@@ -919,7 +944,7 @@ else
     check_and_set_stability_key
     load_env_file
     start_hub_surrealdb
-    linux_start_node
+    linux_start_servers
     linux_start_celery_worker
 fi
 
