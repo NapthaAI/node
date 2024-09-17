@@ -70,16 +70,7 @@ def file_lock(lock_file, timeout=30):
 
 @app.task
 def run_flow(flow_run: Dict) -> None:
-    async def run_flow_wrapper():
-        try:
-            await _run_flow_async(flow_run)
-        except Exception as e:
-            error_msg = f"Error in run_flow: {str(e)}"
-            logger.error(error_msg)
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            await handle_failure(flow_run, error_msg)
-
-    asyncio.run(run_flow_wrapper())
+    asyncio.run(_run_flow_async(flow_run))
 
 async def install_module_if_not_present(flow_run_obj, module_version):
     module_name = flow_run_obj.module_name
@@ -111,32 +102,38 @@ async def install_module_if_not_present(flow_run_obj, module_version):
         raise RuntimeError(error_msg) from e
 
 async def _run_flow_async(flow_run: Dict) -> None:
-    flow_run_obj = ModuleRun(**flow_run)
-    module_version = f"v{flow_run_obj.module_version}"
-
-    logger.info(f"Received flow run: {flow_run_obj}")
-    logger.info(f"Checking if module {flow_run_obj.module_name} version {module_version} is installed")
-    
     try:
-        await install_module_if_not_present(flow_run_obj, module_version)
-    except Exception as e:
-        error_msg = f"Failed to install or verify module {flow_run_obj.module_name}: {str(e)}"
-        logger.error(error_msg)
-        if "Dependency conflict detected" in str(e):
-            logger.error("This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the module and the main project.")
-        await handle_failure(flow_run, error_msg)
-        return
-    
-    logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed and verified. Initializing workflow engine...")
-    workflow_engine = FlowEngine(flow_run_obj)
+        flow_run_obj = ModuleRun(**flow_run)
+        module_version = f"v{flow_run_obj.module_version}"
 
-    await workflow_engine.init_run()
-    await workflow_engine.start_run()
-    
-    if workflow_engine.flow_run.status == "completed":
-        await workflow_engine.complete()
-    elif workflow_engine.flow_run.status == "error":
-        await workflow_engine.fail()
+        logger.info(f"Received flow run: {flow_run_obj}")
+        logger.info(f"Checking if module {flow_run_obj.module_name} version {module_version} is installed")
+        
+        try:
+            await install_module_if_not_present(flow_run_obj, module_version)
+        except Exception as e:
+            error_msg = f"Failed to install or verify module {flow_run_obj.module_name}: {str(e)}"
+            logger.error(error_msg)
+            if "Dependency conflict detected" in str(e):
+                logger.error("This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the module and the main project.")
+            await handle_failure(flow_run, error_msg)
+            return
+        
+        logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed and verified. Initializing workflow engine...")
+        workflow_engine = FlowEngine(flow_run_obj)
+
+        await workflow_engine.init_run()
+        await workflow_engine.start_run()
+        
+        if workflow_engine.flow_run.status == "completed":
+            await workflow_engine.complete()
+        elif workflow_engine.flow_run.status == "error":
+            await workflow_engine.fail()
+    except Exception as e:
+        error_msg = f"Error in _run_flow_async: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        await handle_failure(flow_run, error_msg)
 
 async def handle_failure(flow_run: Dict, error_msg: str) -> None:
     flow_run_obj = ModuleRun(**flow_run)
@@ -333,7 +330,6 @@ class FlowEngine:
 
         logger.info(f"Flow run response: {response}")
 
-        # Process the response as before
         if isinstance(response, (dict, list, tuple)):
             response = json.dumps(response)
         elif isinstance(response, BaseModel):
