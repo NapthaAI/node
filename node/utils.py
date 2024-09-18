@@ -39,73 +39,109 @@ def get_external_ip():
     except requests.RequestException as e:
         raise f"""Error retrieving IP: {e}\n\nPlease pass the IP address manually in the .env file"""
 
+def parse_ports(port_string: str) -> List[int]:
+    """Parse a comma-separated string of ports into a list of integers."""
+    return [int(port.strip()) for port in port_string.split(',') if port.strip()]
 
 def get_config():
     """Get the configuration for the node."""
-    ip = os.getenv("NODE_IP")
-    dev_mode = os.getenv("DEV_MODE")
-    dev_mode = True if dev_mode == "true" else False
-
-    # if not dev_mode:
-    #     if ip is None or ip == "" or "localhost" in ip:
-    #         ip = get_external_ip()
-    #         # add http:// to the ip
-    #         ip = f"http://{ip}"
-
-    base_output_dir = os.getenv("BASE_OUTPUT_DIR")
-    if base_output_dir is None:
-        raise Exception("base_output_dir not found in environment")
-    base_output_dir = NODE_PATH / base_output_dir
-    base_output_dir = base_output_dir.resolve()
-
-    ollama_models = os.getenv("OLLAMA_MODELS")
-    if ollama_models is None:
-        raise Exception("ollama_models not found in environment")
-
     config = {}
-    config["PUBLIC_KEY"] = get_public_key(os.getenv("PRIVATE_KEY"))
-    config["NODE_TYPE"] = os.getenv("NODE_TYPE")
+
+    # Basic Node Configuration
+    config["PRIVATE_KEY"] = os.getenv("PRIVATE_KEY")
+    config["PUBLIC_KEY"] = get_public_key(config["PRIVATE_KEY"])
+    config["IN_DOCKER"] = os.getenv("IN_DOCKER", "false").lower() == "true"
+    config["GPU"] = os.getenv("GPU", "false").lower() == "true"
+    config["DOCKER_JOBS"] = os.getenv("DOCKER_JOBS", "false").lower() == "true"
+
+    # Node Type and Network Configuration
+    config["NODE_TYPE"] = os.getenv("NODE_TYPE", "direct")
     if config["NODE_TYPE"] == "direct":
-        config["NODE_IP"] = ip
-        config["NODE_PORT"] = int(os.getenv("NODE_PORT"))
+        config["NODE_IP"] = os.getenv("NODE_IP")
+        config["NODE_PORTS"] = parse_ports(os.getenv("NODE_PORT", "7001"))
         config["NODE_ROUTING"] = None
     elif config["NODE_TYPE"] == "indirect":
         config["NODE_IP"] = None
-        config["NODE_PORT"] = None
+        config["NODE_PORTS"] = None
         config["NODE_ROUTING"] = os.getenv("NODE_ROUTING")
     else:
         raise Exception("Unknown node type specified in environment.")
 
+    config["NUM_SERVERS"] = int(os.getenv("NUM_SERVERS", 1))
+
+    # MQ Configuration
+    config["RMQ_USER"] = os.getenv("RMQ_USER", "username")
+    config["RMQ_PASSWORD"] = os.getenv("RMQ_PASSWORD", "password")
+    config["CELERY_BROKER_URL"] = os.getenv("CELERY_BROKER_URL", "amqp://localhost:5672/")
+
+    # LLM Configuration
+    config["LLM_BACKEND"] = os.getenv("LLM_BACKEND", "ollama")
+    config["VLLM_MODEL"] = os.getenv("VLLM_MODEL", None)
     config["OLLAMA_MODELS"] = [item.strip() for item in os.getenv("OLLAMA_MODELS", "").split(",") if item.strip()]
+    config["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", None)
+    config["STABILITY_API_KEY"] = os.getenv("STABILITY_API_KEY", None)
+
+    # Local DB Configuration
+    config["SURREALDB_PORT"] = int(os.getenv("SURREALDB_PORT"))
+    config["DB_NS"] = os.getenv("DB_NS")
+    config["DB_DB"] = os.getenv("DB_DB")
+    config["DB_URL"] = os.getenv("DB_URL")
+    config["DB_ROOT_USER"] = os.getenv("DB_ROOT_USER")
+    config["DB_ROOT_PASS"] = os.getenv("DB_ROOT_PASS")
+
+    # Storage Configuration
+    base_output_dir = os.getenv("BASE_OUTPUT_DIR")
+    
+    config["BASE_OUTPUT_DIR"] = (NODE_PATH / base_output_dir).resolve()
+    if base_output_dir is None:
+        raise Exception("BASE_OUTPUT_DIR not found in environment")
+
+    config["MODULES_PATH"] = os.getenv("MODULES_PATH")
+    if config["MODULES_PATH"] is None:
+        raise Exception("MODULES_PATH not found in environment")
+
+    config["IPFS_GATEWAY_URL"] = os.getenv("IPFS_GATEWAY_URL")
+    if config["IPFS_GATEWAY_URL"] is None:
+        raise Exception("IPFS_GATEWAY_URL not found in environment")
+
+    # Hub Configuration
+    config["LOCAL_HUB"] = os.getenv("LOCAL_HUB", "false").lower() == "true"
+    config["LOCAL_HUB_URL"] = os.getenv("LOCAL_HUB_URL")
+    config["PUBLIC_HUB_URL"] = os.getenv("PUBLIC_HUB_URL")
+    config["HUB_DB_PORT"] = int(os.getenv("HUB_DB_PORT"))
+    config["HUB_NS"] = os.getenv("HUB_NS")
+    config["HUB_DB"] = os.getenv("HUB_DB")
+    config["HUB_ROOT_USER"] = os.getenv("HUB_ROOT_USER")
+    config["HUB_ROOT_PASS"] = os.getenv("HUB_ROOT_PASS")
+    config["HUB_USERNAME"] = os.getenv("HUB_USERNAME")
+    config["HUB_PASSWORD"] = os.getenv("HUB_PASSWORD")
+
+    # System Information
     config["NUM_GPUS"] = os.getenv("NUM_GPUS", 0)
     config["VRAM"] = os.getenv("VRAM", 0)
     config["OS_INFO"] = platform.system()
     config["ARCH_INFO"] = platform.machine()
     config["RAM_INFO"] = psutil.virtual_memory().total
-    config["BASE_OUTPUT_DIR"] = base_output_dir
-    config["MODULES_PATH"] = os.getenv("MODULES_PATH", None)
-    config["HUB_USERNAME"] = os.getenv("HUB_USERNAME")
-    config["HUB_PASSWORD"] = os.getenv("HUB_PASSWORD")
-    config["DOCKER_JOBS"] = os.getenv("DOCKER_JOBS", "False")
-    return config
 
+    return config
 
 def get_node_config(config):
     """Get the node configuration."""
-    node_config = NodeConfig(
+    return NodeConfig(
         public_key=config["PUBLIC_KEY"],
         ip=config["NODE_IP"],
-        port=config["NODE_PORT"],
+        ports=config["NODE_PORTS"],
         routing=config["NODE_ROUTING"],
         ollama_models=config["OLLAMA_MODELS"],
         num_gpus=config["NUM_GPUS"],
         vram=config["VRAM"],
-        os=config["OS_INFO"],
-        arch=config["ARCH_INFO"],
-        ram=config["RAM_INFO"],
+        os=platform.system(),
+        arch=platform.machine(),
+        ram=psutil.virtual_memory().total,
         docker_jobs=config["DOCKER_JOBS"],
+        owner=config["HUB_USERNAME"],
+        num_servers=config["NUM_SERVERS"]
     )
-    return node_config
 
 
 def create_output_dir(base_output_dir):
