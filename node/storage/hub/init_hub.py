@@ -178,6 +178,6 @@ if __name__ == "__main__":
             async with Hub() as hub:
                 await user_setup_flow()
         asyncio.run(run_user_setup())
-        asyncio.run(register_node())
+        # asyncio.run(register_node()) 
     else:
         asyncio.run(init_hub())
