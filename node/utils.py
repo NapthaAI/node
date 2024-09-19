@@ -55,8 +55,9 @@ def get_config():
     config["DOCKER_JOBS"] = os.getenv("DOCKER_JOBS", "false").lower() == "true"
 
     # Node Type and Network Configuration
-    config["NODE_TYPE"] = os.getenv("NODE_TYPE", "direct")
-    if config["NODE_TYPE"] == "direct":
+    config["NODE_TYPE"] = os.getenv("NODE_TYPE", "direct-http")
+    logger.info(f"NODE_TYPE: {config['NODE_TYPE']}")
+    if config["NODE_TYPE"] in ["direct-http", "direct-ws"]:
         config["NODE_IP"] = os.getenv("NODE_IP")
         config["NODE_PORTS"] = parse_ports(os.getenv("NODE_PORT", "7001"))
         config["NODE_ROUTING"] = None
@@ -140,7 +141,8 @@ def get_node_config(config):
         ram=psutil.virtual_memory().total,
         docker_jobs=config["DOCKER_JOBS"],
         owner=config["HUB_USERNAME"],
-        num_servers=config["NUM_SERVERS"]
+        num_servers=config["NUM_SERVERS"],
+        node_type=config["NODE_TYPE"]
     )
 
 

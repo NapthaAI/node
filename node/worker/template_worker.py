@@ -30,6 +30,7 @@ from node.worker.utils import (
     upload_json_string_to_ipfs
 )
 from node.worker.main import app
+from node.engine.ws.node import Node as WsNode
 from naptha_sdk.client.node import Node
 from naptha_sdk.schemas import ModuleRun
 from node.utils import get_logger
@@ -255,10 +256,16 @@ class FlowEngine:
         self.flow_name = flow_run.module_name
         self.parameters = flow_run.module_params
         self.node_type = os.getenv("NODE_TYPE")
-        if self.node_type == "direct":
+        if self.node_type == "direct-http":
             self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
-        else:
+        elif self.node_type == "direct-ws":
+            ip = os.getenv("NODE_IP")
+            if 'http' in ip:
+                ip = ip.replace('http://', 'ws://')
+            self.orchestrator_node = WsNode(f'{ip}:{os.getenv("NODE_PORT")}')
+            logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
+        elif self.node_type == "indirect":
             node_id = requests.get("http://localhost:7001/node_id").json()
             if not node_id:
                 raise ValueError("NODE_ID environment variable is not set")
@@ -266,9 +273,16 @@ class FlowEngine:
                 indirect_node_id=node_id,
                 routing_url=os.getenv("NODE_ROUTING")
             )
+        else:
+            raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
 
         if flow_run.worker_nodes is not None:
-            self.worker_nodes = [Node(worker_node) for worker_node in flow_run.worker_nodes]
+            self.worker_nodes = []
+            for worker_node in flow_run.worker_nodes:
+                if 'ws' in worker_node:
+                    self.worker_nodes.append(WsNode(worker_node))
+                else:
+                    self.worker_nodes.append(Node(worker_node))
         else:
             self.worker_nodes = None
 

@@ -15,6 +15,7 @@ class NodeConfig(BaseModel):
     routing: Union[str, None] = Field(default=None)
     owner: Union[str, None] = Field(default=None)
     num_servers: int = Field(default=1)
+    node_type: str = Field(default="direct-http")
 
     class Config:
         allow_mutation = True

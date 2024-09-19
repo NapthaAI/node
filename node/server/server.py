@@ -7,7 +7,8 @@ from typing import Optional
 from node.storage.hub.hub import Hub
 from node.module_manager import setup_modules_from_config
 from node.server.http.server import HTTPServer
-from node.server.ws.server import WebSocketServer
+from node.server.ws.direct.server import WebSocketDirectServer
+from node.server.ws.indirect.server import WebSocketIndirectServer
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
 
 
@@ -42,9 +43,9 @@ async def run_servers():
     if node_config.routing:  # This means it's an indirect node
         logger.info("Node is indirect")
         uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config.public_key.split(':')[-1]}"
-        websocket_server = WebSocketServer(uri)
+        websocket_server = WebSocketIndirectServer(uri)
         tasks.append(websocket_server.launch_server())
-    else:  # Direct node
+    elif node_config.node_type == "direct-http":
         start_port = node_config.ports[0] if node_config.ports else 7001
         actual_ports = []
 
@@ -66,6 +67,20 @@ async def run_servers():
 
         # Update node_config with actual ports
         node_config.ports = actual_ports
+    elif node_config.node_type == "direct-ws":
+        start_port = node_config.ports[0] if node_config.ports else 7001
+        actual_ports = []
+        for i in range(node_config.num_servers):
+            port = find_available_port(start_port)
+            websocket_server = WebSocketDirectServer(node_config.ip, port)
+            tasks.append(websocket_server.launch_server())
+            actual_ports.append(port)
+            start_port = port + 1  # Set the next start port
+
+        # Update node_config with actual ports
+        node_config.ports = actual_ports
+    else:
+        raise Exception(f"Invalid node type: {node_config.node_type}")
 
     # Create and sign in to the hub
     async with Hub() as hub:
