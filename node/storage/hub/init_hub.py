@@ -1,18 +1,21 @@
 import asyncio
-import os
-import subprocess
 from dotenv import load_dotenv
+import os
+from pathlib import Path
+import subprocess
+import time
+
 from node.storage.hub.hub import Hub
 from node.user import get_public_key
-from node.utils import add_credentials_to_env, get_logger
-import time
+from node.utils import add_credentials_to_env, get_config, get_logger, get_node_config
+
 
 load_dotenv()
 logger = get_logger(__name__)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 surql_path = os.path.join(file_path, "data_structures")
-
+root_dir = Path(file_path).parent.parent
 
 def import_surql():
     """Import SURQL files to the database"""
@@ -89,6 +92,14 @@ async def init_hub():
     time.sleep(5)
     logger.info("Database initialized")
     import_surql()
+
+
+async def register_node():
+    config = get_config()
+    node_config = get_node_config(config)
+    async with Hub() as hub:
+        success, user, user_id = await hub.signin(os.getenv('HUB_USERNAME'), os.getenv('HUB_PASSWORD'))
+        node_config = await hub.create_node(node_config)
 
 async def user_setup_flow():
     async with Hub() as hub:
@@ -167,5 +178,6 @@ if __name__ == "__main__":
             async with Hub() as hub:
                 await user_setup_flow()
         asyncio.run(run_user_setup())
+        # asyncio.run(register_node()) 
     else:
         asyncio.run(init_hub())

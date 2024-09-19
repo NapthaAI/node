@@ -14,3 +14,5 @@ DEFINE FIELD ip ON node TYPE option<string|null>;
 DEFINE FIELD port ON node TYPE option<number|null>;
 DEFINE FIELD routing ON node TYPE option<string|null>;
 DEFINE FIELD owner ON node TYPE record<user>;
+DEFINE FIELD num_servers ON node TYPE number;
+DEFINE FIELD ports ON node TYPE option<array<number>>;

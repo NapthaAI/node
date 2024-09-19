@@ -11,18 +11,15 @@ from node.utils import get_logger
 logger = get_logger(__name__)
 
 class HTTPServer:
-    def __init__(self, host: str, port: int, node_id: str):
+    def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
-        self.node_id = node_id
         
         self.app = FastAPI()
         self.app.include_router(http_server_router)
         self.app.include_router(http_server_storage_router)
         self.app.include_router(http_server_user_router)
         self.app.include_router(http_server_orchestration_router)
-
-        self.app.add_api_route("/node_id", self.get_node_id, methods=["GET"])
 
         self.app.add_middleware(
             CORSMiddleware,
@@ -32,11 +29,8 @@ class HTTPServer:
             allow_headers=["*"],
         )
 
-    def get_node_id(self):
-        return self.node_id.split(":")[1]
-
     async def launch_server(self):
-        logger.info(f"Launching HTTP server on {self.host}:{self.port}")
+        logger.info(f"Launching HTTP server...")
         config = uvicorn.Config(
             self.app,
             host="0.0.0.0",

@@ -22,15 +22,27 @@ stop_surrealdb() {
 
 os=$(uname)
 if [ "$os" = "Darwin" ]; then
+    # Load the .env file
+    if [ -f .env ]; then
+        export $(cat .env | grep -v '^#' | xargs)
+    else
+        echo ".env file not found. Using default values."
+        NUM_SERVERS=1
+    fi
+
     # Stop the services
     launchctl unload ~/Library/LaunchAgents/com.example.celeryworker.plist
-    launchctl unload ~/Library/LaunchAgents/com.example.nodeapp.plist
+    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+        launchctl unload ~/Library/LaunchAgents/com.example.nodeapp_$i.plist
+    done
     launchctl unload ~/Library/LaunchAgents/com.example.ollama.plist
     brew services stop rabbitmq
 
     # Remove the service files
     rm ~/Library/LaunchAgents/com.example.celeryworker.plist
-    rm ~/Library/LaunchAgents/com.example.nodeapp.plist
+    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+        rm ~/Library/LaunchAgents/com.example.nodeapp_$i.plist
+    done
     rm ~/Library/LaunchAgents/com.example.ollama.plist
 
     # Stop SurrealDB
