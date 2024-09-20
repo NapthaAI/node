@@ -13,7 +13,7 @@ from websockets.exceptions import ConnectionClosedError
 import asyncio
 from functools import wraps
 
-from node.server.storage import get_ipns_record
+from node.storage.storage import get_ipns_record
 
 load_dotenv()
 logger = get_logger(__name__)
