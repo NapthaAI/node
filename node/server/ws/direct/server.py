@@ -1,20 +1,20 @@
-import json
-import uvicorn
 import asyncio
-from typing import Dict
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
-
-from node.utils import get_logger
-from node.storage.hub.hub import Hub
+import json
+from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.storage.db.db import DB
-from naptha_sdk.schemas import DockerParams, ModuleRunInput
+from node.storage.hub.hub import Hub
+from node.user import check_user, register_user
+from node.utils import get_logger
 from node.worker.docker_worker import execute_docker_module
 from node.worker.template_worker import run_flow
-from node.user import check_user, register_user
 import os
-from datetime import datetime
+import traceback
+from typing import Dict
+import uvicorn
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 logger = get_logger(__name__)
 
@@ -49,14 +49,15 @@ class ConnectionManager:
                 logger.error(f"Error sending message to client {client_id} for task {task}: {str(e)}")
 
 
-class WebSocketDirectServer:
-    def __init__(self, host: str, port: int):
+class WebSocketServer:
+    def __init__(self, host: str, port: int, node_type: str):
         self.host = host
         if 'http' in host:
             self.host = host.split('http://')[1]
         self.port = port
         self.app = FastAPI()
         self.manager = ConnectionManager()
+        self.node_type = node_type
 
         self.app.add_middleware(
             CORSMiddleware,
@@ -77,7 +78,10 @@ class WebSocketDirectServer:
             while True:
                 data = await websocket.receive_text()
                 logger.info(f"Endpoint: create_task :: Received data: {data}")
-                result = await self.create_task(data)
+                if self.node_type == "direct":
+                    result = await self.create_task_direct(data)
+                else:
+                    result = await self.create_task_indirect(websocket, data, client_id)
                 logger.info(f"Endpoint: create_task :: Sending result: {result}")
                 await self.manager.send_message(result, client_id, "create_task")
         except WebSocketDisconnect:
@@ -92,7 +96,10 @@ class WebSocketDirectServer:
             while True:
                 data = await websocket.receive_text()
                 logger.info(f"Endpoint: check_user :: Received data: {data}")
-                result = await self.check_user_ws_direct(data)
+                if self.node_type == "direct":
+                    result = await self.check_user_direct(data)
+                else:
+                    result = await self.check_user_indirect(data, client_id)
                 logger.info(f"Endpoint: check_user :: Sending result: {result}")
                 await self.manager.send_message(result, client_id, "check_user")
         except WebSocketDisconnect:
@@ -104,7 +111,10 @@ class WebSocketDirectServer:
             while True:
                 data = await websocket.receive_text()
                 logger.info(f"Endpoint: register_user :: Received data: {data}")
-                result = await self.register_user_ws_direct(data)
+                if self.node_type == "direct":
+                    result = await self.register_user_direct(data)
+                else:
+                    result = await self.register_user_indirect(data, client_id)
                 logger.info(f"Endpoint: register_user :: Sending result: {result}")
                 await self.manager.send_message(result, client_id, "register_user")
         except WebSocketDisconnect:
@@ -125,7 +135,7 @@ class WebSocketDirectServer:
         server = uvicorn.Server(config)
         await server.serve()
 
-    async def create_task(self, data: str) -> str:
+    async def create_task_direct(self, data: str) -> str:
         try:
             job = json.loads(data)
             logger.info(f"Processing job: {job}")
@@ -178,12 +188,104 @@ class WebSocketDirectServer:
             logger.error(f"Error processing job: {str(e)}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    async def check_user_ws_direct(self, data: str):
+    async def create_task_indirect(self, message: dict, client_id: str) -> ModuleRun:
+        """
+        Create a task and return the task
+        """
+        target_node_id = message['source_node']
+        source_node_id = message['target_node']
+        params = message['params']
+        response = {
+            'target_node': target_node_id,
+            'source_node': source_node_id
+        }
+        try:
+            module_run_input = ModuleRunInput(**params)
+            logger.info(f"Received task: {module_run_input}")
+
+            async with Hub() as hub:
+                success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
+                module = await hub.list_modules(f"module:{module_run_input.module_name}")
+                logger.info(f"Found module: {module}")
+
+                if not module:
+                    raise HTTPException(status_code=404, detail="Module not found")
+
+                module_run_input.module_type = module["type"]
+                module_run_input.module_version = module["version"]
+                module_run_input.module_url = module["url"]
+
+                if module["type"] == "docker":
+                    module_run_input.module_params = DockerParams(**module_run_input.module_params)
+
+            async with DB() as db:
+                module_run = await db.create_module_run(module_run_input)
+                logger.info("Created module run")
+
+                updated_module_run = await db.update_module_run(module_run.id, module_run)
+                logger.info("Updated module run")
+
+            # Enqueue the module run in Celery
+            if module_run.module_type in ["flow", "template"]:
+                run_flow.delay(module_run.dict())
+            elif module_run.module_type == "docker":
+                execute_docker_module.delay(module_run.dict())
+            else:
+                raise HTTPException(status_code=400, detail="Invalid module type")
+
+            response['params'] = module_run.model_dict()
+            await self.manager.send_message(json.dumps(response), client_id, "create_task")
+            return module_run
+
+        except Exception as e:
+            logger.error(f"Failed to run module: {str(e)}")
+            error_details = traceback.format_exc()
+            logger.error(f"Full traceback: {error_details}")
+            response['params'] = {'error': f"Failed to run module: {str(e)}"}
+            await self.manager.send_message(json.dumps(response), client_id, "create_task")
+            raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run_input}")
+
+    async def check_user_direct(self, data: str):
         data = json.loads(data)
         response = await check_user(data)
         return json.dumps(response)
 
-    async def register_user_ws_direct(self, data: str):
+    async def check_user_indirect(self, message: Dict, client_id: str) -> Dict:
+        """Check if a user exists"""
+        target_node_id = message['source_node']
+        source_node_id = message['target_node']
+        params = message['params']
+        response = {
+            'target_node': target_node_id,
+            'source_node': source_node_id
+        }
+        try:
+            result = await check_user(params)
+            response['params'] = result
+            await self.manager.send_message(json.dumps(response), client_id, "check_user")
+        except Exception as e:
+            response['params'] = {'error': str(e)}
+            await self.manager.send_message(json.dumps(response), client_id, "check_user")
+
+    async def register_user_direct(self, data: str):
         data = json.loads(data)
         response = await register_user(data)
         return json.dumps(response)
+    
+    async def register_user_indirect(self, message: Dict, client_id: str) -> Dict:
+        """Register a user"""
+        target_node_id = message['source_node']
+        source_node_id = message['target_node']
+        params = message['params']
+        response = {
+            'target_node': target_node_id,
+            'source_node': source_node_id
+        }
+        try:
+            result = await register_user(params)
+            response['params'] = result
+            await self.manager.send_message(json.dumps(response), client_id, "register_user")
+        except Exception as e:
+            logger.error(f"Error registering user: {e}")
+            response['params'] = {'error': str(e)}
+            await self.manager.send_message(json.dumps(response), client_id, "register_user")

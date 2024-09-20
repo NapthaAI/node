@@ -7,8 +7,7 @@ from typing import Optional
 from node.storage.hub.hub import Hub
 from node.module_manager import setup_modules_from_config
 from node.server.http import HTTPServer
-from node.server.ws.direct.server import WebSocketDirectServer
-from node.server.ws.indirect.server import WebSocketIndirectServer
+from node.server.ws.server import WebSocketServer
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
 
 
@@ -40,12 +39,14 @@ async def run_servers():
 
     tasks = []
 
-    if node_config.routing:  # This means it's an indirect node
-        logger.info("Node is indirect")
+    if node_config.node_type == "indirect": 
+        logger.info("Creating indirect websocket server...")
         uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config.public_key.split(':')[-1]}"
-        websocket_server = WebSocketIndirectServer(uri)
+        websocket_server = WebSocketServer(uri, 7001, node_type =node_config.node_type)
         tasks.append(websocket_server.launch_server())
+
     elif node_config.node_type == "direct-http":
+        logger.info("Creating direct http server...")
         start_port = node_config.ports[0] if node_config.ports else 7001
         actual_ports = []
 
@@ -65,19 +66,19 @@ async def run_servers():
 
             start_port = port + 1  # Set the next start port
 
-        # Update node_config with actual ports
         node_config.ports = actual_ports
+
     elif node_config.node_type == "direct-ws":
+        logger.info("Creating direct websocket server...")
         start_port = node_config.ports[0] if node_config.ports else 7001
         actual_ports = []
         for i in range(node_config.num_servers):
             port = find_available_port(start_port)
-            websocket_server = WebSocketDirectServer(node_config.ip, port)
+            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type)
             tasks.append(websocket_server.launch_server())
             actual_ports.append(port)
             start_port = port + 1  # Set the next start port
 
-        # Update node_config with actual ports
         node_config.ports = actual_ports
     else:
         raise Exception(f"Invalid node type: {node_config.node_type}")
