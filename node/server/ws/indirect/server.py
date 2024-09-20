@@ -9,7 +9,7 @@ from typing import Dict
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
 from node.server.task import create_task, check_task
-from node.server.user import register_user, check_user
+from node.user import register_user, check_user
 from node.server.orchestration import create_task_run, update_task_run
 from node.server.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError

@@ -12,7 +12,7 @@ from node.storage.db.db import DB
 from naptha_sdk.schemas import DockerParams, ModuleRunInput
 from node.worker.docker_worker import execute_docker_module
 from node.worker.template_worker import run_flow
-from node.server.user import check_user, register_user
+from node.user import check_user, register_user
 import os
 from datetime import datetime
 

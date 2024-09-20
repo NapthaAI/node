@@ -9,7 +9,7 @@ from naptha_sdk.schemas import ModuleRun, ModuleRunInput, TaskRun, TaskRunInput
 from node.utils import get_logger
 from node.server.task import create_task, check_task
 from node.server.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
-from node.server.user import check_user, register_user
+from node.user import check_user, register_user
 from node.server.orchestration import create_task_run, update_task_run
 
 logger = get_logger(__name__)
