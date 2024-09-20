@@ -43,7 +43,7 @@ async def run_servers():
         websocket_server = WebSocketServer(uri, 7001, node_type =node_config.node_type)
         tasks.append(websocket_server.launch_server())
 
-    elif node_config.node_type == "direct-http":
+    elif node_config.node_type == "direct" and node_config.server_type == "http":
         logger.info("Creating direct http server...")
         start_port = node_config.ports[0] if node_config.ports else 7001
         actual_ports = []
@@ -66,7 +66,7 @@ async def run_servers():
 
         node_config.ports = actual_ports
 
-    elif node_config.node_type == "direct-ws":
+    elif node_config.node_type == "direct" and node_config.server_type == "ws":
         logger.info("Creating direct websocket server...")
         start_port = node_config.ports[0] if node_config.ports else 7001
         actual_ports = []

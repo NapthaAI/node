@@ -142,7 +142,8 @@ def get_node_config(config):
         docker_jobs=config["DOCKER_JOBS"],
         owner=config["HUB_USERNAME"],
         num_servers=config["NUM_SERVERS"],
-        node_type=config["NODE_TYPE"]
+        node_type=config["NODE_TYPE"],
+        server_type=config["SERVER_TYPE"],
     )
 
 
