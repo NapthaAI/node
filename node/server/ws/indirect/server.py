@@ -8,10 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
-from node.server.task import create_task, check_task
 from node.user import register_user, check_user
 from node.server.orchestration import create_task_run, update_task_run
-from node.server.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
+from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 
@@ -160,6 +159,22 @@ class WebSocketIndirectServer:
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "read_from_ipfs")
 
+    async def create_task(self, module_run_input: ModuleRunInput) -> ModuleRun:
+        """
+        Create a task and return the task
+        """
+        # Implement the create_task logic here
+        # This is a placeholder implementation
+        return ModuleRun(**module_run_input.dict())
+
+    async def check_task(self, module_run: ModuleRun) -> ModuleRun:
+        """
+        Check a task and return the task
+        """
+        # Implement the check_task logic here
+        # This is a placeholder implementation
+        return module_run
+
     async def create_task_ws(self, websocket, message: dict, client_id: str) -> ModuleRun:
         """
         Create a task and return the task
@@ -173,7 +188,7 @@ class WebSocketIndirectServer:
         }
         try:
             module_run_input = ModuleRunInput(**params)
-            result = await create_task(module_run_input)
+            result = await self.create_task(module_run_input)
             response['params'] = result.model_dict()
             await self.manager.send_message(json.dumps(response), client_id, "create_task")
         except Exception as e:
@@ -193,7 +208,7 @@ class WebSocketIndirectServer:
         }
         module_run = ModuleRun(**params)
         try:
-            result = await check_task(module_run)
+            result = await self.check_task(module_run)
             response['params'] = result.model_dict()
             await self.manager.send_message(json.dumps(response), client_id, "check_task")
         except Exception as e:
