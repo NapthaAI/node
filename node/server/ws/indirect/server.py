@@ -2,15 +2,18 @@ import asyncio
 import json
 import base64
 import os
-import io
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
 from node.user import register_user, check_user
-from node.server.orchestration import create_task_run, update_task_run
+from node.storage.db.db import DB
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import traceback
+from typing import Dict
+
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 
@@ -41,6 +44,9 @@ class ConnectionManager:
                 self.disconnect(client_id, task)
             except Exception as e:
                 logger.error(f"Error sending message to client {client_id} for task {task}: {str(e)}")
+
+class TransientDatabaseError(Exception):
+    pass
 
 class WebSocketIndirectServer:
     def __init__(self, host: str, port: int):
@@ -74,7 +80,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.create_task_ws(websocket, message, client_id)
+                await self.create_task(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "create_task")
 
@@ -83,7 +89,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.check_task_ws(websocket, message, client_id)
+                await self.check_task(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "check_task")
 
@@ -92,7 +98,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.register_user_ws(websocket, message, client_id)
+                await self.register_user(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "register_user")
 
@@ -101,7 +107,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.check_user_ws(websocket, message, client_id)
+                await self.check_user(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "check_user")
 
@@ -110,7 +116,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.create_task_run_ws(websocket, message, client_id)
+                await self.create_task_run(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "create_task_run")
 
@@ -119,7 +125,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.update_task_run_ws(websocket, message, client_id)
+                await self.update_task_run(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "update_task_run")
 
@@ -128,7 +134,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.write_storage_ws(websocket, message, client_id)
+                await self.write_storage(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "write_storage")
 
@@ -137,7 +143,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.write_to_ipfs_ws(websocket, message, client_id)
+                await self.write_to_ipfs(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "write_to_ipfs")
 
@@ -146,7 +152,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.read_storage_ws(websocket, message, client_id)
+                await self.read_storage(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "read_storage")
 
@@ -155,7 +161,7 @@ class WebSocketIndirectServer:
         try:
             while True:
                 message = await websocket.receive_json()
-                await self.read_from_ipfs_or_ipns_ws(websocket, message, client_id)
+                await self.read_from_ipfs_or_ipns(websocket, message, client_id)
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "read_from_ipfs")
 
@@ -175,7 +181,7 @@ class WebSocketIndirectServer:
         # This is a placeholder implementation
         return module_run
 
-    async def create_task_ws(self, websocket, message: dict, client_id: str) -> ModuleRun:
+    async def create_task(self, websocket: WebSocket, message: dict, client_id: str) -> ModuleRun:
         """
         Create a task and return the task
         """
@@ -195,7 +201,7 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "create_task")
 
-    async def check_task_ws(self, websocket, message: dict, client_id: str) -> ModuleRun:
+    async def check_task(self, websocket: WebSocket, message: dict, client_id: str) -> ModuleRun:
         """
         Check a task and return the task
         """
@@ -215,7 +221,7 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "check_task")
 
-    async def register_user_ws(self, websocket, message: Dict, client_id: str) -> Dict:
+    async def register_user(self, websocket: WebSocket, message: Dict, client_id: str) -> Dict:
         """Register a user"""
         target_node_id = message['source_node']
         source_node_id = message['target_node']
@@ -233,7 +239,7 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "register_user")
 
-    async def check_user_ws(self, websocket, message: Dict, client_id: str) -> Dict:
+    async def check_user(self, websocket: WebSocket, message: Dict, client_id: str) -> Dict:
         """Check if a user exists"""
         target_node_id = message['source_node']
         source_node_id = message['target_node']
@@ -250,7 +256,13 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "check_user")
 
-    async def create_task_run_ws(self, websocket, message: dict, client_id: str) -> ModuleRun:
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=0.5, max=10),
+        retry=retry_if_exception_type(TransientDatabaseError),
+        before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
+    )
+    async def create_task_run(self, websocket: WebSocket, message: dict, client_id: str) -> ModuleRun:
         """
         Create a task run via a websocket connection.
         """
@@ -262,17 +274,30 @@ class WebSocketIndirectServer:
             'source_node': source_node_id
         }
         try:
-            module_run_input = ModuleRunInput(
-                **params
-            )
-            module_run = await create_task_run(module_run_input)
+            module_run_input = ModuleRunInput(**params)
+            logger.info(f"Creating module run for worker node {module_run_input.worker_nodes[0]}")
+            async with DB() as db:
+                module_run = await db.create_module_run(module_run_input)
+            logger.info(f"Created module run for worker node {module_run_input.worker_nodes[0]}")
             response['params'] = module_run.model_dict()
             await self.manager.send_message(json.dumps(response), client_id, "create_task_run")
+            return module_run
         except Exception as e:
+            logger.error(f"Failed to create module run: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
+                raise TransientDatabaseError(str(e))
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "create_task_run")
+            raise HTTPException(status_code=500, detail=f"Internal server error occurred while creating module run")
 
-    async def update_task_run_ws(self, websocket, message: dict, client_id: str) -> ModuleRun:
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=0.5, max=10),
+        retry=retry_if_exception_type(TransientDatabaseError),
+        before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
+    )
+    async def update_task_run(self, websocket: WebSocket, message: dict, client_id: str) -> ModuleRun:
         """
         Update a task run via a websocket connection.
         """
@@ -283,18 +308,26 @@ class WebSocketIndirectServer:
             'target_node': target_node_id,
             'source_node': source_node_id
         }
-        module_run = ModuleRun(**params)
         try:
             module_run = ModuleRun(**params)
-            module_run = await update_task_run(module_run)
-            response['params'] = module_run.model_dict()
+            logger.info(f"Updating module run for worker node {module_run.worker_nodes[0]}")
+            async with DB() as db:
+                updated_module_run = await db.update_module_run(module_run.id, module_run)
+            logger.info(f"Updated module run for worker node {module_run.worker_nodes[0]}")
+            response['params'] = updated_module_run.model_dict()
             await self.manager.send_message(json.dumps(response), client_id, "update_task_run")
+            return updated_module_run
         except Exception as e:
+            logger.error(f"Failed to update module run: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
+                raise TransientDatabaseError(str(e))
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "update_task_run")
+            raise HTTPException(status_code=500, detail=f"Internal server error occurred while updating module run")
 
 
-    async def write_storage_ws(self, websocket: WebSocket, message: dict, client_id: str):
+    async def write_storage(self, websocket: WebSocket, message: dict, client_id: str):
         """Write files to the storage."""
         target_node_id = message['source_node']
         source_node_id = message['target_node']
@@ -343,7 +376,7 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "write_storage")
 
-    async def write_to_ipfs_ws(self, websocket: WebSocket, message: dict, client_id: str):
+    async def write_to_ipfs(self, websocket: WebSocket, message: dict, client_id: str):
         """Write a file to IPFS, optionally publish to IPNS or update an existing IPNS record."""
         target_node_id = message['source_node']
         source_node_id = message['target_node']
@@ -394,7 +427,7 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "write_to_ipfs")
 
-    async def read_storage_ws(self, websocket: WebSocket, message: dict, client_id: str):
+    async def read_storage(self, websocket: WebSocket, message: dict, client_id: str):
         """Get the output directory for a job_id and serve it as a zip file."""
         target_node_id = message['source_node']
         source_node_id = message['target_node']
@@ -438,7 +471,7 @@ class WebSocketIndirectServer:
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "read_storage")
 
-    async def read_from_ipfs_or_ipns_ws(self, websocket: WebSocket, message: dict, client_id: str):
+    async def read_from_ipfs_or_ipns(self, websocket: WebSocket, message: dict, client_id: str):
         """Read a file from IPFS or IPNS."""
         target_node_id = message['source_node']
         source_node_id = message['target_node']

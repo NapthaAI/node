@@ -11,16 +11,20 @@ from naptha_sdk.schemas import ModuleRun, ModuleRunInput, TaskRun, TaskRunInput,
 from node.utils import get_logger, get_config
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from node.user import check_user, register_user
-from node.server.orchestration import create_task_run, update_task_run
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.worker.docker_worker import execute_docker_module
 from node.worker.template_worker import run_flow
 from dotenv import load_dotenv
+import asyncio
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = get_logger(__name__)
 load_dotenv()
 BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
+
+class TransientDatabaseError(Exception):
+    pass
 
 class HTTPServer:
     def __init__(self, host: str, port: int):
@@ -33,7 +37,7 @@ class HTTPServer:
 
         # Task endpoints
         @router.post("/CreateTask")
-        async def create_task_http(module_run_input: ModuleRunInput) -> ModuleRun:
+        async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
             """
             Create a Task
             :param module_run_input: Module run specifications
@@ -42,7 +46,7 @@ class HTTPServer:
             return await self.create_task(module_run_input)
 
         @router.post("/CheckTask")
-        async def check_task_http(module_run: ModuleRun) -> ModuleRun:
+        async def check_task(module_run: ModuleRun) -> ModuleRun:
             """
             Check a task
             :param module_run: ModuleRun details
@@ -52,13 +56,13 @@ class HTTPServer:
 
         # Storage endpoints
         @router.post("/write_storage")
-        async def write_storage_http(file: UploadFile = File(...)):
+        async def write_storage(file: UploadFile = File(...)):
             """Write files to the storage."""
             status_code, message_dict = await write_storage(file)
             return JSONResponse(status_code=status_code, content=message_dict)
 
         @router.get("/read_storage/{job_id}")
-        async def read_storage_http(job_id: str):
+        async def read_storage(job_id: str):
             """Get the output directory for a job_id and serve it as a tar.gz file."""
             status_code, message_dict = await read_storage(job_id)
             if status_code == 200:
@@ -72,7 +76,7 @@ class HTTPServer:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
         @router.post("/write_ipfs")
-        async def write_to_ipfs_http(
+        async def write_to_ipfs(
             publish_to_ipns: bool = Form(False),
             update_ipns_name: Optional[str] = Form(None),
             file: UploadFile = File(...),
@@ -91,7 +95,7 @@ class HTTPServer:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
         @router.get("/read_ipfs/{hash_or_name}")
-        async def read_from_ipfs_or_ipns_http(hash_or_name: str):
+        async def read_from_ipfs_or_ipns(hash_or_name: str):
             """Read a file from IPFS or IPNS."""
             status_code, message_dict = await read_from_ipfs_or_ipns(hash_or_name)
             if status_code == 200:
@@ -115,25 +119,25 @@ class HTTPServer:
 
         # User endpoints
         @router.post("/check_user")
-        async def check_user_http(user_input: dict):
+        async def check_user(user_input: dict):
             """Check if a user exists."""
             return await check_user(user_input)
 
         @router.post("/register_user")
-        async def register_user_http(user_input: dict):
+        async def register_user(user_input: dict):
             """Register a new user."""
             return await register_user(user_input)
 
         # Orchestration endpoints
         @router.post("/create_task_run")
-        async def create_task_run_http(task_run_input: TaskRunInput) -> TaskRun:
+        async def create_task_run(task_run_input: TaskRunInput) -> TaskRun:
             """Create a new task run."""
-            return await create_task_run(task_run_input)
+            return await self.create_task_run(task_run_input)
 
         @router.post("/update_task_run")
-        async def update_task_run_http(task_run: TaskRun) -> TaskRun:
+        async def update_task_run(task_run: TaskRun) -> TaskRun:
             """Update an existing task run."""
-            return await update_task_run(task_run)
+            return await self.update_task_run(task_run)
 
         # Include the router
         self.app.include_router(router)
@@ -234,6 +238,46 @@ class HTTPServer:
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail="Internal server error occurred while checking task")
         
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=0.5, max=10),
+        retry=retry_if_exception_type(TransientDatabaseError),
+        before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
+    )
+    async def create_task_run(self, task_run_input: TaskRunInput) -> TaskRun:
+        try:
+            logger.info(f"Creating task run for worker node {task_run_input.worker_nodes[0]}")
+            async with DB() as db:
+                task_run = await db.create_task_run(task_run_input)
+            logger.info(f"Created task run for worker node {task_run_input.worker_nodes[0]}")
+            return task_run
+        except Exception as e:
+            logger.error(f"Failed to create task run: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
+                raise TransientDatabaseError(str(e))
+            raise HTTPException(status_code=500, detail=f"Internal server error occurred while creating task run")
+
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=0.5, max=10),
+        retry=retry_if_exception_type(TransientDatabaseError),
+        before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
+    )
+    async def update_task_run(self, task_run: TaskRun) -> TaskRun:
+        try:
+            logger.info(f"Updating task run for worker node {task_run.worker_nodes[0]}")
+            async with DB() as db:
+                updated_task_run = await db.update_task_run(task_run.id, task_run)
+            logger.info(f"Updated task run for worker node {task_run.worker_nodes[0]}")
+            return updated_task_run
+        except Exception as e:
+            logger.error(f"Failed to update task run: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
+                raise TransientDatabaseError(str(e))
+            raise HTTPException(status_code=500, detail=f"Internal server error occurred while updating task run")
+
     async def launch_server(self):
         logger.info(f"Launching HTTP server...")
         config = uvicorn.Config(
