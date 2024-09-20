@@ -6,7 +6,7 @@ import io
 import os
 import traceback
 from typing import Optional
-from naptha_sdk.schemas import ModuleRun, ModuleRunInput, TaskRun, TaskRunInput, DockerParams
+from naptha_sdk.schemas import ModuleRun, ModuleRunInput, DockerParams
 
 from node.utils import get_logger
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
@@ -129,12 +129,12 @@ class HTTPServer:
 
         # Orchestration endpoints
         @router.post("/create_task_run")
-        async def create_task_run_endpoint(task_run_input: TaskRunInput) -> TaskRun:
+        async def create_task_run_endpoint(task_run_input: ModuleRunInput) -> ModuleRun:
             """Create a new task run."""
             return await self.create_task_run(task_run_input)
 
         @router.post("/update_task_run")
-        async def update_task_run_endpoint(task_run: TaskRun) -> TaskRun:
+        async def update_task_run_endpoint(task_run: ModuleRun) -> ModuleRun:
             """Update an existing task run."""
             return await self.update_task_run(task_run)
 
@@ -243,7 +243,7 @@ class HTTPServer:
         retry=retry_if_exception_type(TransientDatabaseError),
         before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
     )
-    async def create_task_run(self, task_run_input: TaskRunInput) -> TaskRun:
+    async def create_task_run(self, task_run_input: ModuleRunInput) -> ModuleRun:
         try:
             logger.info(f"Creating task run for worker node {task_run_input.worker_nodes[0]}")
             async with DB() as db:
@@ -263,7 +263,7 @@ class HTTPServer:
         retry=retry_if_exception_type(TransientDatabaseError),
         before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
     )
-    async def update_task_run(self, task_run: TaskRun) -> TaskRun:
+    async def update_task_run(self, task_run: ModuleRun) -> ModuleRun:
         try:
             logger.info(f"Updating task run for worker node {task_run.worker_nodes[0]}")
             async with DB() as db:
