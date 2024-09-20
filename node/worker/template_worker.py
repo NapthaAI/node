@@ -22,8 +22,6 @@ from contextlib import contextmanager
 from git.exc import GitCommandError, InvalidGitRepositoryError
 from node.worker.utils import (
     load_yaml_config, 
-    MODULES_PATH, 
-    BASE_OUTPUT_DIR,
     prepare_input_dir, 
     update_db_with_status_sync, 
     upload_to_ipfs, 
@@ -34,7 +32,7 @@ from node.engine.ws.node import Node as WsNode
 from naptha_sdk.client.node import Node
 from naptha_sdk.schemas import ModuleRun
 from node.utils import get_logger
-from node.config import NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING
+from node.config import BASE_OUTPUT_DIR, MODULES_PATH, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
 
 logger = get_logger(__name__)
 
@@ -52,6 +50,10 @@ class LockAcquisitionError(Exception):
 def file_lock(lock_file, timeout=30):
     lock_fd = None
     try:
+        # Ensure the directory exists
+        lock_dir = os.path.dirname(lock_file)
+        os.makedirs(lock_dir, exist_ok=True)
+        
         start_time = time.time()
         while True:
             try:
@@ -76,8 +78,8 @@ def run_flow(flow_run: Dict) -> None:
 
 async def install_module_if_not_present(flow_run_obj, module_version):
     module_name = flow_run_obj.module_name
-    lock_file = Path(MODULES_PATH) / f"{module_name}.lock"
-
+    lock_file = Path("node") / MODULES_PATH / f"{module_name}.lock"
+    logger.info(f"Lock file: {lock_file}")
     try:
         with file_lock(lock_file):
             logger.info(f"Acquired lock for {module_name}")
@@ -97,10 +99,12 @@ async def install_module_if_not_present(flow_run_obj, module_version):
     except LockAcquisitionError as e:
         error_msg = f"Failed to acquire lock for module {module_name}: {str(e)}"
         logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
     except Exception as e:
         error_msg = f"Failed to install or verify module {module_name}: {str(e)}"
         logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
 
 async def _run_flow_async(flow_run: Dict) -> None:
@@ -257,10 +261,11 @@ class FlowEngine:
         self.flow_name = flow_run.module_name
         self.parameters = flow_run.module_params
         self.node_type = NODE_TYPE
-        if self.node_type == "direct-http":
+        self.server_type = SERVER_TYPE
+        if self.node_type == "direct" and self.server_type == "http":
             self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}')
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
-        elif self.node_type == "direct-ws":
+        elif self.node_type == "direct" and self.server_type == "ws":
             ip = NODE_IP
             if 'http' in ip:
                 ip = ip.replace('http://', 'ws://')
