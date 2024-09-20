@@ -3,9 +3,7 @@ from dotenv import load_dotenv
 import os
 import socket
 from pathlib import Path
-from typing import Optional
 from node.storage.hub.hub import Hub
-from node.module_manager import setup_modules_from_config
 from node.server.http import HTTPServer
 from node.server.ws import WebSocketServer
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
