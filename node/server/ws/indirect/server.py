@@ -2,14 +2,17 @@ import asyncio
 import json
 import base64
 import os
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
-from naptha_sdk.schemas import ModuleRun, ModuleRunInput
+from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.utils import get_logger, get_config
-from node.user import register_user, check_user
 from node.storage.db.db import DB
+from node.storage.hub.hub import Hub
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
+from node.user import register_user, check_user
+from node.worker.docker_worker import execute_docker_module
+from node.worker.template_worker import run_flow
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import traceback
 from typing import Dict
@@ -165,22 +168,6 @@ class WebSocketIndirectServer:
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "read_from_ipfs")
 
-    async def create_task(self, module_run_input: ModuleRunInput) -> ModuleRun:
-        """
-        Create a task and return the task
-        """
-        # Implement the create_task logic here
-        # This is a placeholder implementation
-        return ModuleRun(**module_run_input.dict())
-
-    async def check_task(self, module_run: ModuleRun) -> ModuleRun:
-        """
-        Check a task and return the task
-        """
-        # Implement the check_task logic here
-        # This is a placeholder implementation
-        return module_run
-
     async def create_task(self, websocket: WebSocket, message: dict, client_id: str) -> ModuleRun:
         """
         Create a task and return the task
@@ -194,12 +181,49 @@ class WebSocketIndirectServer:
         }
         try:
             module_run_input = ModuleRunInput(**params)
-            result = await self.create_task(module_run_input)
-            response['params'] = result.model_dict()
+            logger.info(f"Received task: {module_run_input}")
+
+            async with Hub() as hub:
+                success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
+                module = await hub.list_modules(f"module:{module_run_input.module_name}")
+                logger.info(f"Found module: {module}")
+
+                if not module:
+                    raise HTTPException(status_code=404, detail="Module not found")
+
+                module_run_input.module_type = module["type"]
+                module_run_input.module_version = module["version"]
+                module_run_input.module_url = module["url"]
+
+                if module["type"] == "docker":
+                    module_run_input.module_params = DockerParams(**module_run_input.module_params)
+
+            async with DB() as db:
+                module_run = await db.create_module_run(module_run_input)
+                logger.info("Created module run")
+
+                updated_module_run = await db.update_module_run(module_run.id, module_run)
+                logger.info("Updated module run")
+
+            # Enqueue the module run in Celery
+            if module_run.module_type in ["flow", "template"]:
+                run_flow.delay(module_run.dict())
+            elif module_run.module_type == "docker":
+                execute_docker_module.delay(module_run.dict())
+            else:
+                raise HTTPException(status_code=400, detail="Invalid module type")
+
+            response['params'] = module_run.model_dict()
             await self.manager.send_message(json.dumps(response), client_id, "create_task")
+            return module_run
+
         except Exception as e:
-            response['params'] = {'error': str(e)}
+            logger.error(f"Failed to run module: {str(e)}")
+            error_details = traceback.format_exc()
+            logger.error(f"Full traceback: {error_details}")
+            response['params'] = {'error': f"Failed to run module: {str(e)}"}
             await self.manager.send_message(json.dumps(response), client_id, "create_task")
+            raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run_input}")
 
     async def check_task(self, websocket: WebSocket, message: dict, client_id: str) -> ModuleRun:
         """
@@ -214,12 +238,37 @@ class WebSocketIndirectServer:
         }
         module_run = ModuleRun(**params)
         try:
-            result = await self.check_task(module_run)
-            response['params'] = result.model_dict()
+            logger.info("Checking task")
+            id_ = module_run.id
+            if id_ is None:
+                raise HTTPException(status_code=400, detail="Module run ID is required")
+
+            async with DB() as db:
+                module_run = await db.list_module_runs(id_)
+
+            if not module_run:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            status = module_run.status
+            logger.info(f"Found task status: {status}")
+
+            if module_run.status == "completed":
+                logger.info(f"Task completed. Returning output: {module_run.results}")
+                response['params'] = module_run.results
+            elif module_run.status == "error":
+                logger.info(f"Task failed. Returning error: {module_run.error_message}")
+                response['params'] = {'error': module_run.error_message}
+            else:
+                response['params'] = module_run.model_dict()
+
+            logger.info(f"Response: {response}")
             await self.manager.send_message(json.dumps(response), client_id, "check_task")
+            return module_run
         except Exception as e:
+            logger.error(f"Error checking task: {str(e)}")
             response['params'] = {'error': str(e)}
             await self.manager.send_message(json.dumps(response), client_id, "check_task")
+            raise
 
     async def register_user(self, websocket: WebSocket, message: Dict, client_id: str) -> Dict:
         """Register a user"""
