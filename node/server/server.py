@@ -4,7 +4,7 @@ import os
 import socket
 from pathlib import Path
 from node.storage.hub.hub import Hub
-from node.server.http import HTTPServer
+from node.server.http_server import HTTPServer
 from node.server.ws import WebSocketServer
 from node.utils import get_logger, get_config, get_node_config, create_output_dir
 

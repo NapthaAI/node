@@ -8,7 +8,7 @@ import traceback
 from typing import Optional
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput, TaskRun, TaskRunInput, DockerParams
 
-from node.utils import get_logger, get_config
+from node.utils import get_logger
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from node.user import check_user, register_user
 from node.storage.hub.hub import Hub
@@ -21,7 +21,6 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 logger = get_logger(__name__)
 load_dotenv()
-BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 class TransientDatabaseError(Exception):
     pass
@@ -37,7 +36,7 @@ class HTTPServer:
 
         # Task endpoints
         @router.post("/CreateTask")
-        async def create_task(module_run_input: ModuleRunInput) -> ModuleRun:
+        async def create_task_endpoint(module_run_input: ModuleRunInput) -> ModuleRun:
             """
             Create a Task
             :param module_run_input: Module run specifications
@@ -46,7 +45,7 @@ class HTTPServer:
             return await self.create_task(module_run_input)
 
         @router.post("/CheckTask")
-        async def check_task(module_run: ModuleRun) -> ModuleRun:
+        async def check_task_endpoint(module_run: ModuleRun) -> ModuleRun:
             """
             Check a task
             :param module_run: ModuleRun details
@@ -56,13 +55,13 @@ class HTTPServer:
 
         # Storage endpoints
         @router.post("/write_storage")
-        async def write_storage(file: UploadFile = File(...)):
+        async def write_storage_endpoint(file: UploadFile = File(...)):
             """Write files to the storage."""
             status_code, message_dict = await write_storage(file)
             return JSONResponse(status_code=status_code, content=message_dict)
 
         @router.get("/read_storage/{job_id}")
-        async def read_storage(job_id: str):
+        async def read_storage_endpoint(job_id: str):
             """Get the output directory for a job_id and serve it as a tar.gz file."""
             status_code, message_dict = await read_storage(job_id)
             if status_code == 200:
@@ -76,7 +75,7 @@ class HTTPServer:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
         @router.post("/write_ipfs")
-        async def write_to_ipfs(
+        async def write_to_ipfs_endpoint(
             publish_to_ipns: bool = Form(False),
             update_ipns_name: Optional[str] = Form(None),
             file: UploadFile = File(...),
@@ -95,7 +94,7 @@ class HTTPServer:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
         @router.get("/read_ipfs/{hash_or_name}")
-        async def read_from_ipfs_or_ipns(hash_or_name: str):
+        async def read_from_ipfs_or_ipns_endpoint(hash_or_name: str):
             """Read a file from IPFS or IPNS."""
             status_code, message_dict = await read_from_ipfs_or_ipns(hash_or_name)
             if status_code == 200:
@@ -119,23 +118,23 @@ class HTTPServer:
 
         # User endpoints
         @router.post("/check_user")
-        async def check_user(user_input: dict):
+        async def check_user_endpoint(user_input: dict):
             """Check if a user exists."""
             return await check_user(user_input)
 
         @router.post("/register_user")
-        async def register_user(user_input: dict):
+        async def register_user_endpoint(user_input: dict):
             """Register a new user."""
             return await register_user(user_input)
 
         # Orchestration endpoints
         @router.post("/create_task_run")
-        async def create_task_run(task_run_input: TaskRunInput) -> TaskRun:
+        async def create_task_run_endpoint(task_run_input: TaskRunInput) -> TaskRun:
             """Create a new task run."""
             return await self.create_task_run(task_run_input)
 
         @router.post("/update_task_run")
-        async def update_task_run(task_run: TaskRun) -> TaskRun:
+        async def update_task_run_endpoint(task_run: TaskRun) -> TaskRun:
             """Update an existing task run."""
             return await self.update_task_run(task_run)
 
