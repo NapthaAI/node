@@ -35,7 +35,7 @@ class HTTPServer:
         router = APIRouter()
 
         # Task endpoints
-        @router.post("/CreateTask")
+        @router.post("/create_task")
         async def create_task_endpoint(module_run_input: ModuleRunInput) -> ModuleRun:
             """
             Create a Task
@@ -44,7 +44,7 @@ class HTTPServer:
             """
             return await self.create_task(module_run_input)
 
-        @router.post("/CheckTask")
+        @router.post("/check_task")
         async def check_task_endpoint(module_run: ModuleRun) -> ModuleRun:
             """
             Check a task
