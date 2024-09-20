@@ -1,10 +1,9 @@
 import os
 import subprocess
 from node.utils import get_logger
-
+from node.config import GPU
 logger = get_logger(__name__)
 
-GPU = os.getenv("GPU", False)
 if GPU == 'false':
     GPU = False
 elif GPU == 'true':

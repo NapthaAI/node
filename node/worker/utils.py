@@ -5,6 +5,7 @@ import ipfshttpclient
 from dotenv import load_dotenv
 from pathlib import Path
 from naptha_sdk.schemas import ModuleRun
+from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
 from node.storage.db.db import DB
 from node.utils import get_logger
 from typing import Dict, Optional
@@ -23,8 +24,6 @@ BASE_ROOT_DIR = os.getcwd()
 FILE_PATH = Path(__file__).resolve()
 CELERY_WORKER_DIR = FILE_PATH.parent
 NODE_DIR = CELERY_WORKER_DIR.parent
-MODULES_PATH = f"{NODE_DIR}/{os.getenv('MODULES_PATH')}"
-BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
 BASE_OUTPUT_DIR = NODE_DIR / BASE_OUTPUT_DIR[2:]
 MAX_RETRIES = 3
 RETRY_DELAY = 1
@@ -32,9 +31,6 @@ RETRY_DELAY = 1
 
 def download_from_ipfs(ipfs_hash: str, temp_dir: str) -> str:
     """Download content from IPFS to a given temporary directory."""
-    IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
-    if not IPFS_GATEWAY_URL:
-        raise Exception("IPFS_GATEWAY_URL is not set in the environment")
     client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
     client.get(ipfs_hash, target=temp_dir)
     return os.path.join(temp_dir, ipfs_hash)
@@ -70,9 +66,6 @@ def handle_ipfs_input(ipfs_hash: str) -> str:
 def upload_to_ipfs(input_dir: str) -> str:
     """Upload a file or directory to IPFS. And pin it."""
     logger.info(f"Uploading to IPFS: {input_dir}")
-    IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
-    if not IPFS_GATEWAY_URL:
-        raise Exception("IPFS_GATEWAY_URL is not set in the environment")
     client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
     res = client.add(input_dir, recursive=True)
     logger.info(f"IPFS add response: {res}")
@@ -83,9 +76,6 @@ def upload_to_ipfs(input_dir: str) -> str:
 def upload_json_string_to_ipfs(json_string: str) -> str:
     """Upload a json string to IPFS. And pin it."""
     logger.info(f"Uploading json string to IPFS")
-    IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL", None)
-    if not IPFS_GATEWAY_URL:
-        raise Exception("IPFS_GATEWAY_URL is not set in the environment")
     client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
     res = client.add_str(json_string)
     logger.info(f"IPFS add response: {res}")

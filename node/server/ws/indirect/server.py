@@ -6,7 +6,8 @@ import os
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
-from node.utils import get_logger, get_config
+from node.config import BASE_OUTPUT_DIR
+from node.utils import get_logger
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
@@ -21,7 +22,6 @@ from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
 
 logger = get_logger(__name__)
-BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 CHUNK_SIZE = 256 * 1024
 
 class ConnectionManager:

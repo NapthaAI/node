@@ -76,9 +76,7 @@ linux_install_ollama() {
     fi
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
-    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
-    echo "MODELS: $MODELS" | log_with_service_name "Ollama" $RED
-    for model in "${MODELS[@]}"; do
+    for model in $OLLAMA_MODELS; do
         echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
         ollama pull "$model"
     done
@@ -275,7 +273,7 @@ linux_install_docker() {
     source .env
     set +a
 
-    if [ "$DOCKER_JOBS" = "true" ]; then
+    if [ "$DOCKER_JOBS" = "True" ]; then
         echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
     else
         echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
@@ -331,7 +329,7 @@ darwin_install_docker() {
     source .env
     set +a
 
-    if [ "$DOCKER_JOBS" = "true" ]; then
+    if [ "$DOCKER_JOBS" = "True" ]; then
         echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
     else
         echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
@@ -508,7 +506,8 @@ install_python312() {
 # Function to start the Hub SurrealDB
 start_hub_surrealdb() {
     PWD=$(pwd)
-    if [ "$LOCAL_HUB" = true ]; then
+    echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
+    if [ "$LOCAL_HUB" = True ]; then
         echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
@@ -657,7 +656,7 @@ load_env_file() {
     
     # Debug: Check if .env file exists and permissions
     if [ -f "$ENV_FILE" ]; then
-        echo ".env file found." | log_with_service_name "EnvLoader" "info"
+        echo ".env file found." | log_with_service_name "Config"
         # Load .env file
         set -a
         . "$ENV_FILE"
@@ -665,9 +664,46 @@ load_env_file() {
 
         . .venv/bin/activate
     else
-        echo ".env file does not exist in $CURRENT_DIR." | log_with_service_name "EnvLoader" "error"
+        echo ".env file does not exist in $CURRENT_DIR." | log_with_service_name "Config" 
         exit 1
     fi
+}
+
+load_config_constants() {
+    CURRENT_DIR=$(pwd)
+    CONFIG_FILE="$CURRENT_DIR/node/config.py"
+
+    echo "Config file path: $CONFIG_FILE" | log_with_service_name "Config"
+
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "config.py file found." | log_with_service_name "Config" 
+        # Extract constants from config.py using Python
+        eval "$(python3 -c "
+import re
+import ast
+
+def parse_value(value):
+    try:
+        return ast.literal_eval(value)
+    except:
+        return value
+
+with open('$CONFIG_FILE', 'r') as f:
+    content = f.read()
+constants = re.findall(r'^([A-Z_]+)\s*=\s*(.+)$', content, re.MULTILINE)
+for name, value in constants:
+    parsed_value = parse_value(value.strip())
+    if isinstance(parsed_value, str):
+        print(f'{name}=\"{parsed_value}\"')
+    else:
+        print(f'{name}={parsed_value}')
+        ")"
+    else
+        echo "config.py file does not exist in $CURRENT_DIR/node/." | log_with_service_name "Config"
+        exit 1
+    fi
+
+    echo "Config constants loaded successfully." | log_with_service_name "Config"
 }
 
 linux_start_servers() {
@@ -941,6 +977,8 @@ if [ "$os" = "Darwin" ]; then
     print_logo
     install_python312
     install_surrealdb
+    load_env_file
+    load_config_constants
     darwin_install_ollama
     darwin_install_miniforge
     darwin_install_docker
@@ -950,7 +988,6 @@ if [ "$os" = "Darwin" ]; then
     check_and_copy_env
     check_and_set_private_key
     check_and_set_stability_key
-    load_env_file
     start_hub_surrealdb
     start_local_surrealdb
     darwin_start_servers
@@ -959,6 +996,8 @@ else
     print_logo
     install_python312
     install_surrealdb
+    load_env_file
+    load_config_constants
     linux_install_ollama
     linux_install_miniforge
     linux_install_docker
@@ -968,7 +1007,6 @@ else
     check_and_copy_env
     check_and_set_private_key
     check_and_set_stability_key
-    load_env_file
     start_hub_surrealdb
     start_local_surrealdb
     linux_start_servers

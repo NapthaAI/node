@@ -3,10 +3,12 @@ from dotenv import load_dotenv
 import os
 import socket
 from pathlib import Path
+
+from node.config import BASE_OUTPUT_DIR, get_node_config
 from node.storage.hub.hub import Hub
 from node.server.http_server import HTTPServer
 from node.server.ws import WebSocketServer
-from node.utils import get_logger, get_config, get_node_config, create_output_dir
+from node.utils import get_logger, create_output_dir
 
 
 logger = get_logger(__name__)
@@ -31,9 +33,8 @@ def find_available_port(start_port: int = 7001) -> int:
 async def run_servers():
     global http_servers, websocket_server, hub
     
-    config = get_config()
-    node_config = get_node_config(config)
-    create_output_dir(config["BASE_OUTPUT_DIR"])
+    node_config = get_node_config()
+    create_output_dir(BASE_OUTPUT_DIR)
 
     tasks = []
 

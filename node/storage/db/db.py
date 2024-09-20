@@ -5,6 +5,7 @@ import json
 import websockets
 from datetime import datetime
 from naptha_sdk.schemas import ModuleRun, ModuleRunInput
+from node.config import DB_URL, DB_NS, DB_DB
 from node.utils import get_logger
 import os
 from surrealdb import Surreal
@@ -20,9 +21,9 @@ class DB():
     """Database class to handle all database operations"""
 
     def __init__(self):
-        self.db_url = os.getenv("DB_URL")
-        self.ns = os.getenv("DB_NS")
-        self.db = os.getenv("DB_DB")
+        self.db_url = DB_URL
+        self.ns = DB_NS
+        self.db = DB_DB
         self.username = os.getenv("DB_ROOT_USER")
         self.password = os.getenv("DB_ROOT_PASS")
 

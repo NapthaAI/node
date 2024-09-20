@@ -3,13 +3,13 @@ import json
 import os
 from pathlib import Path
 import shutil
+from node.config import MODULES_PATH
 from node.utils import run_subprocess
-from node.utils import get_logger, get_config
+from node.utils import get_logger
 
 logger = get_logger(__name__)
 
 PARENT_DIR = Path(__file__).resolve().parent
-MODULES_PATH = f"{get_config()['MODULES_PATH']}"
 MODULES_PATH = os.path.join(str(PARENT_DIR), MODULES_PATH)
 logger.info(f"MODULES_PATH: {MODULES_PATH}")
 

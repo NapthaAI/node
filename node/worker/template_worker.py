@@ -34,6 +34,7 @@ from node.engine.ws.node import Node as WsNode
 from naptha_sdk.client.node import Node
 from naptha_sdk.schemas import ModuleRun
 from node.utils import get_logger
+from node.config import NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING
 
 logger = get_logger(__name__)
 
@@ -255,15 +256,15 @@ class FlowEngine:
         self.flow = None
         self.flow_name = flow_run.module_name
         self.parameters = flow_run.module_params
-        self.node_type = os.getenv("NODE_TYPE")
+        self.node_type = NODE_TYPE
         if self.node_type == "direct-http":
-            self.orchestrator_node = Node(f'{os.getenv("NODE_IP")}:{os.getenv("NODE_PORT")}')
+            self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}')
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
         elif self.node_type == "direct-ws":
-            ip = os.getenv("NODE_IP")
+            ip = NODE_IP
             if 'http' in ip:
                 ip = ip.replace('http://', 'ws://')
-            self.orchestrator_node = WsNode(f'{ip}:{os.getenv("NODE_PORT")}')
+            self.orchestrator_node = WsNode(f'{ip}:{NODE_PORT}')
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
         elif self.node_type == "indirect":
             node_id = requests.get("http://localhost:7001/node_id").json()
@@ -271,7 +272,7 @@ class FlowEngine:
                 raise ValueError("NODE_ID environment variable is not set")
             self.orchestrator_node = Node(
                 indirect_node_id=node_id,
-                routing_url=os.getenv("NODE_ROUTING")
+                routing_url=NODE_ROUTING
             )
         else:
             raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
