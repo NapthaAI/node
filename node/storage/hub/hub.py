@@ -128,16 +128,16 @@ class Hub(AsyncMixin):
             "SELECT * FROM wins WHERE in=$user;", {"user": purchases["me"]}
         )
 
-    async def list_modules(self, module_name=None) -> List:
-        if not module_name:
-            modules = await self.surrealdb.query("SELECT * FROM module;")
-            return modules[0]["result"]
+    async def list_agents(self, agent_name=None) -> List:
+        if not agent_name:
+            agents = await self.surrealdb.query("SELECT * FROM agent;")
+            return agents[0]["result"]
         else:
-            module = await self.surrealdb.query(
-                "SELECT * FROM module WHERE id=$module_name;", {"module_name": module_name}
+            agent = await self.surrealdb.query(
+                "SELECT * FROM agent WHERE id=$agent_name;", {"agent_name": agent_name}
             )
             try:
-                return module[0]["result"][0]
+                return agent[0]["result"][0]
             except:
                 return None
 
@@ -153,8 +153,8 @@ class Hub(AsyncMixin):
     async def list_services(self) -> List:
         return await self.surrealdb.query("SELECT * FROM lot;")
 
-    async def create_module(self, module_config: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.create("module", module_config)
+    async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
+        return await self.surrealdb.create("agent", agent_config)
 
     async def purchase(self, purchase: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.query(

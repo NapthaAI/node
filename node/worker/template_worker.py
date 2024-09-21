@@ -30,9 +30,9 @@ from node.worker.utils import (
 from node.worker.main import app
 from node.engine.ws.node import Node as WsNode
 from naptha_sdk.client.node import Node
-from naptha_sdk.schemas import ModuleRun
+from node.schemas import AgentRun
 from node.utils import get_logger
-from node.config import BASE_OUTPUT_DIR, MODULES_PATH, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
+from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
 
 logger = get_logger(__name__)
 
@@ -40,8 +40,8 @@ logger = get_logger(__name__)
 load_dotenv(".env")
 os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 
-if MODULES_PATH not in sys.path:
-    sys.path.append(MODULES_PATH)
+if AGENTS_SOURCE_DIR not in sys.path:
+    sys.path.append(AGENTS_SOURCE_DIR)
 
 class LockAcquisitionError(Exception):
     pass
@@ -76,56 +76,56 @@ def file_lock(lock_file, timeout=30):
 def run_flow(flow_run: Dict) -> None:
     asyncio.run(_run_flow_async(flow_run))
 
-async def install_module_if_not_present(flow_run_obj, module_version):
-    module_name = flow_run_obj.module_name
-    lock_file = Path("node") / MODULES_PATH / f"{module_name}.lock"
+async def install_agent_if_not_present(flow_run_obj, agent_version):
+    agent_name = flow_run_obj.agent_name
+    lock_file = Path("node") / AGENTS_SOURCE_DIR / f"{agent_name}.lock"
     logger.info(f"Lock file: {lock_file}")
     try:
         with file_lock(lock_file):
-            logger.info(f"Acquired lock for {module_name}")
+            logger.info(f"Acquired lock for {agent_name}")
 
-            if not is_module_installed(module_name, module_version):
-                logger.info(f"Module {module_name} version {module_version} is not installed. Attempting to install...")
-                if not flow_run_obj.module_url:
-                    raise ValueError(f"Module URL is required for installation of {module_name}")
-                install_module_if_needed(module_name, module_version, flow_run_obj.module_url)
+            if not is_agent_installed(agent_name, agent_version):
+                logger.info(f"Agent {agent_name} version {agent_version} is not installed. Attempting to install...")
+                if not flow_run_obj.agent_source_url:
+                    raise ValueError(f"Agent URL is required for installation of {agent_name}")
+                install_agent_if_needed(agent_name, agent_version, flow_run_obj.agent_source_url)
             
-            # Verify module installation
-            if not verify_module_installation(module_name):
-                raise RuntimeError(f"Module {module_name} failed verification after installation")
+            # Verify agent installation
+            if not verify_agent_installation(agent_name):
+                raise RuntimeError(f"Agent {agent_name} failed verification after installation")
             
-            logger.info(f"Module {module_name} version {module_version} is installed and verified")
+            logger.info(f"Agent {agent_name} version {agent_version} is installed and verified")
 
     except LockAcquisitionError as e:
-        error_msg = f"Failed to acquire lock for module {module_name}: {str(e)}"
+        error_msg = f"Failed to acquire lock for agent {agent_name}: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
     except Exception as e:
-        error_msg = f"Failed to install or verify module {module_name}: {str(e)}"
+        error_msg = f"Failed to install or verify agent {agent_name}: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
 
 async def _run_flow_async(flow_run: Dict) -> None:
     try:
-        flow_run_obj = ModuleRun(**flow_run)
-        module_version = f"v{flow_run_obj.module_version}"
+        flow_run_obj = AgentRun(**flow_run)
+        agent_version = f"v{flow_run_obj.agent_version}"
 
         logger.info(f"Received flow run: {flow_run_obj}")
-        logger.info(f"Checking if module {flow_run_obj.module_name} version {module_version} is installed")
+        logger.info(f"Checking if agent {flow_run_obj.agent_name} version {agent_version} is installed")
         
         try:
-            await install_module_if_not_present(flow_run_obj, module_version)
+            await install_agent_if_not_present(flow_run_obj, agent_version)
         except Exception as e:
-            error_msg = f"Failed to install or verify module {flow_run_obj.module_name}: {str(e)}"
+            error_msg = f"Failed to install or verify agent {flow_run_obj.agent_name}: {str(e)}"
             logger.error(error_msg)
             if "Dependency conflict detected" in str(e):
-                logger.error("This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the module and the main project.")
+                logger.error("This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project.")
             await handle_failure(flow_run, error_msg)
             return
         
-        logger.info(f"Module {flow_run_obj.module_name} version {module_version} is installed and verified. Initializing workflow engine...")
+        logger.info(f"Agent {flow_run_obj.agent_name} version {agent_version} is installed and verified. Initializing workflow engine...")
         workflow_engine = FlowEngine(flow_run_obj)
 
         await workflow_engine.init_run()
@@ -142,7 +142,7 @@ async def _run_flow_async(flow_run: Dict) -> None:
         await handle_failure(flow_run, error_msg)
 
 async def handle_failure(flow_run: Dict, error_msg: str) -> None:
-    flow_run_obj = ModuleRun(**flow_run)
+    flow_run_obj = AgentRun(**flow_run)
     flow_run_obj.status = "error"
     flow_run_obj.error = True
     flow_run_obj.error_message = error_msg
@@ -158,36 +158,36 @@ async def handle_failure(flow_run: Dict, error_msg: str) -> None:
     except Exception as db_error:
         logger.error(f"Failed to update database after error: {str(db_error)}")
 
-def is_module_installed(module_name: str, required_version: str) -> bool:
+def is_agent_installed(agent_name: str, required_version: str) -> bool:
     try:
-        module = importlib.import_module(module_name)
-        module_path = os.path.join(MODULES_PATH, module_name)
+        agent = importlib.import_module(agent_name)
+        agents_source_dir = os.path.join(AGENTS_SOURCE_DIR, agent_name)
 
-        if not Path(module_path).exists():
-            logger.warning(f"Module directory for {module_name} does not exist")
+        if not Path(agents_source_dir).exists():
+            logger.warning(f"Agents source directory for {agent_name} does not exist")
             return False
             
         try:
-            repo = Repo(module_path)
+            repo = Repo(agents_source_dir)
             if repo.head.is_detached:
                 current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
             else:
                 current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
             
             if current_tag:
-                logger.info(f"Module {module_name} is at tag: {current_tag}")
+                logger.info(f"Agent {agent_name} is at tag: {current_tag}")
                 current_version = current_tag[1:] if current_tag.startswith('v') else current_tag
                 required_version = required_version[1:] if required_version.startswith('v') else required_version
                 return current_version == required_version
             else:
-                logger.warning(f"No tag found for current commit in {module_name}")
+                logger.warning(f"No tag found for current commit in {agent_name}")
                 return False
         except (InvalidGitRepositoryError, GitCommandError) as e:
-            logger.error(f"Git error for {module_name}: {str(e)}")
+            logger.error(f"Git error for {agent_name}: {str(e)}")
             return False
         
     except ImportError:
-        logger.warning(f"Module {module_name} not found")
+        logger.warning(f"Agent {agent_name} not found")
         return False
 
 def run_poetry_command(command):
@@ -201,48 +201,48 @@ def run_poetry_command(command):
         logger.error(f"Stderr: {e.stderr}")
         raise RuntimeError(error_msg)
 
-def verify_module_installation(module_name: str) -> bool:
+def verify_agent_installation(agent_name: str) -> bool:
     try:
-        importlib.import_module(f"{module_name}.run")
+        importlib.import_module(f"{agent_name}.run")
         return True
     except ImportError:
         return False
     
-def install_module_if_needed(module_name: str, module_version: str, module_url: str):
-    logger.info(f"Installing/updating module {module_name} version {module_version}")
+def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
+    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
     
-    module_path = Path(MODULES_PATH) / module_name
-    logger.info(f"Module path exists: {module_path.exists()}")
+    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
+    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
 
     try:
-        if module_path.exists():
-            logger.info(f"Updating existing repository for {module_name}")
-            repo = Repo(module_path)
+        if agents_source_dir.exists():
+            logger.info(f"Updating existing repository for {agent_name}")
+            repo = Repo(agents_source_dir)
             repo.remotes.origin.fetch()
-            repo.git.checkout(module_version)
-            logger.info(f"Successfully updated {module_name} to version {module_version}")
+            repo.git.checkout(agent_version)
+            logger.info(f"Successfully updated {agent_name} to version {agent_version}")
         else:
             # Clone new repository
-            logger.info(f"Cloning new repository for {module_name}")
-            Repo.clone_from(module_url, module_path)
-            repo = Repo(module_path)
-            repo.git.checkout(module_version)
-            logger.info(f"Successfully cloned {module_name} version {module_version}")
+            logger.info(f"Cloning new repository for {agent_name}")
+            Repo.clone_from(agent_source_url, agents_source_dir)
+            repo = Repo(agents_source_dir)
+            repo.git.checkout(agent_version)
+            logger.info(f"Successfully cloned {agent_name} version {agent_version}")
 
-        # Reinstall the module
-        logger.info(f"Installing/Reinstalling {module_name}")
-        installation_output = run_poetry_command(["add", f"{module_path}"])
+        # Reinstall the agent
+        logger.info(f"Installing/Reinstalling {agent_name}")
+        installation_output = run_poetry_command(["add", f"{agents_source_dir}"])
         logger.info(f"Installation output: {installation_output}")
 
-        if not verify_module_installation(module_name):
-            raise RuntimeError(f"Module {module_name} failed verification after installation")
+        if not verify_agent_installation(agent_name):
+            raise RuntimeError(f"Agent {agent_name} failed verification after installation")
 
-        logger.info(f"Successfully installed and verified {module_name} version {module_version}")
+        logger.info(f"Successfully installed and verified {agent_name} version {agent_version}")
     except Exception as e:
-        error_msg = f"Error installing {module_name}: {str(e)}"
+        error_msg = f"Error installing {agent_name}: {str(e)}"
         logger.error(error_msg)
         if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
+            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
         raise RuntimeError(error_msg) from e
 
 async def maybe_async_call(func, *args, **kwargs):
@@ -255,11 +255,11 @@ async def maybe_async_call(func, *args, **kwargs):
         return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
 
 class FlowEngine:
-    def __init__(self, flow_run: ModuleRun):
+    def __init__(self, flow_run: AgentRun):
         self.flow_run = flow_run
         self.flow = None
-        self.flow_name = flow_run.module_name
-        self.parameters = flow_run.module_params
+        self.flow_name = flow_run.agent_name
+        self.parameters = flow_run.agent_run_params
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
         if self.node_type == "direct" and self.server_type == "http":
@@ -303,7 +303,7 @@ class FlowEngine:
         logger.info("Initializing flow run")
         self.flow_run.status = "processing"
         self.flow_run.start_processing_time = datetime.now(pytz.utc).isoformat()
-        await update_db_with_status_sync(module_run=self.flow_run)
+        await update_db_with_status_sync(agent_run=self.flow_run)
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -332,7 +332,7 @@ class FlowEngine:
     async def start_run(self):
         logger.info("Starting flow run")
         self.flow_run.status = "running"
-        await update_db_with_status_sync(module_run=self.flow_run)
+        await update_db_with_status_sync(agent_run=self.flow_run)
 
         try:
             response = await maybe_async_call(
@@ -356,7 +356,7 @@ class FlowEngine:
             response = response.model_dump_json()
 
         if not isinstance(response, str):
-            raise ValueError(f"Module/flow response is not a string: {response}. Current response type: {type(response)}")
+            raise ValueError(f"Agent/flow response is not a string: {response}. Current response type: {type(response)}")
 
         self.flow_run.results = [response]
         await self.handle_ipfs_output(self.cfg, response)
@@ -368,8 +368,8 @@ class FlowEngine:
         self.flow_run.error_message = ""
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
         self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
-        await update_db_with_status_sync(module_run=self.flow_run)
-        logger.info(f"Flow run completed")
+        await update_db_with_status_sync(agent_run=self.flow_run)
+        logger.info(f"Agent run completed")
 
     async def fail(self):
         logger.error("Error running flow")
@@ -380,7 +380,7 @@ class FlowEngine:
         self.flow_run.error_message = error_details
         self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
         self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
-        await update_db_with_status_sync(module_run=self.flow_run)
+        await update_db_with_status_sync(agent_run=self.flow_run)
 
     def load_and_validate_input_schema(self):
         tn = self.flow_name.replace("-", "_")
@@ -397,10 +397,10 @@ class FlowEngine:
 
     async def load_flow(self):
         """
-        Loads the flow from the module and returns the workflow
+        Loads the flow from the agent and returns the workflow
         """
-        # Load the flow from the module
-        workflow_path = f"{MODULES_PATH}/{self.flow_name}"
+        # Load the flow from the agent
+        workflow_path = f"{AGENTS_SOURCE_DIR}/{self.flow_name}"
 
         # Load the component.yaml file
         cfg = load_yaml_config(f"{workflow_path}/{self.flow_name}/component.yaml")

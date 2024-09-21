@@ -1,5 +1,5 @@
 from datetime import datetime
-from naptha_sdk.schemas import ModuleRun, ModuleRunInput
+from node.schemas import AgentRun, AgentRunInput
 from naptha_sdk.utils import get_logger
 import pytz
 import traceback
@@ -39,19 +39,19 @@ class TransientDatabaseError(Exception):
     retry=retry_if_exception_type(TransientDatabaseError),
     reraise=True
 )
-async def update_task_run(task_run: ModuleRun):
+async def update_task_run(task_run: AgentRun):
     try:
-        logger.info("Updating module run for worker node")
+        logger.info("Updating agent run for worker node")
         async with DB() as db:
-            updated_module_run = await db.update_module_run(task_run.id, task_run)
-        logger.info("Updated module run for worker node")
-        return updated_module_run
+            updated_agent_run = await db.update_agent_run(task_run.id, task_run)
+        logger.info("Updated agent run for worker node")
+        return updated_agent_run
     except Exception as e:
-        logger.error(f"Failed to update module run: {str(e)}")
+        logger.error(f"Failed to update agent run: {str(e)}")
         logger.debug(f"Full traceback: {traceback.format_exc()}")
         if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
             raise TransientDatabaseError(str(e))
-        raise Exception(f"Internal server error occurred while updating module run. {str(e)}")
+        raise Exception(f"Internal server error occurred while updating agent run. {str(e)}")
 
 
 @retry(
@@ -60,19 +60,19 @@ async def update_task_run(task_run: ModuleRun):
     retry=retry_if_exception_type(TransientDatabaseError),
     reraise=True
 )
-async def create_task_run(task_run: ModuleRun):
+async def create_task_run(task_run: AgentRun):
     try:
-        logger.info(f"Creating module run for worker node {task_run.worker_nodes[0]}")
+        logger.info(f"Creating agent run for worker node {task_run.worker_nodes[0]}")
         async with DB() as db:
-            module_run = await db.create_module_run(task_run)
-        logger.info(f"Created module run for worker node {task_run.worker_nodes[0]}")
-        return module_run
+            agent_run = await db.create_agent_run(task_run)
+        logger.info(f"Created agent run for worker node {task_run.worker_nodes[0]}")
+        return agent_run
     except Exception as e:
-        logger.error(f"Failed to create module run: {str(e)}")
+        logger.error(f"Failed to create agent run: {str(e)}")
         logger.debug(f"Full traceback: {traceback.format_exc()}")
         if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
             raise TransientDatabaseError(str(e))
-        raise Exception(f"Internal server error occurred while creating module run. {str(e)}")
+        raise Exception(f"Internal server error occurred while creating agent run. {str(e)}")
 
 class TaskEngine:
     def __init__(self, task, flow_run, parameters):
@@ -88,25 +88,25 @@ class TaskEngine:
         }
 
     async def init_run(self):
-        if isinstance(self.flow_run, ModuleRunInput):
+        if isinstance(self.flow_run, AgentRunInput):
             self.flow_run = await create_task_run(self.flow_run)
             logger.info(f"flow_run: {self.flow_run}")
 
         task_run_input = {
             'consumer_id': self.consumer["id"],
             "worker_nodes": [self.task.worker_node.node_url],
-            "module_name": self.task.fn,
-            "module_type": "template",
-            "module_params": self.parameters,
+            "agent_name": self.task.fn,
+            "agent_run_type": "package",
+            "agent_run_params": self.parameters,
             "parent_runs": [{k: v for k, v in self.flow_run.model_dict().items() if k not in ["child_runs", "parent_runs"]}],
         }
-        self.task_run_input = ModuleRunInput(**task_run_input)
+        self.task_run_input = AgentRunInput(**task_run_input)
         logger.info(f"Initializing task run.")
         self.task_run = await create_task_run(self.task_run_input)
         self.task_run.start_processing_time = datetime.now(pytz.utc).isoformat()
 
         # Relate new task run with parent flow run
-        self.flow_run.child_runs.append(ModuleRun(**{k: v for k, v in self.task_run.model_dict().items() if k not in ["child_runs", "parent_runs"]}))
+        self.flow_run.child_runs.append(AgentRun(**{k: v for k, v in self.task_run.model_dict().items() if k not in ["child_runs", "parent_runs"]}))
         logger.info(f"Adding task run to parent flow run: {self.flow_run}")
         _ = await update_task_run(self.flow_run)
 
@@ -125,7 +125,7 @@ class TaskEngine:
             logger.info(f"User registered: {consumer}.")
 
         logger.info(f"Running task on worker node {self.task.worker_node.node_url}: {self.task_run_input}")
-        task_run = await self.task.worker_node.run_task(module_run_input=self.task_run_input)
+        task_run = await self.task.worker_node.run_task(agent_run_input=self.task_run_input)
         logger.info(f"Completed task run on worker node {self.task.worker_node.node_url}: {task_run}")
 
         self.task_run = task_run

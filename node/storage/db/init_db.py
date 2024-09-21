@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from node.config import BASE_OUTPUT_DIR, DB_NS, DB_DB, SURREALDB_PORT
-from node.module_manager import setup_modules_from_config
+from node.agent_manager import instal_agents_from_config
 from node.utils import create_output_dir, get_logger
 import os
 from pathlib import Path
@@ -24,7 +24,7 @@ def import_surql():
     logger.info("Importing SURQL files")
     import_files = [
         f"{surql_path}/user.surql",
-        f"{surql_path}/module_run.surql",
+        f"{surql_path}/agent_run.surql",
         f"{surql_path}/auth.surql",
     ]
 
@@ -87,7 +87,7 @@ def init_db():
     import_surql()
 
     create_output_dir(BASE_OUTPUT_DIR)
-    setup_modules_from_config(Path(f"{root_dir}/storage/hub/packages.json"))
+    instal_agents_from_config(Path(f"{root_dir}/storage/hub/packages.json"))
 
 
 if __name__ == "__main__":

@@ -61,21 +61,6 @@ CREATE category:reinforcement_learning SET name="Reinforcement Learning";
 CREATE category:reinforcement_learning SET name="Reinforcement Learning", parent_categories=[category:reinforcement_learning];
 CREATE category:robotics SET name="Robotics", parent_categories=[category:reinforcement_learning];
 
-CREATE category:custom_templates SET name="Custom Templates";
--- subcategories for Custom Templates
-CREATE category:code_execution SET name="Code Execution", parent_categories=[category:custom_templates];
-CREATE category:synthetic_data_generation SET name="Synthetic Data Generation", parent_categories=[category:custom_templates];
-CREATE category:data_processing SET name="Data Processing", parent_categories=[category:custom_templates];
-CREATE category:model_optimization SET name="Model Optimization", parent_categories=[category:custom_templates];
-CREATE category:interactive_tools SET name="Interactive Tools", parent_categories=[category:custom_templates];
-CREATE category:visualization SET name="Visualization", parent_categories=[category:custom_templates];
-CREATE category:task_identification SET name="Task Identification", parent_categories=[category:custom_templates];
-CREATE category:parallel_execution SET name="Parallel Execution", parent_categories=[category:custom_templates];
-CREATE category:task_coordination SET name="Task Coordination", parent_categories=[category:custom_templates];
-CREATE category:result_synthesis SET name="Result Synthesis", parent_categories=[category:custom_templates];
-CREATE category:dynamic_adjustment SET name="Dynamic Adjustment", parent_categories=[category:custom_templates];
-CREATE category:retrieval_augmented_generation SET name="Retrieval Augmented Generation", parent_categories=[category:custom_templates];
-
 CREATE category:simulation SET name="Simulation";
 -- subcategories for Simulation
 CREATE category:human_behavior SET name="Simulate Human Behavior", parent_categories=[category:simulation];
@@ -111,28 +96,30 @@ CREATE organization:naptha SET name="Naptha", image="https://richardblythman.git
 RELATE user:seller1->is_associated_with->organization:naptha;
 
 
--- MODULEs
-CREATE module:hello_world SET name="Hello World", description="A simple hello world workflow", author=user:naptha, url="https://github.com/NapthaAI/module_hello_world", type="template", version="0.11";
-CREATE module:chat SET name="Chat", description="A simple chat workflow", author=user:naptha, url="https://github.com/NapthaAI/chat", type="template", version="0.7";
-CREATE module:multiplayer_chat SET name="Multiplayer Chat", description="A multiplayer chat app", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="flow", version="0.6";
-CREATE module:create_profile_description SET name="Generate Profile Description", description="A simple workflow for writing a profile description based on key points", author=user:naptha, url="https://github.com/NapthaAI/module_create_profile_description", type="template", version="0.8";
-CREATE module:generate_image SET name="Generate Image Stable Diffusion", description="A simple workflow for generating an image from text", author=user:naptha, url="https://github.com/NapthaAI/module_generate_image", type="template", version="0.8";
-CREATE module:image_to_image SET name="Image to Image Stable Diffusion", description="A simple workflow for generating an image from another image", author=user:naptha, url="https://github.com/NapthaAI/module_image2image", type="template", version="0.7";
-CREATE module:babyagi SET name="Babyagi", description="A simple babyagi app", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="flow", version="0.1";
-CREATE module:babyagi_task_initiator SET name="Babyagi Task Initiator", description="A simple babyagi task initiator", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_initiator", type="template", version="0.1";
-CREATE module:babyagi_task_executor SET name="Babyagi Task Executor", description="A simple babyagi task executor", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_executor", type="template", version="0.1";
-CREATE module:babyagi_task_finalizer SET name="Babyagi Task Finalizer", description="A simple babyagi task finalizer", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_finalizer", type="template", version="0.1";
-CREATE module:olas_prediction SET name="Predict Future Events", description="Workflow for making predictions about events", author=user:naptha, url="https://huggingface.co/NapthaAI/olas_prediction", type="template", version="0.2";
-CREATE module:multi_olas_prediction SET name="Multi Olas Prediction", description="An implementation of multi olas prediction", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="flow", version="0.1";
-CREATE module:debate_agent SET name="Debate Agent", description="debating agent", author=user:naptha, url="https://huggingface.co/NapthaAI/debate_agent", type="template", version="0.1";
-CREATE module:debate_protocol SET name="Debate Protocol", description="debating protocol", author=user:naptha, url="https://github.com/NapthaAI/debate_protocol", type="flow", version="0.4";
-CREATE module:napthaville_module SET name="Napthaville Module", description="implementation of Agentic game", author=user:naptha, url="https://github.com/moarshy/napthaville_module", type="template", version="0.36";
-CREATE module:napthaville_chat SET name="Napthaville Chat", description="implementation of Napthaville chat between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="flow", version="0.4";
-CREATE module:napthaville_move SET name="Napthaville Move", description="implementation of Napthaville move between two personas", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="flow", version="0.26";
-CREATE module:docker_hello_world SET name="Hello World Docker", description="A simple hello world app", author=user:naptha, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1";
-CREATE module:module_test SET name="Module Test", description="A simple module test", author=user:naptha, url="https://github.com/moarshy/module_test", type="template", version="0.4";
-CREATE module:random_number_agent SET name="Random Number Agent", description="A simple random number agent", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="template", version="0.1";
-CREATE module:random_number_protocol SET name="Random Number Protocol", description="A simple random number protocol", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="template", version="0.1";
+-- AGENTS
+CREATE agent:hello_world SET name="Hello World Agent", description="A simple hello world agent", author=user:naptha, url="https://github.com/NapthaAI/module_hello_world", type="package", version="0.11";
+CREATE agent:chat SET name="Simple Chat Agent", description="A simple chat agent", author=user:naptha, url="https://github.com/NapthaAI/chat", type="package", version="0.7";
+CREATE agent:create_profile_description SET name="Profile Agent", description="A simple agent for writing a profile description based on key points", author=user:naptha, url="https://github.com/NapthaAI/module_create_profile_description", type="package", version="0.8";
+CREATE agent:generate_image SET name="Generate Image Stable Diffusion", description="A simple agent for generating an image from text", author=user:naptha, url="https://github.com/NapthaAI/module_generate_image", type="package", version="0.8";
+CREATE agent:image_to_image SET name="Image to Image Stable Diffusion", description="A simple agent for generating an image from another image", author=user:naptha, url="https://github.com/NapthaAI/module_image2image", type="package", version="0.7";
+CREATE agent:babyagi_task_initiator SET name="Babyagi Initiator Agent", description="A simple babyagi initiator agent", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_initiator", type="package", version="0.1";
+CREATE agent:babyagi_task_executor SET name="Babyagi Executor Agent", description="A simple babyagi executor agent", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_executor", type="package", version="0.1";
+CREATE agent:babyagi_task_finalizer SET name="Babyagi Finalizer Agent", description="A simple babyagi finalizer agent", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi_task_finalizer", type="package", version="0.1";
+CREATE agent:olas_prediction SET name="Prediction Agent", description="Agent for making predictions about events", author=user:naptha, url="https://huggingface.co/NapthaAI/olas_prediction", type="package", version="0.2";
+CREATE agent:debate_agent SET name="Debate Agent", description="Debating agent", author=user:naptha, url="https://huggingface.co/NapthaAI/debate_agent", type="package", version="0.1";
+CREATE agent:napthaville_module SET name="Napthaville Agent", description="implementation of Agentic game", author=user:naptha, url="https://github.com/moarshy/napthaville_module", type="package", version="0.36";
+CREATE agent:docker_hello_world SET name="Hello World Docker Agent", description="A simple hello world app", author=user:naptha, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1";
+CREATE agent:module_test SET name="Module Test", description="A simple module test", author=user:naptha, url="https://github.com/moarshy/module_test", type="package", version="0.4";
+CREATE agent:random_number_agent SET name="Random Number Agent", description="A simple random number agent", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.1";
+
+-- AGENT NETWORKS
+CREATE agentnet:multiplayer_chat SET name="Chat Network", description="A network of chat agents", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="package", version="0.6";
+CREATE agentnet:babyagi SET name="Babyagi", description="A Network of task-solving agents", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="package", version="0.1";
+CREATE agentnet:debate_protocol SET name="Debate Network", description="A network of debating agents", author=user:naptha, url="https://github.com/NapthaAI/debate_protocol", type="package", version="0.4";
+CREATE agentnet:random_number_protocol SET name="Random Number Network", description="A network of agents that guess random numbers", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="package", version="0.1";
+CREATE agentnet:napthaville_chat SET name="Napthaville Chat Network", description="A network of chat agents in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="package", version="0.4";
+CREATE agentnet:napthaville_move SET name="Napthaville Social Network", description="A network of social agents in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26";
+CREATE agentnet:multi_olas_prediction SET name="Prediction Network", description="A network of prediction agents", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="package", version="0.1";
 
 
 -- NODES

@@ -3,12 +3,12 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import json
-from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
+from node.schemas import DockerParams, AgentRun, AgentRunInput
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
 from node.user import check_user, register_user
 from node.utils import get_logger
-from node.worker.docker_worker import execute_docker_module
+from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_flow
 import os
 import traceback
@@ -68,27 +68,27 @@ class WebSocketServer:
         )
 
         # Add the WebSocket route
-        self.app.add_api_websocket_route("/ws/{client_id}/create_task", self.create_task_endpoint)
+        self.app.add_api_websocket_route("/ws/{client_id}/run_agent", self.run_agent_endpoint)
         self.app.add_api_websocket_route("/ws/{client_id}/check_user", self.check_user_endpoint)
         self.app.add_api_websocket_route("/ws/{client_id}/register_user", self.register_user_endpoint)
 
-    async def create_task_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "create_task")
+    async def run_agent_endpoint(self, websocket: WebSocket, client_id: str):
+        await self.manager.connect(websocket, client_id, "run_agent")
         try:
             while True:
                 data = await websocket.receive_text()
-                logger.info(f"Endpoint: create_task :: Received data: {data}")
+                logger.info(f"Endpoint: run_agent :: Received data: {data}")
                 if self.node_type == "direct":
-                    result = await self.create_task_direct(data)
+                    result = await self.run_agent_direct(data)
                 else:
-                    result = await self.create_task_indirect(websocket, data, client_id)
-                logger.info(f"Endpoint: create_task :: Sending result: {result}")
-                await self.manager.send_message(result, client_id, "create_task")
+                    result = await self.run_agent_indirect(websocket, data, client_id)
+                logger.info(f"Endpoint: run_agent :: Sending result: {result}")
+                await self.manager.send_message(result, client_id, "run_agent")
         except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "create_task")
+            self.manager.disconnect(client_id, "run_agent")
         except Exception as e:
-            logger.error(f"Error in WebSocket connection for client {client_id} in create_task: {str(e)}")
-            self.manager.disconnect(client_id, "create_task")
+            logger.error(f"Error in WebSocket connection for client {client_id} in run_agent: {str(e)}")
+            self.manager.disconnect(client_id, "run_agent")
 
     async def check_user_endpoint(self, websocket: WebSocket, client_id: str):
         await self.manager.connect(websocket, client_id, "check_user")
@@ -135,62 +135,62 @@ class WebSocketServer:
         server = uvicorn.Server(config)
         await server.serve()
 
-    async def create_task_direct(self, data: str) -> str:
+    async def run_agent_direct(self, data: str) -> str:
         try:
             job = json.loads(data)
             logger.info(f"Processing job: {job}")
 
-            module_run_input = ModuleRunInput(**job)
+            agent_run_input = AgentRunInput(**job)
 
             async with Hub() as hub:
                 success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
-                module = await hub.list_modules(f"module:{module_run_input.module_name}")
+                agent = await hub.list_agents(f"agent:{agent_run_input.agent_name}")
                 
-                if not module:
-                    return json.dumps({"status": "error", "message": "Module not found"})
+                if not agent:
+                    return json.dumps({"status": "error", "message": "Agent not found"})
                 
-                module_run_input.module_type = module["type"]
-                module_run_input.module_version = module["version"]
-                module_run_input.module_url = module["url"]
+                agent_run_input.agent_run_type = agent["type"]
+                agent_run_input.agent_version = agent["version"]
+                agent_run_input.agent_source_url = agent["url"]
                 
-                if module["type"] == "docker":
-                    module_run_input.module_params = DockerParams(**module_run_input.module_params)
+                if agent["type"] == "docker":
+                    agent_run_input.agent_run_params = DockerParams(**agent_run_input.agent_run_params)
 
             async with DB() as db:
-                module_run = await db.create_module_run(module_run_input)
-                logger.info("Created module run")
+                agent_run = await db.create_agent_run(agent_run_input)
+                logger.info("Created agent run")
 
-            # Execute the task
-            if module_run.module_type in ["flow", "template"]:
-                task = run_flow.delay(module_run.dict())
-            elif module_run.module_type == "docker":
-                task = execute_docker_module.delay(module_run.dict())
+            # Run the agent
+            if agent_run.agent_run_type == "package":
+                agent = run_flow.delay(agent_run.dict())
+            elif agent_run.agent_run_type == "docker":
+                agent = execute_docker_agent.delay(agent_run.dict())
             else:
-                return json.dumps({"status": "error", "message": "Invalid module type"})
+                return json.dumps({"status": "error", "message": "Invalid agent type"})
 
-            # Wait for the task to complete
-            while not task.ready():
+            # Wait for the agent to complete
+            while not agent.ready():
                 await asyncio.sleep(1)
 
-            # Retrieve the updated module run from the database
+            # Retrieve the updated agent run from the database
             async with DB() as db:
-                updated_module_run = await db.list_module_runs(module_run.id)
+                updated_agent_run = await db.list_agent_runs(agent_run.id)
                 
-            if updated_module_run:
+            if updated_agent_run:
                 # Convert the Pydantic model to a dictionary with datetime objects serialized
-                updated_module_run_dict = updated_module_run.dict()
+                updated_agent_run_dict = updated_agent_run.dict()
             
-                return json.dumps({"status": "success", "data": updated_module_run_dict}, cls=DateTimeEncoder)
+                return json.dumps({"status": "success", "data": updated_agent_run_dict}, cls=DateTimeEncoder)
             else:
-                return json.dumps({"status": "error", "message": "Failed to retrieve updated module run"})
+                return json.dumps({"status": "error", "message": "Failed to retrieve updated agent run"})
 
         except Exception as e:
             logger.error(f"Error processing job: {str(e)}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    async def create_task_indirect(self, message: dict, client_id: str) -> ModuleRun:
+    async def run_agent_indirect(self, message: dict, client_id: str) -> AgentRun:
         """
-        Create a task and return the task
+        Run an agent
         """
         target_node_id = message['source_node']
         source_node_id = message['target_node']
@@ -200,41 +200,41 @@ class WebSocketServer:
             'source_node': source_node_id
         }
         try:
-            module_run_input = ModuleRunInput(**params)
-            logger.info(f"Received task: {module_run_input}")
+            agent_run_input = AgentRunInput(**params)
+            logger.info(f"Received request to run agent: {agent_run_input}")
 
             async with Hub() as hub:
                 success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
-                module = await hub.list_modules(f"module:{module_run_input.module_name}")
+                module = await hub.list_agents(f"module:{agent_run_input.module_name}")
                 logger.info(f"Found module: {module}")
 
                 if not module:
                     raise HTTPException(status_code=404, detail="Module not found")
 
-                module_run_input.module_type = module["type"]
-                module_run_input.module_version = module["version"]
-                module_run_input.module_url = module["url"]
+                agent_run_input.module_type = module["type"]
+                agent_run_input.module_version = module["version"]
+                agent_run_input.module_url = module["url"]
 
                 if module["type"] == "docker":
-                    module_run_input.module_params = DockerParams(**module_run_input.module_params)
+                    agent_run_input.module_params = DockerParams(**agent_run_input.module_params)
 
             async with DB() as db:
-                module_run = await db.create_module_run(module_run_input)
+                module_run = await db.create_module_run(agent_run_input)
                 logger.info("Created module run")
 
                 updated_module_run = await db.update_module_run(module_run.id, module_run)
                 logger.info("Updated module run")
 
             # Enqueue the module run in Celery
-            if module_run.module_type in ["flow", "template"]:
-                run_flow.delay(module_run.dict())
-            elif module_run.module_type == "docker":
-                execute_docker_module.delay(module_run.dict())
+            if agent_run.agent_run_type == "package":
+                run_flow.delay(agent_run.dict())
+            elif agent_run.module_type == "docker":
+                execute_docker_agent.delay(module_run.dict())
             else:
                 raise HTTPException(status_code=400, detail="Invalid module type")
 
             response['params'] = module_run.model_dict()
-            await self.manager.send_message(json.dumps(response), client_id, "create_task")
+            await self.manager.send_message(json.dumps(response), client_id, "run_agent")
             return module_run
 
         except Exception as e:
@@ -242,8 +242,8 @@ class WebSocketServer:
             error_details = traceback.format_exc()
             logger.error(f"Full traceback: {error_details}")
             response['params'] = {'error': f"Failed to run module: {str(e)}"}
-            await self.manager.send_message(json.dumps(response), client_id, "create_task")
-            raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run_input}")
+            await self.manager.send_message(json.dumps(response), client_id, "run_agent")
+            raise HTTPException(status_code=500, detail=f"Failed to run module: {agent_run_input}")
 
     async def check_user_direct(self, data: str):
         data = json.loads(data)

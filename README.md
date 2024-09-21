@@ -41,10 +41,10 @@ This will install all of the components, including:
 - SurrealDB (Naptha Protocol info is stored here)
 - RabbitMQ (message-broker for the Naptha Protocol)
 - Ollama (used to run LLMs)
-- Docker (isolates Modules from the system)
+- Docker (isolates agents from the system)
 - Naptha node (orchestrates ML workflows)
 
-The first time you launch, you will be prompted about whether (i) to generate a private key, and (ii) to input a Stability API key, which is needed if you would like to run the image module examples. If you choose not to, you can always edit the .env file manually later.
+The first time you launch, you will be prompted about whether (i) to generate a private key, and (ii) to input a Stability API key, which is needed if you would like to run the image agent examples. If you choose not to, you can always edit the .env file manually later.
 
 After a few minutes you should see,```[System] Setup complete. Applications are running.```
 
@@ -79,9 +79,9 @@ bash launch_docker.sh
 ```
 
 
-# Run AI modules on your node
+# Run AI agents on your node
 
-To run modules, keep your node running and follow the the instructions using the [Naptha SDK](https://github.com/NapthaAI/naptha-sdk). 
+To run agents, keep your node running and follow the the instructions using the [Naptha SDK](https://github.com/NapthaAI/naptha-sdk). 
 
 ## Stop
 

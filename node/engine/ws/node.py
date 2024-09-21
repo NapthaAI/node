@@ -3,7 +3,7 @@ import websockets
 import json
 from datetime import datetime
 from typing import Dict, Optional
-from naptha_sdk.schemas import ModuleRun, ModuleRunInput
+from node.schemas import AgentRun, AgentRunInput
 from naptha_sdk.utils import get_logger
 
 logger = get_logger(__name__)
@@ -59,25 +59,22 @@ class Node:
         finally:
             await self.disconnect(client_id)
 
-    async def create_task(self, module_run_input: ModuleRunInput) -> ModuleRun:
+    async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
         data = {
-            "module_name": module_run_input.module_name,
-            "consumer_id": module_run_input.consumer_id,
-            "module_params": module_run_input.module_params,
-            "module_type": module_run_input.module_type
+            "agent_name": agent_run_input.agent_name,
+            "consumer_id": agent_run_input.consumer_id,
+            "agent_run_params": agent_run_input.agent_run_params,
+            "agent_run_type": agent_run_input.agent_run_type
         }
-        response = await self.send_receive(data, "create_task")
+        response = await self.send_receive(data, "run_agent")
         
         if response['status'] == 'success':
-            logger.info(f"Task created successfully: {response['data']}")
+            logger.info(f"Ran agent successfully: {response['data']}")
             response['data'] = parse_datetime(response['data'])
-            return ModuleRun(**response['data'])
+            return AgentRun(**response['data'])
         else:
-            logger.error(f"Error creating task: {response['message']}")
+            logger.error(f"Error running agent: {response['message']}")
             raise Exception(response['message'])
-
-    async def run_task(self, module_run_input: ModuleRunInput) -> ModuleRun:
-        return await self.create_task(module_run_input)
 
     async def check_user(self, user_input: Dict[str, str]):
         response = await self.send_receive(user_input, "check_user")

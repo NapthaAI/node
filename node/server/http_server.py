@@ -6,14 +6,14 @@ import io
 import os
 import traceback
 from typing import Optional
-from naptha_sdk.schemas import ModuleRun, ModuleRunInput, DockerParams
+from node.schemas import AgentRun, AgentRunInput, DockerParams
 
 from node.utils import get_logger
 from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
 from node.user import check_user, register_user
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
-from node.worker.docker_worker import execute_docker_module
+from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_flow
 from dotenv import load_dotenv
 import asyncio
@@ -34,24 +34,23 @@ class HTTPServer:
         
         router = APIRouter()
 
-        # Task endpoints
-        @router.post("/create_task")
-        async def create_task_endpoint(module_run_input: ModuleRunInput) -> ModuleRun:
+        @router.post("/run_agent")
+        async def run_agent_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
             """
-            Create a Task
-            :param module_run_input: Module run specifications
+            Run an agent
+            :param agent_run_input: Agent run specifications
             :return: Status
             """
-            return await self.create_task(module_run_input)
+            return await self.run_agent(agent_run_input)
 
-        @router.post("/check_task")
-        async def check_task_endpoint(module_run: ModuleRun) -> ModuleRun:
+        @router.post("/check_agent_run")
+        async def check_agent_endpoint(agent_run: AgentRun) -> AgentRun:
             """
-            Check a task
-            :param module_run: ModuleRun details
+            Check an agent
+            :param agent_run: AgentRun details
             :return: Status
             """
-            return await self.check_task(module_run)
+            return await self.check_agent_run(agent_run)
 
         # Storage endpoints
         @router.post("/write_storage")
@@ -128,15 +127,15 @@ class HTTPServer:
             return await register_user(user_input)
 
         # Orchestration endpoints
-        @router.post("/create_task_run")
-        async def create_task_run_endpoint(task_run_input: ModuleRunInput) -> ModuleRun:
-            """Create a new task run."""
-            return await self.create_task_run(task_run_input)
+        @router.post("/register_agent_run")
+        async def register_agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
+            """Register a new agent run with orchestrator."""
+            return await self.register_agent_run(agent_run_input)
 
-        @router.post("/update_task_run")
-        async def update_task_run_endpoint(task_run: ModuleRun) -> ModuleRun:
-            """Update an existing task run."""
-            return await self.update_task_run(task_run)
+        @router.post("/update_agent_run")
+        async def update_agent_run_endpoint(agent_run: AgentRun) -> AgentRun:
+            """Update an existing agent run with orchestrator."""
+            return await self.update_agent_run(agent_run)
 
         # Include the router
         self.app.include_router(router)
@@ -149,93 +148,93 @@ class HTTPServer:
             allow_headers=["*"],
         )
 
-    async def create_task(self, module_run_input: ModuleRunInput) -> ModuleRun:
+    async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
         """
-        Create a Task
-        :param module_run_input: Module run specifications
+        Run an agent
+        :param agent_run_input: Agent run specifications
         :return: Status
         """
         try:
-            logger.info(f"Received task: {module_run_input}")
+            logger.info(f"Received request to run an agent: {agent_run_input}")
 
             async with Hub() as hub:
                 success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
-                module = await hub.list_modules(f"module:{module_run_input.module_name}")
-                logger.info(f"Found module: {module}")
+                agent = await hub.list_agents(f"agent:{agent_run_input.agent_name}")
+                logger.info(f"Found Agent: {agent}")
 
-                if not module:
-                    raise HTTPException(status_code=404, detail="Module not found")
+                if not agent:
+                    raise HTTPException(status_code=404, detail="Agent not found")
 
-                module_run_input.module_type = module["type"]
-                module_run_input.module_version = module["version"]
-                module_run_input.module_url = module["url"]
+                agent_run_input.agent_run_type = agent["type"]
+                agent_run_input.agent_version = agent["version"]
+                agent_run_input.agent_source_url = agent["url"]
 
-                if module["type"] == "docker":
-                    module_run_input.module_params = DockerParams(**module_run_input.module_params)
+                if agent["type"] == "docker":
+                    agent_run_input.agent_run_params = DockerParams(**agent_run_input.agent_run_params)
 
             async with DB() as db:
-                module_run = await db.create_module_run(module_run_input)
-                logger.info("Created module run")
+                agent_run = await db.create_agent_run(agent_run_input)
+                logger.info("Created agent run")
 
-                updated_module_run = await db.update_module_run(module_run.id, module_run)
-                logger.info("Updated module run")
+                updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
+                logger.info("Updated agent run")
 
-            # Enqueue the module run in Celery
-            if module_run.module_type in ["flow", "template"]:
-                run_flow.delay(module_run.dict())
-            elif module_run.module_type == "docker":
-                execute_docker_module.delay(module_run.dict())
+            # Enqueue the agent run in Celery
+            if agent_run.agent_run_type == "package":
+                run_flow.delay(agent_run.dict())
+            elif agent_run.agent_run_type == "docker":
+                execute_docker_agent.delay(agent_run.dict())
             else:
-                raise HTTPException(status_code=400, detail="Invalid module type")
+                raise HTTPException(status_code=400, detail="Invalid agent run type")
 
-            return module_run
+            return agent_run
 
         except Exception as e:
-            logger.error(f"Failed to run module: {str(e)}")
+            logger.error(f"Failed to run agent: {str(e)}")
             error_details = traceback.format_exc()
             logger.error(f"Full traceback: {error_details}")
-            raise HTTPException(status_code=500, detail=f"Failed to run module: {module_run_input}")
+            raise HTTPException(status_code=500, detail=f"Failed to run agent: {agent_run_input}")
 
-    async def check_task(self, module_run: ModuleRun) -> ModuleRun:
+    async def check_agent_run(self, agent_run: AgentRun) -> AgentRun:
         """
-        Check a task
-        :param module_run: ModuleRun details
+        Check an agent run
+        :param agent_run: AgentRun details
         :return: Status
         """
         try:
-            logger.info("Checking task")
-            id_ = module_run.id
+            logger.info("Checking agent run")
+            id_ = agent_run.id
             if id_ is None:
-                raise HTTPException(status_code=400, detail="Module run ID is required")
+                raise HTTPException(status_code=400, detail="Agent run ID is required")
 
             async with DB() as db:
-                module_run = await db.list_module_runs(id_)
+                agent_run = await db.list_agent_runs(id_)
 
-            if not module_run:
-                raise HTTPException(status_code=404, detail="Task not found")
+            if not agent_run:
+                raise HTTPException(status_code=404, detail="Agent run not found")
 
-            status = module_run.status
-            logger.info(f"Found task status: {status}")
+            status = agent_run.status
+            logger.info(f"Found agent status: {status}")
 
-            if module_run.status == "completed":
-                logger.info(f"Task completed. Returning output: {module_run.results}")
-                response = module_run.results
-            elif module_run.status == "error":
-                logger.info(f"Task failed. Returning error: {module_run.error_message}")
-                response = module_run.error_message
+            if agent_run.status == "completed":
+                logger.info(f"Agent run completed. Returning output: {agent_run.results}")
+                response = agent_run.results
+            elif agent_run.status == "error":
+                logger.info(f"Agent run failed. Returning error: {agent_run.error_message}")
+                response = agent_run.error_message
             else:
                 response = None
 
             logger.info(f"Response: {response}")
 
-            return module_run
+            return agent_run
 
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Failed to check task: {str(e)}")
+            logger.error(f"Failed to check agent run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
-            raise HTTPException(status_code=500, detail="Internal server error occurred while checking task")
+            raise HTTPException(status_code=500, detail="Internal server error occurred while checking agent run")
         
     @retry(
         stop=stop_after_attempt(5),
@@ -243,19 +242,19 @@ class HTTPServer:
         retry=retry_if_exception_type(TransientDatabaseError),
         before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
     )
-    async def create_task_run(self, task_run_input: ModuleRunInput) -> ModuleRun:
+    async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         try:
-            logger.info(f"Creating task run for worker node {task_run_input.worker_nodes[0]}")
+            logger.info(f"Creating agent run for worker node {agent_run_input.worker_nodes[0]}")
             async with DB() as db:
-                task_run = await db.create_task_run(task_run_input)
-            logger.info(f"Created task run for worker node {task_run_input.worker_nodes[0]}")
-            return task_run
+                agent_run = await db.create_agent_run(agent_run_input)
+            logger.info(f"Created agent run for worker node {agent_run_input.worker_nodes[0]}")
+            return agent_run
         except Exception as e:
-            logger.error(f"Failed to create task run: {str(e)}")
+            logger.error(f"Failed to create agent run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
                 raise TransientDatabaseError(str(e))
-            raise HTTPException(status_code=500, detail=f"Internal server error occurred while creating task run")
+            raise HTTPException(status_code=500, detail=f"Internal server error occurred while creating agent run")
 
     @retry(
         stop=stop_after_attempt(5),
@@ -263,19 +262,19 @@ class HTTPServer:
         retry=retry_if_exception_type(TransientDatabaseError),
         before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
     )
-    async def update_task_run(self, task_run: ModuleRun) -> ModuleRun:
+    async def update_agent_run(self, agent_run: AgentRun) -> AgentRun:
         try:
-            logger.info(f"Updating task run for worker node {task_run.worker_nodes[0]}")
+            logger.info(f"Updating agent run for worker node {agent_run.worker_nodes[0]}")
             async with DB() as db:
-                updated_task_run = await db.update_task_run(task_run.id, task_run)
-            logger.info(f"Updated task run for worker node {task_run.worker_nodes[0]}")
-            return updated_task_run
+                updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
+            logger.info(f"Updated agent run for worker node {agent_run.worker_nodes[0]}")
+            return updated_agent_run
         except Exception as e:
-            logger.error(f"Failed to update task run: {str(e)}")
+            logger.error(f"Failed to update agent run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
                 raise TransientDatabaseError(str(e))
-            raise HTTPException(status_code=500, detail=f"Internal server error occurred while updating task run")
+            raise HTTPException(status_code=500, detail=f"Internal server error occurred while updating agent run")
 
     async def launch_server(self):
         logger.info(f"Launching HTTP server...")

@@ -23,7 +23,7 @@ def import_surql():
     logger.info("Importing SURQL files")
     import_files = [
         f"{surql_path}/user.surql",
-        f"{surql_path}/module.surql",
+        f"{surql_path}/agent.surql",
         f"{surql_path}/auth.surql",
         f"{surql_path}/node.surql",
         f"{surql_path}/auction.surql",

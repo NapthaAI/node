@@ -210,9 +210,9 @@ linux_clean_node() {
     # Eccho start cleaning
     echo "Cleaning node..." | log_with_service_name "Node" $BLUE
 
-    # Remove node/modules if it exists
-    if [ -d "node/modules" ]; then
-        rm -rf node/modules
+    # Remove node/agents if it exists
+    if [ -d "node/agents" ]; then
+        rm -rf node/agents
     fi
 
     sudo apt-get install -y make
@@ -626,7 +626,7 @@ check_and_set_stability_key() {
         touch .env
     fi
 
-    read -p "No value for STABILITY_API_KEY set. You will need this to run the image module examples. Would you like to enter a value for STABILITY_API_KEY? (yes/no): " response
+    read -p "No value for STABILITY_API_KEY set. You will need this to run the image agent examples. Would you like to enter a value for STABILITY_API_KEY? (yes/no): " response
     if [[ "$response" == "yes" ]]; then
         read -p "Enter the value for STABILITY_API_KEY: " stability_key
 

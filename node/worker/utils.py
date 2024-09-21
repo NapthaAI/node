@@ -4,7 +4,7 @@ import tempfile
 import ipfshttpclient
 from dotenv import load_dotenv
 from pathlib import Path
-from naptha_sdk.schemas import ModuleRun
+from node.schemas import AgentRun
 from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
 from node.storage.db.db import DB
 from node.utils import get_logger
@@ -99,22 +99,22 @@ def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
     return decorator
 
 @with_retry()
-async def update_db_with_status_sync(module_run: ModuleRun) -> None:
+async def update_db_with_status_sync(agent_run: AgentRun) -> None:
     """
-    Update the DB with the module run status synchronously
-    param module_run: ModuleRun data to update
+    Update the DB with the agent run status synchronously
+    param agent_run: AgentRun data to update
     """
-    logger.info("Updating DB with module run")
+    logger.info("Updating DB with agent run")
 
     try:
         async with DB() as db:
-            updated_module_run = await db.update_module_run(module_run.id, module_run)
-        logger.info(f"Updated module run: {updated_module_run}")
+            updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
+        logger.info(f"Updated agent run: {updated_agent_run}")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
         raise
     except Exception as e:
-        logger.error(f"Failed to update DB with module run status: {str(e)}")
+        logger.error(f"Failed to update DB with agent run status: {str(e)}")
         raise
     
 def load_yaml_config(cfg_path):

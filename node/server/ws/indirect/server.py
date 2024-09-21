@@ -5,7 +5,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from naptha_sdk.schemas import DockerParams, ModuleRun, ModuleRunInput
+from node.schemas import DockerParams, ModuleRun, ModuleRunInput
 from node.config import BASE_OUTPUT_DIR
 from node.utils import get_logger
 from node.storage.db.db import DB
@@ -206,7 +206,7 @@ class WebSocketIndirectServer:
                 logger.info("Updated module run")
 
             # Enqueue the module run in Celery
-            if module_run.module_type in ["flow", "template"]:
+            if module_run.module_type == "package":
                 run_flow.delay(module_run.dict())
             elif module_run.module_type == "docker":
                 execute_docker_module.delay(module_run.dict())
