@@ -5,9 +5,14 @@ import pytz
 import traceback
 import asyncio
 from node.storage.db.db import DB
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 
 logger = get_logger(__name__)
+NUM_RETRIES = 3
+BACKOFF_MULTIPLIER = 1
+BACKOFF_MIN = 1
+BACKOFF_MAX = 10
 
 async def run_task(task, flow_run, parameters) -> None:
     task_engine = TaskEngine(task, flow_run, parameters)
@@ -28,6 +33,12 @@ class TransientDatabaseError(Exception):
     pass
 
 
+@retry(
+    stop=stop_after_attempt(NUM_RETRIES),
+    wait=wait_exponential(multiplier=BACKOFF_MULTIPLIER, min=BACKOFF_MIN, max=BACKOFF_MAX),
+    retry=retry_if_exception_type(TransientDatabaseError),
+    reraise=True
+)
 async def update_task_run(task_run: ModuleRun):
     try:
         logger.info("Updating module run for worker node")
@@ -43,6 +54,12 @@ async def update_task_run(task_run: ModuleRun):
         raise Exception(f"Internal server error occurred while updating module run. {str(e)}")
 
 
+@retry(
+    stop=stop_after_attempt(NUM_RETRIES),
+    wait=wait_exponential(multiplier=BACKOFF_MULTIPLIER, min=BACKOFF_MIN, max=BACKOFF_MAX),
+    retry=retry_if_exception_type(TransientDatabaseError),
+    reraise=True
+)
 async def create_task_run(task_run: ModuleRun):
     try:
         logger.info(f"Creating module run for worker node {task_run.worker_nodes[0]}")
