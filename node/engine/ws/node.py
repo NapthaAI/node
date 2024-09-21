@@ -30,32 +30,34 @@ class Node:
         if 'ws' not in self.node_url:
             logger.info(f"Adding ws to ws_url: {self.node_url}")
             self.node_url = f'ws://{self.node_url}'
-        self.ws = None
+        self.connections = {}
 
     async def connect(self, action: str):
         client_id = str(uuid.uuid4())
         full_url = f"{self.node_url}/ws/{client_id}/{action}"
         logger.info(f"Connecting to WebSocket: {full_url}")
-        self.ws = await websockets.connect(full_url)
+        ws = await websockets.connect(full_url)
+        self.connections[client_id] = ws
+        return client_id
 
-    async def disconnect(self):
-        if self.ws:
-            await self.ws.close()
-            self.ws = None
+    async def disconnect(self, client_id: str):
+        if client_id in self.connections:
+            await self.connections[client_id].close()
+            del self.connections[client_id]
 
     async def send_receive(self, data, action: str):
-        await self.connect(action)
+        client_id = await self.connect(action)
         
         try:
             message = json.dumps(data)
             logger.info(f"Sending message: {message}")
-            await self.ws.send(message)
+            await self.connections[client_id].send(message)
             
-            response = await self.ws.recv()
+            response = await self.connections[client_id].recv()
             logger.info(f"Received response: {response}")
             return json.loads(response)
         finally:
-            await self.disconnect()
+            await self.disconnect(client_id)
 
     async def create_task(self, module_run_input: ModuleRunInput) -> ModuleRun:
         data = {
@@ -86,3 +88,25 @@ class Node:
         response = await self.send_receive(user_input, "register_user")
         logger.info(f"Register user response: {response}")
         return response
+
+    async def send_receive_multiple(self, data_list, action: str):
+        client_ids = []
+        results = []
+
+        for data in data_list:
+            client_id = await self.connect(action)
+            client_ids.append(client_id)
+
+            message = json.dumps(data)
+            logger.info(f"Sending message: {message}")
+            await self.connections[client_id].send(message)
+
+        for client_id in client_ids:
+            response = await self.connections[client_id].recv()
+            logger.info(f"Received response: {response}")
+            results.append(json.loads(response))
+
+        for client_id in client_ids:
+            await self.disconnect(client_id)
+
+        return results
