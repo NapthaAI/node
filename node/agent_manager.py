@@ -10,7 +10,6 @@ from node.utils import get_logger
 logger = get_logger(__name__)
 
 PARENT_DIR = Path(__file__).resolve().parent
-AGENTS_SOURCE_DIR = os.path.join(str(PARENT_DIR), AGENTS_SOURCE_DIR)
 logger.info(f"AGENTS_SOURCE_DIR: {AGENTS_SOURCE_DIR}")
 
 
@@ -43,7 +42,7 @@ def install_agent(package_name, agents_source_dir=AGENTS_SOURCE_DIR):
     run_subprocess(["poetry", "install"])
 
 
-def instal_agents_from_config(agents_config_path):
+def install_agents_from_config(agents_config_path):
     logger.info(f"Downloading AI agents in {agents_config_path}")
     # Make sure the agents source directory is empty
     if os.path.exists(AGENTS_SOURCE_DIR):

@@ -16,8 +16,8 @@ from node.storage.db.db import DB
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_flow
 from dotenv import load_dotenv
-import asyncio
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import asyncio 
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -34,33 +34,33 @@ class HTTPServer:
         
         router = APIRouter()
 
-        @router.post("/run_agent")
-        async def run_agent_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
+        @router.post("/agent/run")
+        async def agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
             """
             Run an agent
             :param agent_run_input: Agent run specifications
             :return: Status
             """
-            return await self.run_agent(agent_run_input)
+            return await self.agent_run(agent_run_input)
 
-        @router.post("/check_agent_run")
-        async def check_agent_endpoint(agent_run: AgentRun) -> AgentRun:
+        @router.post("/agent/check")
+        async def agent_check_endpoint(agent_run: AgentRun) -> AgentRun:
             """
             Check an agent
             :param agent_run: AgentRun details
             :return: Status
             """
-            return await self.check_agent_run(agent_run)
+            return await self.agent_check(agent_run)
 
         # Storage endpoints
-        @router.post("/write_storage")
-        async def write_storage_endpoint(file: UploadFile = File(...)):
+        @router.post("/storage/write")
+        async def storage_write_endpoint(file: UploadFile = File(...)):
             """Write files to the storage."""
             status_code, message_dict = await write_storage(file)
             return JSONResponse(status_code=status_code, content=message_dict)
 
-        @router.get("/read_storage/{job_id}")
-        async def read_storage_endpoint(job_id: str):
+        @router.get("/storage/read/{job_id}")
+        async def storage_read_endpoint(job_id: str):
             """Get the output directory for a job_id and serve it as a tar.gz file."""
             status_code, message_dict = await read_storage(job_id)
             if status_code == 200:
@@ -73,8 +73,8 @@ class HTTPServer:
             else:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
-        @router.post("/write_ipfs")
-        async def write_to_ipfs_endpoint(
+        @router.post("/storage/write_ipfs")
+        async def storage_write_ipfs_endpoint(
             publish_to_ipns: bool = Form(False),
             update_ipns_name: Optional[str] = Form(None),
             file: UploadFile = File(...),
@@ -92,8 +92,8 @@ class HTTPServer:
             else:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
-        @router.get("/read_ipfs/{hash_or_name}")
-        async def read_from_ipfs_or_ipns_endpoint(hash_or_name: str):
+        @router.get("/storage/read_ipfs/{hash_or_name}")
+        async def storage_read_ipfs_or_ipns_endpoint(hash_or_name: str):
             """Read a file from IPFS or IPNS."""
             status_code, message_dict = await read_from_ipfs_or_ipns(hash_or_name)
             if status_code == 200:
@@ -116,26 +116,26 @@ class HTTPServer:
                 raise HTTPException(status_code=status_code, detail=message_dict["message"])
 
         # User endpoints
-        @router.post("/check_user")
-        async def check_user_endpoint(user_input: dict):
+        @router.post("/user/check")
+        async def user_check_endpoint(user_input: dict):
             """Check if a user exists."""
             return await check_user(user_input)
 
-        @router.post("/register_user")
-        async def register_user_endpoint(user_input: dict):
+        @router.post("/user/register")
+        async def user_register_endpoint(user_input: dict):
             """Register a new user."""
             return await register_user(user_input)
 
-        # Orchestration endpoints
-        @router.post("/register_agent_run")
-        async def register_agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
-            """Register a new agent run with orchestrator."""
-            return await self.register_agent_run(agent_run_input)
+        # Monitor endpoints
+        @router.post("/monitor/create_agent_run")
+        async def monitor_create_agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
+            """Log a new agent run with orchestrator."""
+            return await self.monitor_create_agent_run(agent_run_input)
 
-        @router.post("/update_agent_run")
-        async def update_agent_run_endpoint(agent_run: AgentRun) -> AgentRun:
+        @router.post("/monitor/update_agent_run")
+        async def monitor_update_agent_run_endpoint(agent_run: AgentRun) -> AgentRun:
             """Update an existing agent run with orchestrator."""
-            return await self.update_agent_run(agent_run)
+            return await self.monitor_update_agent_run(agent_run)
 
         # Include the router
         self.app.include_router(router)
@@ -148,7 +148,7 @@ class HTTPServer:
             allow_headers=["*"],
         )
 
-    async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
+    async def agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         """
         Run an agent
         :param agent_run_input: Agent run specifications
@@ -195,9 +195,9 @@ class HTTPServer:
             logger.error(f"Full traceback: {error_details}")
             raise HTTPException(status_code=500, detail=f"Failed to run agent: {agent_run_input}")
 
-    async def check_agent_run(self, agent_run: AgentRun) -> AgentRun:
+    async def agent_check(self, agent_run: AgentRun) -> AgentRun:
         """
-        Check an agent run
+        Check an agent 
         :param agent_run: AgentRun details
         :return: Status
         """
@@ -242,7 +242,7 @@ class HTTPServer:
         retry=retry_if_exception_type(TransientDatabaseError),
         before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
     )
-    async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
+    async def monitor_create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         try:
             logger.info(f"Creating agent run for worker node {agent_run_input.worker_nodes[0]}")
             async with DB() as db:
@@ -262,7 +262,7 @@ class HTTPServer:
         retry=retry_if_exception_type(TransientDatabaseError),
         before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
     )
-    async def update_agent_run(self, agent_run: AgentRun) -> AgentRun:
+    async def monitor_update_agent_run(self, agent_run: AgentRun) -> AgentRun:
         try:
             logger.info(f"Updating agent run for worker node {agent_run.worker_nodes[0]}")
             async with DB() as db:

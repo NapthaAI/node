@@ -4,7 +4,7 @@ import os
 import socket
 from pathlib import Path
 
-from node.config import BASE_OUTPUT_DIR, get_node_config
+from node.config import get_node_config
 from node.storage.hub.hub import Hub
 from node.server.http_server import HTTPServer
 from node.server.ws import WebSocketServer
@@ -34,7 +34,6 @@ async def run_servers():
     global http_servers, websocket_server, hub
     
     node_config = get_node_config()
-    create_output_dir(BASE_OUTPUT_DIR)
 
     tasks = []
 

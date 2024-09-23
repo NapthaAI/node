@@ -41,7 +41,7 @@ DB_URL="ws://localhost:3002/rpc"
 
 # Storage
 BASE_OUTPUT_DIR="./storage/fs"
-AGENTS_SOURCE_DIR="./storage/hub/agents"
+AGENTS_SOURCE_DIR="./node/storage/hub/agents"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub

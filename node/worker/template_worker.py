@@ -78,7 +78,7 @@ def run_flow(flow_run: Dict) -> None:
 
 async def install_agent_if_not_present(flow_run_obj, agent_version):
     agent_name = flow_run_obj.agent_name
-    lock_file = Path("node") / AGENTS_SOURCE_DIR / f"{agent_name}.lock"
+    lock_file = Path(AGENTS_SOURCE_DIR) / f"{agent_name}.lock"
     logger.info(f"Lock file: {lock_file}")
     try:
         with file_lock(lock_file):

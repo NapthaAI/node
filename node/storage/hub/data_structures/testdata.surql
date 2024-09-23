@@ -113,13 +113,13 @@ CREATE agent:module_test SET name="Module Test", description="A simple module te
 CREATE agent:random_number_agent SET name="Random Number Agent", description="A simple random number agent", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.1";
 
 -- AGENT NETWORKS
-CREATE agentnet:multiplayer_chat SET name="Chat Network", description="A network of chat agents", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="package", version="0.6";
-CREATE agentnet:babyagi SET name="Babyagi", description="A Network of task-solving agents", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="package", version="0.1";
-CREATE agentnet:debate_protocol SET name="Debate Network", description="A network of debating agents", author=user:naptha, url="https://github.com/NapthaAI/debate_protocol", type="package", version="0.4";
-CREATE agentnet:random_number_protocol SET name="Random Number Network", description="A network of agents that guess random numbers", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="package", version="0.1";
-CREATE agentnet:napthaville_chat SET name="Napthaville Chat Network", description="A network of chat agents in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="package", version="0.4";
-CREATE agentnet:napthaville_move SET name="Napthaville Social Network", description="A network of social agents in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26";
-CREATE agentnet:multi_olas_prediction SET name="Prediction Network", description="A network of prediction agents", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="package", version="0.1";
+CREATE agent:multiplayer_chat SET name="Chat Network", description="A network of chat agents", author=user:naptha, url="https://huggingface.co/NapthaAI/multiplayer_chat", type="package", version="0.7";
+CREATE agent:babyagi SET name="Babyagi", description="A Network of task-solving agents", author=user:naptha, url="https://huggingface.co/NapthaAI/babyagi", type="package", version="0.1";
+CREATE agent:debate_protocol SET name="Debate Network", description="A network of debating agents", author=user:naptha, url="https://github.com/NapthaAI/debate_protocol", type="package", version="0.4";
+CREATE agent:random_number_protocol SET name="Random Number Network", description="A network of agents that guess random numbers", author=user:naptha, url="https://github.com/NapthaAI/random_number_protocol", type="package", version="0.1";
+CREATE agent:napthaville_chat SET name="Napthaville Chat Network", description="A network of chat agents in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="package", version="0.4";
+CREATE agent:napthaville_move SET name="Napthaville Social Network", description="A network of social agents in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26";
+CREATE agent:multi_olas_prediction SET name="Prediction Network", description="A network of prediction agents", author=user:naptha, url="https://huggingface.co/NapthaAI/multi_olas_prediction", type="package", version="0.1";
 
 
 -- NODES
