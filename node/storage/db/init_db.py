@@ -10,10 +10,10 @@ import time
 load_dotenv()
 logger = get_logger(__name__)
 
-file_path = os.path.dirname(os.path.realpath(__file__))
-surql_path = os.path.join(file_path, "data_structures")
-root_dir = Path(file_path).parent.parent
-
+file_path = Path(__file__).resolve().parent
+local_db_file_path = f"{file_path}/db.db"
+surql_path = f"{file_path}/data_structures"
+root_dir = file_path.parent.parent
 
 logger.info(f"DB root pass: {os.getenv('DB_ROOT_PASS')}")
 logger.info(f"DB root user: {os.getenv('DB_ROOT_USER')}")
@@ -64,7 +64,7 @@ def init_db():
                   --user {os.getenv('DB_ROOT_USER')} \
                   --bind 0.0.0.0:{SURREALDB_PORT} \
                   --pass {os.getenv('DB_ROOT_PASS')} \
-                  file:./node/storage/db/db.db"""
+                  file:{local_db_file_path}"""
 
     try:
         # Start the command in a new process and detach it
