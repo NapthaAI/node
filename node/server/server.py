@@ -34,12 +34,12 @@ async def run_servers():
     global http_servers, websocket_server, hub
     
     node_config = get_node_config()
+    node_id = node_config.public_key.split(':')[-1]
 
     tasks = []
 
     if node_config.node_type == "indirect": 
         logger.info("Creating indirect websocket server...")
-        node_id = node_config.public_key.split(':')[-1] 
         uri = f"{NODE_ROUTING}/ws/{node_id}"
         websocket_server = WebSocketServer(uri, 7001, node_type =node_config.node_type, node_id=node_id)
         tasks.append(websocket_server.launch_server())
@@ -73,7 +73,7 @@ async def run_servers():
         actual_ports = []
         for i in range(node_config.num_servers):
             port = find_available_port(start_port)
-            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type)
+            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
             tasks.append(websocket_server.launch_server())
             actual_ports.append(port)
             start_port = port + 1  # Set the next start port

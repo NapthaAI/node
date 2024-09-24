@@ -837,26 +837,24 @@ class WebSocketServer:
             await self.send_response(json.dumps(response))
 
     async def launch_server(self):
-        node_id_app = FastAPI()
-
-        @node_id_app.get("/node_id")
-        async def get_node_id():
-            return {"node_id": self.node_id}
-
-        # Configure the node_id server
-        node_id_config = uvicorn.Config(
-            node_id_app,
-            host="0.0.0.0",
-            port=self.port,
-            log_level="info"
-        )
-        node_id_server = uvicorn.Server(node_id_config)
-
-        # Start the node_id server in a separate task
-        import asyncio
-        node_id_task = asyncio.create_task(node_id_server.serve())
-
         if self.node_type == "indirect":
+            node_id_app = FastAPI()
+
+            @node_id_app.get("/node_id")
+            async def get_node_id():
+                return {"node_id": self.node_id}
+
+            # Configure the node_id server
+            node_id_config = uvicorn.Config(
+                node_id_app,
+                host="0.0.0.0",
+            port=self.port,
+                log_level="info"
+            )
+            node_id_server = uvicorn.Server(node_id_config)
+
+            import asyncio
+            node_id_task = asyncio.create_task(node_id_server.serve())
             self.relay_websocket = await self.establish_connection()
             await self.handle_indirect_messages()
         else:
