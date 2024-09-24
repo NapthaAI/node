@@ -750,7 +750,6 @@ linux_start_servers() {
         exit 1
     fi
 }
-
 darwin_start_servers() {
     # Echo start Node
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
@@ -833,9 +832,6 @@ EOF
             echo "Failed to start Node application $i service on port $server_port." | log_with_service_name "Server" $RED
         fi
 
-        launchctl start com.example.nodeapp_$i
-
-        echo "Node application $i service started successfully on port $server_port." | log_with_service_name "Server" $BLUE
     done
 }
 
