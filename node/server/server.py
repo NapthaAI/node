@@ -4,11 +4,11 @@ import os
 import socket
 from pathlib import Path
 
-from node.config import get_node_config
+from node.config import get_node_config, NODE_ROUTING
 from node.storage.hub.hub import Hub
 from node.server.http_server import HTTPServer
 from node.server.ws_server import WebSocketServer
-from node.utils import get_logger, create_output_dir
+from node.utils import get_logger
 
 
 logger = get_logger(__name__)
@@ -39,8 +39,9 @@ async def run_servers():
 
     if node_config.node_type == "indirect": 
         logger.info("Creating indirect websocket server...")
-        uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config.public_key.split(':')[-1]}"
-        websocket_server = WebSocketServer(uri, 7001, node_type =node_config.node_type)
+        node_id = node_config.public_key.split(':')[-1] 
+        uri = f"{NODE_ROUTING}/ws/{node_id}"
+        websocket_server = WebSocketServer(uri, 7001, node_type =node_config.node_type, node_id=node_id)
         tasks.append(websocket_server.launch_server())
 
     elif node_config.node_type == "direct" and node_config.server_type == "http":

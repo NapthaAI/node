@@ -3,6 +3,7 @@ import json
 import base64
 import asyncio
 import uvicorn
+import websockets
 from datetime import datetime
 import traceback
 from typing import Dict
@@ -35,31 +36,30 @@ CHUNK_SIZE = 256 * 1024
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
+        self.active_connections: Dict[str, Dict[str, WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, client_id: str, task: str):
         await websocket.accept()
-        key = f"{client_id}_{task}"
-        self.active_connections[key] = websocket
-        logger.info(f"WebSocket connection established for {key}")
+        if client_id not in self.active_connections:
+            self.active_connections[client_id] = {}
+        self.active_connections[client_id][task] = websocket
+        logger.info(f"WebSocket connection established for {client_id}_{task}")
 
     def disconnect(self, client_id: str, task: str):
-        key = f"{client_id}_{task}"
-        if key in self.active_connections:
-            del self.active_connections[key]
-            logger.info(f"WebSocket connection closed for {key}")
+        if client_id in self.active_connections and task in self.active_connections[client_id]:
+            del self.active_connections[client_id][task]
+            if not self.active_connections[client_id]:
+                del self.active_connections[client_id]
+            logger.info(f"WebSocket connection closed for {client_id}_{task}")
 
     async def send_message(self, message: str, client_id: str, task: str):
-        key = f"{client_id}_{task}"
-        if key in self.active_connections:
+        if client_id in self.active_connections and task in self.active_connections[client_id]:
             try:
-                logger.info(f"Sending message to {key}: {message}")
-                await self.active_connections[key].send_text(message)
-            except (ConnectionClosedOK, ConnectionClosedError, WebSocketDisconnect) as e:
-                logger.warning(f"Connection closed while sending message to {key}: {str(e)}")
-                self.disconnect(client_id, task)
+                await self.active_connections[client_id][task].send_text(message)
+                logger.info(f"Sent message to {client_id}_{task}")
             except Exception as e:
-                logger.error(f"Error sending message to {key}: {str(e)}")
+                logger.error(f"Error sending message to {client_id}_{task}: {str(e)}")
+                self.disconnect(client_id, task)
 
 
 class TransientDatabaseError(Exception):
@@ -72,10 +72,11 @@ class DateTimeEncoder(json.JSONEncoder):
         return super().default(obj)
 
 class WebSocketServer:
-    def __init__(self, host: str, port: int, node_type: str):
+    def __init__(self, host: str, port: int, node_type: str, node_id: str):
         self.host = host
         self.port = port
         self.node_type = node_type
+        self.node_id = node_id
         self.app = FastAPI()
         self.temp_files = {}
         self.manager = ConnectionManager()
@@ -88,46 +89,15 @@ class WebSocketServer:
             allow_headers=["*"],
         )
 
-        # run_agent
         self.app.add_api_websocket_route("/ws/run_agent/{client_id}", self.run_agent_endpoint)
-        self.app.add_api_websocket_route("/ws/run_agent_indirect/{client_id}", self.run_agent_indirect_endpoint)
-
-        # check_task
         self.app.add_api_websocket_route("/ws/check_agent_run/{client_id}", self.check_agent_run_endpoint)
-        self.app.add_api_websocket_route("/ws/check_agent_run_indirect/{client_id}", self.check_agent_run_indirect_endpoint)
-
-        # check_user
         self.app.add_api_websocket_route("/ws/check_user/{client_id}", self.check_user_endpoint)
-        self.app.add_api_websocket_route("/ws/check_user_indirect/{client_id}", self.check_user_indirect_endpoint)
-
-        # register_user
         self.app.add_api_websocket_route("/ws/register_user/{client_id}", self.register_user_endpoint)
-        self.app.add_api_websocket_route("/ws/register_user_indirect/{client_id}", self.register_user_indirect_endpoint)
-        
-        # write_storage
         self.app.add_api_websocket_route("/ws/write_storage/{client_id}", self.write_storage_endpoint)
-        self.app.add_api_websocket_route("/ws/write_storage_indirect/{client_id}", self.write_storage_indirect_endpoint)
-
-        # write_to_ipfs
         self.app.add_api_websocket_route("/ws/write_ipfs/{client_id}", self.write_ipfs_endpoint)
-        self.app.add_api_websocket_route("/ws/write_ipfs_indirect/{client_id}", self.write_ipfs_indirect_endpoint)
-
-        # read_storage
         self.app.add_api_websocket_route("/ws/read_storage/{client_id}", self.read_storage_endpoint)
-        self.app.add_api_websocket_route("/ws/read_storage_indirect/{client_id}", self.read_storage_indirect_endpoint)
-
-        # read_from_ipfs
         self.app.add_api_websocket_route("/ws/read_ipfs/{client_id}", self.read_ipfs_endpoint)
-        self.app.add_api_websocket_route("/ws/read_ipfs_indirect/{client_id}", self.read_ipfs_indirect_endpoint)
-
-        # register_agent_run
-        # self.app.add_api_websocket_route("/ws/register_agent_run/{client_id}", self.register_agent_run_endpoint)
-        # self.app.add_api_websocket_route("/ws/register_agent_run_indirect/{client_id}", self.register_agent_run_indirect_endpoint)
-
-        # update_agent_run
-        # self.app.add_api_websocket_route("/ws/update_agent_run/{client_id}", self.update_agent_run_endpoint)
-        # self.app.add_api_websocket_route("/ws/update_agent_run_indirect/{client_id}", self.update_agent_run_indirect_endpoint)    
-
+    
     async def run_agent_endpoint(self, websocket: WebSocket, client_id: str):
         await self.manager.connect(websocket, client_id, "run_agent")
         try:
@@ -158,16 +128,76 @@ class WebSocketServer:
         except WebSocketDisconnect:
             logger.warning(f"Client {client_id} disconnected (outer).")
             self.manager.disconnect(client_id, "run_agent")
+    
+    async def establish_connection(self):
+        while True:
+            try:
+                websocket = await websockets.connect(self.host)
+                logger.info(f"Connected to relay server at {self.host}")
+                return websocket
+            except Exception as e:
+                logger.error(f"Failed to connect to relay server: {e}")
+                await asyncio.sleep(5)  # Wait before retrying
 
-    async def run_agent_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "run_agent_indirect")
+    async def handle_indirect_messages(self):
+        while True:
+            try:
+                message = await self.relay_websocket.recv()
+                await self.process_message(message, self.relay_websocket)
+            except websockets.ConnectionClosed:
+                logger.warning("Connection to relay server closed. Reconnecting...")
+                self.relay_websocket = await self.establish_connection()
+            except Exception as e:
+                logger.error(f"Error handling message: {e}")
+                await asyncio.sleep(1)
+
+    async def process_message(self, message, websocket):
         try:
-            while True:
-                message = await websocket.receive_json()
-                result = await self.run_agent_indirect(message, client_id)
-                await self.manager.send_message(result, client_id, "run_agent_indirect")
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "run_agent_indirect")
+            data = json.loads(message)
+            task = data.get('task')
+            params = data.get('params')
+            client_id = data.get('source_node')
+            logger.info(f"Processing message: {task} with params: {params}")
+            if task == 'run_agent':
+                result = await self.run_agent_indirect(data, client_id)
+            elif task == 'check_agent_run':
+                result = await self.check_agent_run_indirect(data, client_id)
+            elif task == 'check_user':
+                result = await self.check_user_indirect(data, client_id)
+            elif task == 'register_user':
+                result = await self.register_user_indirect(data, client_id)
+            elif task == 'write_storage':
+                result = await self.write_storage_indirect(data, client_id)
+            elif task == 'write_ipfs':
+                result = await self.write_ipfs_indirect(data, client_id)
+            elif task == 'read_storage':
+                result = await self.read_storage_indirect(data, client_id)
+            elif task == 'read_ipfs':
+                result = await self.read_ipfs_indirect(data, client_id)
+            else:
+                logger.error(f"Unknown task: {task}")
+                raise ValueError(f"Unknown task: {task}")
+            await self.send_response(result)
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+            await self.send_response({"status": "error", "message": str(e)})
+
+    async def send_response(self, response):
+        try:
+            await self.relay_websocket.send(json.dumps(response, cls=DateTimeEncoder))
+            logger.info(f"Sent response: {response}")
+        except Exception as e:
+            logger.error(f"Error sending response: {str(e)}")
+            # If the connection is closed, try to reconnect
+            if isinstance(e, websockets.exceptions.ConnectionClosed):
+                logger.info("Attempting to reconnect to relay server...")
+                self.relay_websocket = await self.establish_connection()
+                # Try sending the response again after reconnecting
+                try:
+                    await self.relay_websocket.send(json.dumps(response, cls=DateTimeEncoder))
+                    logger.info(f"Sent response after reconnection: {response}")
+                except Exception as e2:
+                    logger.error(f"Failed to send response after reconnection: {str(e2)}")
 
     async def run_agent_direct(self, data: dict, client_id: str) -> str:
         try:
@@ -182,13 +212,14 @@ class WebSocketServer:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    async def run_agent_indirect(self, message: dict, client_id: str) -> str:
+    async def run_agent_indirect(self, message: dict, client_id: str) -> dict:
         target_node_id = message['source_node']
         source_node_id = message['target_node']
         params = message['params']
         response = {
             'target_node': target_node_id,
-            'source_node': source_node_id
+            'source_node': source_node_id,
+            'task': 'run_agent'
         }
         try:
             agent_run_input = AgentRunInput(**params)
@@ -196,7 +227,7 @@ class WebSocketServer:
             response['params'] = result.dict()
         except Exception as e:
             response['params'] = {'error': str(e)}
-        return json.dumps(response)
+        return response
 
     async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
         try:
@@ -258,16 +289,6 @@ class WebSocketServer:
             logger.error(f"Error in WebSocket connection for client {client_id} in check_task: {str(e)}")
             self.manager.disconnect(client_id, "check_agent_run")
 
-    async def check_agent_run_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "check_agent_run_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                result = await self.check_agent_run_indirect(message, client_id)
-                await self.manager.send_message(result, client_id, "check_agent_run_indirect")
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "check_agent_run_indirect")
-
     async def check_agent_run_direct(self, data: str, client_id: str) -> str:
         try:
             agent_run_data = json.loads(data)
@@ -284,7 +305,9 @@ class WebSocketServer:
         params = message['params']
         response = {
             'target_node': target_node_id,
-            'source_node': source_node_id
+            'source_node': source_node_id,
+            'task': 'check_agent_run',
+
         }
         try:
             agent_run = AgentRun(**params)
@@ -334,16 +357,6 @@ class WebSocketServer:
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "check_user")
 
-    async def check_user_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "check_user_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                result = await self.check_user_indirect(message, client_id)
-                await self.manager.send_message(result, client_id, "check_user_indirect")
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "check_user_indirect")
-
     async def check_user_direct(self, data: str) -> str:
         data = json.loads(data)
         response = await check_user(data)
@@ -355,7 +368,8 @@ class WebSocketServer:
         params = message['params']
         response = {
             'target_node': target_node_id,
-            'source_node': source_node_id
+            'source_node': source_node_id,
+            'task': 'check_user'
         }
         try:
             result = await check_user(params)
@@ -374,16 +388,6 @@ class WebSocketServer:
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "register_user")
 
-    async def register_user_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "register_user_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                result = await self.register_user_indirect(message, client_id)
-                await self.manager.send_message(result, client_id, "register_user_indirect")
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "register_user_indirect")
-
     async def register_user_direct(self, data: str) -> str:
         data = json.loads(data)
         response = await register_user(data)
@@ -395,7 +399,8 @@ class WebSocketServer:
         params = message['params']
         response = {
             'target_node': target_node_id,
-            'source_node': source_node_id
+            'source_node': source_node_id,
+            'task': 'register_user'
         }
         try:
             result = await register_user(params)
@@ -414,16 +419,6 @@ class WebSocketServer:
                 await self.manager.send_message(result, client_id, "write_storage")
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "write_storage")
-
-    async def write_storage_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "write_storage_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                result = await self.write_storage_indirect(message, client_id)
-                await self.manager.send_message(result, client_id, "write_storage_indirect")
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "write_storage_indirect")
 
     async def write_storage_direct(self, data: str, client_id: str) -> str:
         params = json.loads(data)
@@ -462,7 +457,8 @@ class WebSocketServer:
         params = message['params']
         response = {
             'target_node': target_node_id,
-            'source_node': source_node_id
+            'source_node': source_node_id,
+            'task': 'write_storage'
         }
         try:
             result = await self.write_storage_direct(json.dumps(params), client_id)
@@ -483,19 +479,6 @@ class WebSocketServer:
         except Exception as e:
             logger.error(f"Error in write_ipfs_endpoint: {str(e)}")
             await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "write_ipfs")
-
-    async def write_ipfs_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "write_ipfs_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                result = await self.write_ipfs_indirect(message, client_id)
-                await self.manager.send_message(json.dumps(result), client_id, "write_ipfs_indirect")
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "write_ipfs_indirect")
-        except Exception as e:
-            logger.error(f"Error in write_ipfs_indirect_endpoint: {str(e)}")
-            await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "write_ipfs_indirect")
 
     async def write_ipfs(self, params: dict, client_id: str) -> dict:
         filename = params['filename']
@@ -548,7 +531,8 @@ class WebSocketServer:
         params = message['params']
         response = {
             'target_node': target_node_id,
-            'source_node': source_node_id
+            'source_node': source_node_id,
+            'task': 'write_ipfs'
         }
         try:
             result = await self.write_ipfs(params, client_id)
@@ -569,18 +553,6 @@ class WebSocketServer:
         except Exception as e:
             logger.error(f"Error in read_storage_endpoint: {str(e)}")
             await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "read_storage")
-
-    async def read_storage_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "read_storage_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                await self.read_storage_indirect(message, client_id, websocket)
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "read_storage_indirect")
-        except Exception as e:
-            logger.error(f"Error in read_storage_indirect_endpoint: {str(e)}")
-            await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "read_storage_indirect")
 
     async def read_storage(self, params: dict, client_id: str, websocket: WebSocket):
         job_id = params['folder_id']
@@ -624,9 +596,10 @@ class WebSocketServer:
             logger.error(f"Error in read_storage: {str(e)}")
             await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "read_storage")
 
-    async def read_storage_indirect(self, message: dict, client_id: str, websocket: WebSocket):
+    async def read_storage_indirect(self, message: dict, client_id: str):
         target_node_id = message['source_node']
         source_node_id = message['target_node']
+        task = message['task']
         params = message['params']
         
         try:
@@ -643,6 +616,7 @@ class WebSocketServer:
                         response = {
                             'target_node': target_node_id,
                             'source_node': source_node_id,
+                            'task': task,  # Include the task in the message
                             'params': {
                                 'status': "success",
                                 'file_data': encoded_chunk,
@@ -651,13 +625,15 @@ class WebSocketServer:
                                 'chunk_total': chunk_total
                             }
                         }
-                        await self.manager.send_message(json.dumps(response), client_id, "read_storage_indirect")
+                        # await websocket.send_text(json.dumps(response))
+                        await self.send_response(json.dumps(response))
                         chunk_index += 1
 
                 # Send EOF
                 response = {
                     'target_node': target_node_id,
                     'source_node': source_node_id,
+                    'task': task,  # Include the task in the message
                     'params': {
                         'status': "success",
                         'file_data': 'EOF',
@@ -666,28 +642,31 @@ class WebSocketServer:
                         'chunk_total': chunk_total
                     }
                 }
-                await self.manager.send_message(json.dumps(response), client_id, "read_storage_indirect")
+                await self.send_response(json.dumps(response))
             else:
                 response = {
                     'target_node': target_node_id,
                     'source_node': source_node_id,
+                    'task': task,
                     'params': {
                         'status': "error",
                         'message': message_dict['message']
                     }
                 }
-                await self.manager.send_message(json.dumps(response), client_id, "read_storage_indirect")
+                await self.send_response(json.dumps(response))
+
         except Exception as e:
             logger.error(f"Error in read_storage_indirect: {str(e)}")
             response = {
                 'target_node': target_node_id,
                 'source_node': source_node_id,
+                'task': task,
                 'params': {
                     'status': "error",
                     'message': str(e)
                 }
             }
-            await self.manager.send_message(json.dumps(response), client_id, "read_storage_indirect")
+            await self.send_response(json.dumps(response))
 
     async def read_ipfs_endpoint(self, websocket: WebSocket, client_id: str):
         await self.manager.connect(websocket, client_id, "read_ipfs")
@@ -700,18 +679,6 @@ class WebSocketServer:
         except Exception as e:
             logger.error(f"Error in read_ipfs_endpoint: {str(e)}")
             await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "read_ipfs")
-
-    async def read_ipfs_indirect_endpoint(self, websocket: WebSocket, client_id: str):
-        await self.manager.connect(websocket, client_id, "read_ipfs_indirect")
-        try:
-            while True:
-                message = await websocket.receive_json()
-                await self.read_ipfs_indirect(message, client_id, websocket)
-        except WebSocketDisconnect:
-            self.manager.disconnect(client_id, "read_ipfs_indirect")
-        except Exception as e:
-            logger.error(f"Error in read_ipfs_indirect_endpoint: {str(e)}")
-            await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "read_ipfs_indirect")
 
     async def read_ipfs(self, params: dict, client_id: str, websocket: WebSocket):
         hash_or_name = params['hash_or_name']
@@ -775,9 +742,10 @@ class WebSocketServer:
             logger.error(f"Error in read_ipfs: {str(e)}")
             await self.manager.send_message(json.dumps({"status": "error", "message": str(e)}), client_id, "read_ipfs")
 
-    async def read_ipfs_indirect(self, message: dict, client_id: str, websocket: WebSocket):
+    async def read_ipfs_indirect(self, message: dict, client_id: str):
         target_node_id = message['source_node']
         source_node_id = message['target_node']
+        task = message['task']
         params = message['params']
         
         try:
@@ -796,6 +764,7 @@ class WebSocketServer:
                         response = {
                             'target_node': target_node_id,
                             'source_node': source_node_id,
+                            'task': task,
                             'params': {
                                 'status': "success",
                                 'file_data': encoded_chunk,
@@ -804,7 +773,7 @@ class WebSocketServer:
                                 'chunk_total': chunk_total
                             }
                         }
-                        await self.manager.send_message(json.dumps(response), client_id, "read_ipfs_indirect")
+                        await self.send_response(json.dumps(response))
                 else:
                     # For single file content
                     temp_filename = message_dict["path"]
@@ -817,6 +786,7 @@ class WebSocketServer:
                             response = {
                                 'target_node': target_node_id,
                                 'source_node': source_node_id,
+                                'task': task,
                                 'params': {
                                     'status': "success",
                                     'file_data': encoded_chunk,
@@ -825,12 +795,13 @@ class WebSocketServer:
                                     'chunk_total': chunk_total
                                 }
                             }
-                            await self.manager.send_message(json.dumps(response), client_id, "read_ipfs_indirect")
+                            await self.send_response(json.dumps(response))
 
                 # Send EOF
                 response = {
                     'target_node': target_node_id,
                     'source_node': source_node_id,
+                    'task': task,
                     'params': {
                         'status': "success",
                         'file_data': 'EOF',
@@ -839,40 +810,65 @@ class WebSocketServer:
                         'chunk_total': chunk_total
                     }
                 }
-                await self.manager.send_message(json.dumps(response), client_id, "read_ipfs_indirect")
+                await self.send_response(json.dumps(response))
             else:
                 response = {
                     'target_node': target_node_id,
                     'source_node': source_node_id,
+                    'task': task,
                     'params': {
                         'status': "error",
                         'message': message_dict['message']
                     }
                 }
-                await self.manager.send_message(json.dumps(response), client_id, "read_ipfs_indirect")
+                await self.send_response(json.dumps(response))
+
         except Exception as e:
             logger.error(f"Error in read_ipfs_indirect: {str(e)}")
             response = {
                 'target_node': target_node_id,
                 'source_node': source_node_id,
+                'task': task,
                 'params': {
                     'status': "error",
                     'message': str(e)
                 }
             }
-            await self.manager.send_message(json.dumps(response), client_id, "read_ipfs_indirect")
+            await self.send_response(json.dumps(response))
 
     async def launch_server(self):
-        logger.info(f"Launching HTTP server...")
-        config = uvicorn.Config(
-            self.app,
+        node_id_app = FastAPI()
+
+        @node_id_app.get("/node_id")
+        async def get_node_id():
+            return {"node_id": self.node_id}
+
+        # Configure the node_id server
+        node_id_config = uvicorn.Config(
+            node_id_app,
             host="0.0.0.0",
             port=self.port,
-            log_level="debug",
-            timeout_keep_alive=300,
-            limit_concurrency=200,
-            backlog=4096,
-            reload=True
+            log_level="info"
         )
-        server = uvicorn.Server(config)
-        await server.serve()
+        node_id_server = uvicorn.Server(node_id_config)
+
+        # Start the node_id server in a separate task
+        import asyncio
+        node_id_task = asyncio.create_task(node_id_server.serve())
+
+        if self.node_type == "indirect":
+            self.relay_websocket = await self.establish_connection()
+            await self.handle_indirect_messages()
+        else:
+            config = uvicorn.Config(
+                self.app,
+                host="0.0.0.0",
+                port=self.port,
+                log_level="debug",
+                timeout_keep_alive=300,
+                limit_concurrency=200,
+                backlog=4096,
+                reload=True
+            )
+            server = uvicorn.Server(config)
+            await server.serve()

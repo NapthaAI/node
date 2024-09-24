@@ -29,6 +29,7 @@ from node.worker.utils import (
 )
 from node.worker.main import app
 from node.engine.ws.node import Node as WsNode
+from node.engine.ws.node import NodeIndirect as WsNodeIndirect
 from naptha_sdk.client.node import Node
 from node.schemas import AgentRun
 from node.utils import get_logger
@@ -288,6 +289,8 @@ class FlowEngine:
             for worker_node in flow_run.worker_nodes:
                 if 'ws' in worker_node:
                     self.worker_nodes.append(WsNode(worker_node))
+                elif ":" not in worker_node:
+                    self.worker_nodes.append(WsNodeIndirect(worker_node, routing_url=NODE_ROUTING))
                 else:
                     self.worker_nodes.append(Node(worker_node))
         else:
