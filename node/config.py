@@ -19,11 +19,11 @@ DEV_MODE=True
 
 # Servers
 NODE_TYPE="direct"
-SERVER_TYPE="http"
+SERVER_TYPE="ws" # http or ws
 NODE_IP="http://localhost"
 NODE_PORT=7001
 NODE_ROUTING="ws://node.naptha.ai:8765"
-NUM_SERVERS=1
+NUM_SERVERS=3
 
 # MQ
 CELERY_BROKER_URL="amqp://localhost:5672/"
@@ -40,9 +40,13 @@ DB_DB="naptha"
 DB_URL="ws://localhost:3002/rpc"
 
 # Storage
-BASE_OUTPUT_DIR="./storage/fs"
-AGENTS_SOURCE_DIR="./node/storage/hub/agents"
+file_path = Path(__file__).resolve()
+repo_dir = file_path.parent.parent
+BASE_OUTPUT_DIR=f"{repo_dir}/node/storage/fs"
+AGENTS_SOURCE_DIR=f"{repo_dir}/node/storage/hub/agents"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
+
+
 
 # Hub
 LOCAL_HUB=True
