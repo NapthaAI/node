@@ -7,7 +7,7 @@ from pathlib import Path
 from node.config import get_node_config
 from node.storage.hub.hub import Hub
 from node.server.http_server import HTTPServer
-from node.server.ws import WebSocketServer
+from node.server.ws_server import WebSocketServer
 from node.utils import get_logger, create_output_dir
 
 
