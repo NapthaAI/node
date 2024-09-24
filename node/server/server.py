@@ -41,44 +41,42 @@ async def run_servers():
     if node_config.node_type == "indirect": 
         logger.info("Creating indirect websocket server...")
         uri = f"{NODE_ROUTING}/ws/{node_id}"
-        websocket_server = WebSocketServer(uri, 7001, node_type =node_config.node_type, node_id=node_id)
+        websocket_server = WebSocketServer(uri, 7001, node_type=node_config.node_type, node_id=node_id)
         tasks.append(websocket_server.launch_server())
 
-    elif node_config.node_type == "direct" and node_config.server_type == "http":
-        logger.info("Creating direct http server...")
-        start_port = node_config.ports[0] if node_config.ports else 7001
+    elif node_config.node_type == "direct":
+        ports = node_config.ports if node_config.ports else [7001]
         actual_ports = []
 
         for i in range(node_config.num_servers):
-            port = find_available_port(start_port)
-            http_server = None
-            while not http_server:
+            if i < len(ports):
+                port = ports[i]
+            else:
+                port = ports[-1] + 1 if ports else 7001 + i
+
+            if node_config.server_type == "http":
+                logger.info(f"Creating direct HTTP server {i+1} on port {port}...")
                 try:
                     http_server = HTTPServer(node_config.ip, port)
                     http_servers.append(http_server)
                     actual_ports.append(port)
                     tasks.append(http_server.launch_server())
-                    logger.info(f"Launching HTTP server {i+1} on port {port}")
                 except Exception as e:
-                    logger.warning(f"Failed to launch server on port {port}: {e}")
-                    port = find_available_port(port + 1)
+                    logger.warning(f"Failed to launch HTTP server on port {port}: {e}")
+                    continue
 
-            start_port = port + 1  # Set the next start port
-
-        node_config.ports = actual_ports
-
-    elif node_config.node_type == "direct" and node_config.server_type == "ws":
-        logger.info("Creating direct websocket server...")
-        start_port = node_config.ports[0] if node_config.ports else 7001
-        actual_ports = []
-        for i in range(node_config.num_servers):
-            port = find_available_port(start_port)
-            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
-            tasks.append(websocket_server.launch_server())
-            actual_ports.append(port)
-            start_port = port + 1  # Set the next start port
+            elif node_config.server_type == "ws":
+                logger.info(f"Creating direct WebSocket server {i+1} on port {port}...")
+                try:
+                    websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
+                    tasks.append(websocket_server.launch_server())
+                    actual_ports.append(port)
+                except Exception as e:
+                    logger.warning(f"Failed to launch WebSocket server on port {port}: {e}")
+                    continue
 
         node_config.ports = actual_ports
+
     else:
         raise Exception(f"Invalid node type: {node_config.node_type}")
 
