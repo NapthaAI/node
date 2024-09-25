@@ -207,7 +207,9 @@ def verify_agent_installation(agent_name: str) -> bool:
     try:
         importlib.import_module(f"{agent_name}.run")
         return True
-    except ImportError:
+    except ImportError as e:
+        logger.error(f"Error importing agent {agent_name}: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return False
     
 def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
@@ -243,6 +245,7 @@ def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_ur
     except Exception as e:
         error_msg = f"Error installing {agent_name}: {str(e)}"
         logger.error(error_msg)
+        logger.info(f"Traceback: {traceback.format_exc()}")
         if "Dependency conflict detected" in str(e):
             error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
         raise RuntimeError(error_msg) from e
