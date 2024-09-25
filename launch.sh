@@ -967,6 +967,7 @@ print_logo(){
     echo -e "\n"
 }
 
+main() {
 os="$(uname)"
 # Main execution flow
 if [ "$os" = "Darwin" ]; then
@@ -1013,3 +1014,8 @@ echo "Setup complete. Applications are running." | log_with_service_name "System
 
 # Keep the script running to maintain background processes
 wait
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main
+fi
