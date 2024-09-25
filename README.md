@@ -9,7 +9,7 @@
       █  █   ▀█▀  █▀▀  ▄█  █  █      ██║╚██╗██║██╔══██║██╔═══╝    ██║   ██╔══██║██╔══██║
       █  ▀█▄  ▀█▄ █ ▄█▀▀ ▄█▀  █      ██║ ╚████║██║  ██║██║        ██║   ██║  ██║██║  ██║
        ▀█▄ ▀▀█  █ █ █ ▄██▀ ▄█▀       ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝
-         ▀█▄ █  █ █ █ █  ▄█▀                         Decentralized Multi-Agent Workflows
+         ▀█▄ █  █ █ █ █  ▄█▀               Orchestrating the Decentralized Web of Agents
             ▀█  █ █ █ █ ▌▀                                                 www.naptha.ai
               ▀▀█ █ ██▀▀                                                    
  
@@ -17,6 +17,10 @@
 # NapthaAI Node  
 
 Naptha helps users to solve real-world problems using AI workflows and agents.
+
+# Prerequisites
+
+If using MacOS, you will need to install brew first.
 
 # Install and run
 
