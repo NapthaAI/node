@@ -45,37 +45,30 @@ async def run_servers():
         tasks.append(websocket_server.launch_server())
 
     elif node_config.node_type == "direct":
-        ports = node_config.ports if node_config.ports else [7001]
+        base_port = node_config.ports[0]
+        port = base_port
+        successful_servers = 0
         actual_ports = []
-
         for i in range(node_config.num_servers):
-            if i < len(ports):
-                port = ports[i]
-            else:
-                port = ports[-1] + 1 if ports else 7001 + i
-
+            logger.info(f"Creating direct server {i+1} on port {port}...")
             if node_config.server_type == "http":
                 logger.info(f"Creating direct HTTP server {i+1} on port {port}...")
-                try:
-                    http_server = HTTPServer(node_config.ip, port)
-                    http_servers.append(http_server)
-                    actual_ports.append(port)
-                    tasks.append(http_server.launch_server())
-                except Exception as e:
-                    logger.warning(f"Failed to launch HTTP server on port {port}: {e}")
-                    continue
-
+                http_server = HTTPServer(node_config.ip, port)
+                http_servers.append(http_server)
+                tasks.append(http_server.launch_server())
             elif node_config.server_type == "ws":
                 logger.info(f"Creating direct WebSocket server {i+1} on port {port}...")
-                try:
-                    websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
-                    tasks.append(websocket_server.launch_server())
-                    actual_ports.append(port)
-                except Exception as e:
-                    logger.warning(f"Failed to launch WebSocket server on port {port}: {e}")
-                    continue
+                websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
+                tasks.append(websocket_server.launch_server())
+            
+            actual_ports.append(port)
+            successful_servers += 1
+
+            port += 1
+            logger.info(f"Created direct server {i+1} on port {port}")
 
         node_config.ports = actual_ports
+        node_config.num_servers = successful_servers
 
     else:
         raise Exception(f"Invalid node type: {node_config.node_type}")
@@ -92,7 +85,7 @@ async def run_servers():
     
     try:
         await asyncio.gather(*tasks)
-        logger.info("Servers launched successfully")
+        logger.info(f"Successfully launched {successful_servers} servers")
     except Exception as e:
         logger.error(f"Error during server execution: {e}")
     finally:
