@@ -19,11 +19,11 @@ DEV_MODE=True
 
 # Servers
 NODE_TYPE="direct"
-SERVER_TYPE="ws" # http or ws
+SERVER_TYPE="http" # http or ws
 NODE_IP="http://localhost"
 NODE_PORT=7001
 NODE_ROUTING="ws://node.naptha.ai:8765"
-NUM_SERVERS=3
+NUM_SERVERS=1
 
 # MQ
 CELERY_BROKER_URL="amqp://localhost:5672/"
@@ -62,7 +62,7 @@ def get_node_config():
     return NodeConfig(
         public_key=get_public_key(os.getenv("PRIVATE_KEY")),
         ip=NODE_IP,
-        ports=[NODE_PORT],
+        ports=[NODE_PORT+i for i in range(NUM_SERVERS)],
         routing=NODE_ROUTING,
         ollama_models=[OLLAMA_MODELS],
         num_gpus=NUM_GPUS,

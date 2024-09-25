@@ -277,10 +277,10 @@ class HTTPServer:
             raise HTTPException(status_code=500, detail=f"Internal server error occurred while updating agent run")
 
     async def launch_server(self):
-        logger.info(f"Launching HTTP server...")
+        logger.info(f"Launching HTTP server on 0.0.0.0:{self.port}...")
         config = uvicorn.Config(
             self.app,
-            host=self.host,
+            host="0.0.0.0",
             port=self.port,
             log_level="debug",
             timeout_keep_alive=300,

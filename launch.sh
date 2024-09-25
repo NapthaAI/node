@@ -789,6 +789,8 @@ darwin_start_servers() {
         <string>run</string>
         <string>python</string>
         <string>server/server.py</string>
+        <string>--port</string>
+        <string>$server_port</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$WORKING_DIR</string>
@@ -798,8 +800,6 @@ darwin_start_servers() {
         <string>$ENVIRONMENT_FILE_PATH</string>
         <key>PATH</key>
         <string>$SURRREALDB_PATH:/usr/bin:/bin:/usr/sbin:/sbin</string>
-        <key>NODE_PORT</key>
-        <string>$server_port</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
@@ -968,52 +968,52 @@ print_logo(){
 }
 
 main() {
-os="$(uname)"
-# Main execution flow
-if [ "$os" = "Darwin" ]; then
-    print_logo
-    install_python312
-    install_surrealdb
-    load_env_file
-    load_config_constants
-    darwin_install_ollama
-    darwin_install_miniforge
-    darwin_install_docker
-    darwin_clean_node
-    darwin_start_rabbitmq
-    setup_poetry
-    check_and_copy_env
-    check_and_set_private_key
-    check_and_set_stability_key
-    start_hub_surrealdb
-    start_local_surrealdb
-    darwin_start_servers
-    darwin_start_celery_worker
-else
-    print_logo
-    install_python312
-    install_surrealdb
-    load_env_file
-    load_config_constants
-    linux_install_ollama
-    linux_install_miniforge
-    linux_install_docker
-    linux_clean_node
-    linux_start_rabbitmq
-    setup_poetry
-    check_and_copy_env
-    check_and_set_private_key
-    check_and_set_stability_key
-    start_hub_surrealdb
-    start_local_surrealdb
-    linux_start_servers
-    linux_start_celery_worker
-fi
+    os="$(uname)"
+    # Main execution flow
+    if [ "$os" = "Darwin" ]; then
+        print_logo
+        install_python312
+        install_surrealdb
+        load_env_file
+        load_config_constants
+        darwin_install_ollama
+        darwin_install_miniforge
+        darwin_install_docker
+        darwin_clean_node
+        darwin_start_rabbitmq
+        setup_poetry
+        check_and_copy_env
+        check_and_set_private_key
+        check_and_set_stability_key
+        start_hub_surrealdb
+        start_local_surrealdb
+        darwin_start_servers
+        darwin_start_celery_worker
+    else
+        print_logo
+        install_python312
+        install_surrealdb
+        load_env_file
+        load_config_constants
+        linux_install_ollama
+        linux_install_miniforge
+        linux_install_docker
+        linux_clean_node
+        linux_start_rabbitmq
+        setup_poetry
+        check_and_copy_env
+        check_and_set_private_key
+        check_and_set_stability_key
+        start_hub_surrealdb
+        start_local_surrealdb
+        linux_start_servers
+        linux_start_celery_worker
+    fi
 
-echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN
+    echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN
 
-# Keep the script running to maintain background processes
-wait
+    # Keep the script running to maintain background processes
+    wait
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

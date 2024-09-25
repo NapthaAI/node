@@ -30,47 +30,32 @@ def find_available_port(start_port: int = 7001) -> int:
                 return port
             port += 1
 
-async def run_servers():
+async def run_server(port: int):
     global http_servers, websocket_server, hub
     
     node_config = get_node_config()
     node_id = node_config.public_key.split(':')[-1]
 
-    tasks = []
-
     if node_config.node_type == "indirect": 
         logger.info("Creating indirect websocket server...")
         uri = f"{NODE_ROUTING}/ws/{node_id}"
-        websocket_server = WebSocketServer(uri, 7001, node_type=node_config.node_type, node_id=node_id)
-        tasks.append(websocket_server.launch_server())
+        websocket_server = WebSocketServer(uri, port, node_type=node_config.node_type, node_id=node_id)
+        await websocket_server.launch_server()
 
     elif node_config.node_type == "direct":
-        base_port = node_config.ports[0]
-        port = base_port
-        successful_servers = 0
-        actual_ports = []
-        for i in range(node_config.num_servers):
-            if node_config.server_type == "http":
-                logger.info(f"Creating direct HTTP server {i+1} on port {port}...")
-                if 'http://' in node_config.ip:
-                    ip = node_config.ip.split('//')[1]
-                else:
-                    ip = node_config.ip
-                http_server = HTTPServer(ip, port)
-                http_servers.append(http_server)
-                tasks.append(http_server.launch_server())
-            elif node_config.server_type == "ws":
-                logger.info(f"Creating direct WebSocket server {i+1} on port {port}...")
-                websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
-                tasks.append(websocket_server.launch_server())
-            
-            actual_ports.append(port)
-            successful_servers += 1
-
-            port += 1
-
-        node_config.ports = actual_ports
-        node_config.num_servers = successful_servers
+        if node_config.server_type == "http":
+            logger.info(f"Creating direct HTTP server on port {port}...")
+            if 'http://' in node_config.ip:
+                ip = node_config.ip.split('//')[1]
+            else:
+                ip = node_config.ip
+            http_server = HTTPServer(ip, port)
+            http_servers.append(http_server)
+            await http_server.launch_server()
+        elif node_config.server_type == "ws":
+            logger.info(f"Creating direct WebSocket server on port {port}...")
+            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
+            await websocket_server.launch_server()
 
     else:
         raise Exception(f"Invalid node type: {node_config.node_type}")
@@ -86,8 +71,9 @@ async def run_servers():
         return
     
     try:
-        await asyncio.gather(*tasks)
-        logger.info(f"Successfully launched {successful_servers} servers")
+        # Keep the script running
+        while True:
+            await asyncio.sleep(3600)  # Sleep for an hour
     except Exception as e:
         logger.error(f"Error during server execution: {e}")
     finally:
@@ -116,4 +102,10 @@ async def on_shutdown():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_servers())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run server with specified port")
+    parser.add_argument("--port", type=int, default=7001, help="Port number to run the server on")
+    args = parser.parse_args()
+
+    asyncio.run(run_server(port=args.port))
