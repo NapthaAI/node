@@ -5,9 +5,10 @@ from pathlib import Path
 import subprocess
 import time
 
+from node.config import get_node_config, HUB_DB_PORT, HUB_NS, HUB_DB
 from node.storage.hub.hub import Hub
 from node.user import get_public_key
-from node.utils import add_credentials_to_env, get_config, get_logger, get_node_config
+from node.utils import add_credentials_to_env, get_logger
 
 
 load_dotenv()
@@ -22,7 +23,7 @@ def import_surql():
     logger.info("Importing SURQL files")
     import_files = [
         f"{surql_path}/user.surql",
-        f"{surql_path}/module.surql",
+        f"{surql_path}/agent.surql",
         f"{surql_path}/auth.surql",
         f"{surql_path}/node.surql",
         f"{surql_path}/auction.surql",
@@ -31,11 +32,11 @@ def import_surql():
 
     for file in import_files:
         command = f"""surreal import \
-                      --conn http://localhost:{os.getenv('HUB_DB_PORT')} \
+                      --conn http://localhost:{HUB_DB_PORT} \
                       --user {os.getenv('HUB_ROOT_USER')} \
                       --pass {os.getenv('HUB_ROOT_PASS')} \
-                      --ns {os.getenv('HUB_NS')} \
-                      --db {os.getenv('HUB_DB')} \
+                      --ns {HUB_NS} \
+                      --db {HUB_DB} \
                     {file}"""
 
         try:
@@ -60,16 +61,10 @@ async def init_hub():
     """Initialize the database"""
     logger.info("Initializing database")
 
-    # use memory storage
-    # command = f"""surreal start memory -A --auth \
-    #               --user {os.getenv('HUB_ROOT_USER')} \
-    #               --bind 0.0.0.0:{os.getenv('HUB_DB_PORT')} \
-    #               --pass {os.getenv('HUB_ROOT_PASS')}"""
-
     # use file storage
     command = f"""surreal start -A --auth \
                   --user {os.getenv('HUB_ROOT_USER')} \
-                  --bind 0.0.0.0:{os.getenv('HUB_DB_PORT')} \
+                  --bind 0.0.0.0:{HUB_DB_PORT} \
                   --pass {os.getenv('HUB_ROOT_PASS')} \
                   file:./node/storage/hub/hub.db"""
 
@@ -95,8 +90,7 @@ async def init_hub():
 
 
 async def register_node():
-    config = get_config()
-    node_config = get_node_config(config)
+    node_config = get_node_config()
     async with Hub() as hub:
         success, user, user_id = await hub.signin(os.getenv('HUB_USERNAME'), os.getenv('HUB_PASSWORD'))
         node_config = await hub.create_node(node_config)

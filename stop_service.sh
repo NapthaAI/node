@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Source the launch.sh script to import functions
+source ./launch.sh
+
 # Function to stop SurrealDB
 stop_surrealdb() {
     # Find and kill the SurrealDB process running on port 3001
@@ -30,9 +33,12 @@ if [ "$os" = "Darwin" ]; then
         NUM_SERVERS=1
     fi
 
+    load_config_constants
+
     # Stop the services
     launchctl unload ~/Library/LaunchAgents/com.example.celeryworker.plist
     for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+        echo "Unloading nodeapp_$i.plist"
         launchctl unload ~/Library/LaunchAgents/com.example.nodeapp_$i.plist
     done
     launchctl unload ~/Library/LaunchAgents/com.example.ollama.plist

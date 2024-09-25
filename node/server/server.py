@@ -3,12 +3,12 @@ from dotenv import load_dotenv
 import os
 import socket
 from pathlib import Path
-from typing import Optional
+
+from node.config import get_node_config, NODE_ROUTING
 from node.storage.hub.hub import Hub
-from node.module_manager import setup_modules_from_config
-from node.server.http.server import HTTPServer
-from node.server.ws.server import WebSocketServer
-from node.utils import get_logger, get_config, get_node_config, create_output_dir
+from node.server.http_server import HTTPServer
+from node.server.ws_server import WebSocketServer
+from node.utils import get_logger
 
 
 logger = get_logger(__name__)
@@ -30,42 +30,35 @@ def find_available_port(start_port: int = 7001) -> int:
                 return port
             port += 1
 
-async def run_servers():
+async def run_server(port: int):
     global http_servers, websocket_server, hub
     
-    config = get_config()
-    node_config = get_node_config(config)
-    create_output_dir(config["BASE_OUTPUT_DIR"])
+    node_config = get_node_config()
+    node_id = node_config.public_key.split(':')[-1]
 
-    tasks = []
+    if node_config.node_type == "indirect": 
+        logger.info("Creating indirect websocket server...")
+        uri = f"{NODE_ROUTING}/ws/{node_id}"
+        websocket_server = WebSocketServer(uri, port, node_type=node_config.node_type, node_id=node_id)
+        await websocket_server.launch_server()
 
-    if node_config.routing:  # This means it's an indirect node
-        logger.info("Node is indirect")
-        uri = f"{os.getenv('PUBLIC_HUB_URL')}/ws/{node_config.public_key.split(':')[-1]}"
-        websocket_server = WebSocketServer(uri)
-        tasks.append(websocket_server.launch_server())
-    else:  # Direct node
-        start_port = node_config.ports[0] if node_config.ports else 7001
-        actual_ports = []
+    elif node_config.node_type == "direct":
+        if node_config.server_type == "http":
+            logger.info(f"Creating direct HTTP server on port {port}...")
+            if 'http://' in node_config.ip:
+                ip = node_config.ip.split('//')[1]
+            else:
+                ip = node_config.ip
+            http_server = HTTPServer(ip, port)
+            http_servers.append(http_server)
+            await http_server.launch_server()
+        elif node_config.server_type == "ws":
+            logger.info(f"Creating direct WebSocket server on port {port}...")
+            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
+            await websocket_server.launch_server()
 
-        for i in range(node_config.num_servers):
-            port = find_available_port(start_port)
-            http_server = None
-            while not http_server:
-                try:
-                    http_server = HTTPServer(node_config.ip, port)
-                    http_servers.append(http_server)
-                    actual_ports.append(port)
-                    tasks.append(http_server.launch_server())
-                    logger.info(f"Launching HTTP server {i+1} on port {port}")
-                except Exception as e:
-                    logger.warning(f"Failed to launch server on port {port}: {e}")
-                    port = find_available_port(port + 1)
-
-            start_port = port + 1  # Set the next start port
-
-        # Update node_config with actual ports
-        node_config.ports = actual_ports
+    else:
+        raise Exception(f"Invalid node type: {node_config.node_type}")
 
     # Create and sign in to the hub
     async with Hub() as hub:
@@ -78,8 +71,9 @@ async def run_servers():
         return
     
     try:
-        await asyncio.gather(*tasks)
-        logger.info("Servers launched successfully")
+        # Keep the script running
+        while True:
+            await asyncio.sleep(3600)  # Sleep for an hour
     except Exception as e:
         logger.error(f"Error during server execution: {e}")
     finally:
@@ -108,4 +102,10 @@ async def on_shutdown():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_servers())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run server with specified port")
+    parser.add_argument("--port", type=int, default=7001, help="Port number to run the server on")
+    args = parser.parse_args()
+
+    asyncio.run(run_server(port=args.port))

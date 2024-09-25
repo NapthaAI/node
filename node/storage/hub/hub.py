@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import jwt
 import os
 from naptha_sdk.utils import AsyncMixin
+from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL
 from node.schemas import NodeConfig
 from node.utils import get_logger
 from surrealdb import Surreal
@@ -14,10 +15,9 @@ logger = get_logger(__name__)
 
 class Hub(AsyncMixin):
     def __init__(self, *args, **kwargs):
-        local_hub = os.getenv("LOCAL_HUB")
-        self.hub_url = os.getenv("LOCAL_HUB_URL") if local_hub == 'true' else os.getenv("PUBLIC_HUB_URL")
-        self.ns = os.getenv("HUB_NS")
-        self.db = os.getenv("HUB_DB")
+        self.hub_url = LOCAL_HUB_URL 
+        self.ns = HUB_NS
+        self.db = HUB_DB
 
         self.surrealdb = Surreal(self.hub_url)
         self.is_authenticated = False
@@ -128,16 +128,16 @@ class Hub(AsyncMixin):
             "SELECT * FROM wins WHERE in=$user;", {"user": purchases["me"]}
         )
 
-    async def list_modules(self, module_name=None) -> List:
-        if not module_name:
-            modules = await self.surrealdb.query("SELECT * FROM module;")
-            return modules[0]["result"]
+    async def list_agents(self, agent_name=None) -> List:
+        if not agent_name:
+            agents = await self.surrealdb.query("SELECT * FROM agent;")
+            return agents[0]["result"]
         else:
-            module = await self.surrealdb.query(
-                "SELECT * FROM module WHERE id=$module_name;", {"module_name": module_name}
+            agent = await self.surrealdb.query(
+                "SELECT * FROM agent WHERE id=$agent_name;", {"agent_name": agent_name}
             )
             try:
-                return module[0]["result"][0]
+                return agent[0]["result"][0]
             except:
                 return None
 
@@ -153,8 +153,8 @@ class Hub(AsyncMixin):
     async def list_services(self) -> List:
         return await self.surrealdb.query("SELECT * FROM lot;")
 
-    async def create_module(self, module_config: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.create("module", module_config)
+    async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
+        return await self.surrealdb.create("agent", agent_config)
 
     async def purchase(self, purchase: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.query(

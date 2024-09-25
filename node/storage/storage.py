@@ -1,6 +1,7 @@
 import os
 import io
-from node.utils import get_logger, get_config
+from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
+from node.utils import get_logger
 from uuid import uuid4
 from pathlib import Path
 import ipfshttpclient
@@ -10,9 +11,6 @@ import requests
 import tempfile
 
 logger = get_logger(__name__)
-
-
-BASE_OUTPUT_DIR = get_config()["BASE_OUTPUT_DIR"]
 
 
 def zip_dir(directory_path: str) -> io.BytesIO:
@@ -95,9 +93,8 @@ async def read_storage(job_id: str):
 
 
 def get_api_url():
-    ipfs_gateway_url = os.getenv('IPFS_GATEWAY_URL')
-    domain = ipfs_gateway_url.split('/')[2]
-    port = ipfs_gateway_url.split('/')[4]
+    domain = IPFS_GATEWAY_URL.split('/')[2]
+    port = IPFS_GATEWAY_URL.split('/')[4]
     return f'http://{domain}:{port}/api/v0'
 
 
@@ -105,7 +102,6 @@ async def write_to_ipfs(file, publish_to_ipns=False, update_ipns_name=None):
     """Write a file to IPFS, optionally publish to IPNS or update an existing IPNS record."""
     try:
         logger.info(f"Writing file to IPFS: {file.filename}")
-        IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
         if not IPFS_GATEWAY_URL:
             return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
         
@@ -145,7 +141,6 @@ async def read_from_ipfs_or_ipns(hash_or_name: str):
     """Read a file from IPFS or IPNS."""
     try:
         logger.info(f"Reading from IPFS/IPNS: {hash_or_name}")
-        IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
         if not IPFS_GATEWAY_URL:
             return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
 

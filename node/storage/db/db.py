@@ -4,7 +4,8 @@ import jwt
 import json
 import websockets
 from datetime import datetime
-from naptha_sdk.schemas import ModuleRun, ModuleRunInput
+from node.schemas import AgentRun, AgentRunInput
+from node.config import DB_URL, DB_NS, DB_DB
 from node.utils import get_logger
 import os
 from surrealdb import Surreal
@@ -20,9 +21,9 @@ class DB():
     """Database class to handle all database operations"""
 
     def __init__(self):
-        self.db_url = os.getenv("DB_URL")
-        self.ns = os.getenv("DB_NS")
-        self.db = os.getenv("DB_DB")
+        self.db_url = DB_URL
+        self.ns = DB_NS
+        self.db = DB_DB
         self.username = os.getenv("DB_ROOT_USER")
         self.password = os.getenv("DB_ROOT_PASS")
 
@@ -78,8 +79,8 @@ class DB():
         logger.info(f"Getting user: {user_id}")
         return await self.surrealdb.select(user_id)
 
-    async def _ws_create_module_run(self, module_run_input: ModuleRunInput) -> ModuleRun:
-        logger.info(f"Creating module run using websocket")
+    async def _ws_create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
+        logger.info(f"Creating agent run using websocket")
         try:
             async with websockets.connect(self.db_url, max_size=MAX_WS_PAYLOAD) as websocket:
                 # signin
@@ -97,27 +98,27 @@ class DB():
                 }))
                 response = await websocket.recv()
                 # create
-                module_params = module_run_input.model_dict()
-                if 'id' in module_params:
-                    id_ = module_params.pop('id')
+                agent_run_params = agent_run_input.model_dict()
+                if 'id' in agent_run_params:
+                    id_ = agent_run_params.pop('id')
                     if id_ is None:
-                        id_ = 'module_run'
+                        id_ = 'agent_run'
                 else:
-                    id_ = 'module_run'
-                logger.info(f"Creating module run with ID: {id_}")
+                    id_ = 'agent_run'
+                logger.info(f"Creating agent run with ID: {id_}")
                 await websocket.send(json.dumps({
                     "id": 3,
                     "method": "create",
-                    "params": [id_, module_params]
+                    "params": [id_, agent_run_params]
                 }))
                 response = await websocket.recv()
-                return ModuleRun(**json.loads(response)['result'][0])
+                return AgentRun(**json.loads(response)['result'][0])
         except Exception as e:
-            logger.error(f"Failed to create module run: {e}")
+            logger.error(f"Failed to create agent run: {e}")
             raise
 
-    async def _get_module_run(self, module_run_id: str) -> ModuleRun:
-        logger.info(f"Getting module run using websocket: {module_run_id}")
+    async def _get_agent_run(self, agent_run_id: str) -> AgentRun:
+        logger.info(f"Getting agent run using websocket: {agent_run_id}")
         try:
             async with websockets.connect(self.db_url, max_size=MAX_WS_PAYLOAD) as websocket:
                 # signin
@@ -138,17 +139,17 @@ class DB():
                 await websocket.send(json.dumps({
                     "id": 3,
                     "method": "select",
-                    "params": [module_run_id]
+                    "params": [agent_run_id]
                 }))
                 response = await websocket.recv()
                 response = json.loads(response)
-                return ModuleRun(**response['result'])
+                return AgentRun(**response['result'])
         except Exception as e:
-            logger.error(f"Failed to get module run: {e}")
+            logger.error(f"Failed to get agent run: {e}")
             raise
 
-    async def _ws_update_module_run(self, module_run_id: str, module_run: ModuleRun) -> ModuleRun:
-        logger.info(f"Updating module run using websocket: {module_run_id}")
+    async def _ws_update_agent_run(self, agent_run_id: str, agent_run: AgentRun) -> AgentRun:
+        logger.info(f"Updating agent run using websocket: {agent_run_id}")
         try:
             async with websockets.connect(self.db_url, max_size=MAX_WS_PAYLOAD) as websocket:
                 # signin
@@ -171,12 +172,12 @@ class DB():
                 await websocket.send(json.dumps({
                     "id": 3,
                     "method": "update",
-                    "params": [module_run_id, module_run.model_dict()]
+                    "params": [agent_run_id, agent_run.model_dict()]
                 }))
                 response = await websocket.recv()
-                return ModuleRun(**json.loads(response)['result'])
+                return AgentRun(**json.loads(response)['result'])
         except Exception as e:
-            logger.error(f"Failed to update module run: {e}")
+            logger.error(f"Failed to update agent run: {e}")
             raise
 
     async def get_user_by_public_key(self, public_key: str) -> Optional[Dict]:
@@ -188,72 +189,72 @@ class DB():
             return result[0]["result"][0]
         return None
 
-    async def create_module_run(self, module_run_input: ModuleRunInput) -> ModuleRun:
-        logger.info(f"Creating module run")
+    async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
+        logger.info(f"Creating agent run")
 
-        input_dict = module_run_input.model_dict()
+        input_dict = agent_run_input.model_dict()
         input_dict = {k: v for k, v in input_dict.items() if v is not None}
         input_dict = self._convert_datetimes(input_dict)
         input_json = json.dumps(input_dict)
         
         if len(input_json) > WS_PAYLOAD_THRESHOLD:
-            logger.info(f"Creating module run using websocket")
-            return await self._ws_create_module_run(module_run_input)
+            logger.info(f"Creating agent run using websocket")
+            return await self._ws_create_agent_run(agent_run_input)
         else:
-            logger.info(f"Creating module run using SurrealDB")
+            logger.info(f"Creating agent run using SurrealDB")
             try:
-                module_run = await self.surrealdb.create("module_run", input_dict)
-                logger.info(f"Created module run")
-                module_run = module_run[0]
-                return ModuleRun(**module_run)
+                agent_run = await self.surrealdb.create("agent_run", input_dict)
+                logger.info(f"Created agent run")
+                agent_run = agent_run[0]
+                return AgentRun(**agent_run)
             except Exception as e:
-                logger.error(f"Failed to create module run: {e}")
+                logger.error(f"Failed to create agent run: {e}")
                 raise 
 
-    async def update_module_run(self, module_run_id: str, module_run: ModuleRun) -> bool:
-        logger.info(f"Updating module run: {module_run_id}")
+    async def update_agent_run(self, agent_run_id: str, agent_run: AgentRun) -> bool:
+        logger.info(f"Updating agent run: {agent_run_id}")
 
-        input_dict = module_run.model_dict()
+        input_dict = agent_run.model_dict()
         input_dict = {k: v for k, v in input_dict.items() if v is not None}
         input_dict = self._convert_datetimes(input_dict)
         input_json = json.dumps(input_dict)
 
         if len(input_json) > WS_PAYLOAD_THRESHOLD:
-            return await self._ws_update_module_run(module_run_id, module_run)
+            return await self._ws_update_agent_run(agent_run_id, agent_run)
         else:
             try:        
-                return await self.surrealdb.update(module_run_id, input_dict)
+                return await self.surrealdb.update(agent_run_id, input_dict)
             except Exception as e:
-                logger.error(f"Failed to update module run: {e}")
+                logger.error(f"Failed to update agent run: {e}")
                 raise
 
-    async def list_module_runs(self, module_run_id=None) -> List[ModuleRun]:
-        logger.info(f'Listing module runs with ID: {module_run_id}')
+    async def list_agent_runs(self, agent_run_id=None) -> List[AgentRun]:
+        logger.info(f'Listing agent runs with ID: {agent_run_id}')
         try:
-            if module_run_id is None:
-                module_runs = await self.surrealdb.select("module_run")
-                return [ModuleRun(**module_run) for module_run in module_runs]
+            if agent_run_id is None:
+                agent_runs = await self.surrealdb.select("agent_run")
+                return [AgentRun(**agent_run) for agent_run in agent_runs]
             else:
                 try:
-                    module_run = await self.surrealdb.select(module_run_id)
-                    module_run = ModuleRun(**module_run)
+                    agent_run = await self.surrealdb.select(agent_run_id)
+                    agent_run = AgentRun(**agent_run)
                 except Exception as e:
-                    logger.error(f"Failed to list module runs: {e}")
-                    module_run = await self._get_module_run(module_run_id)
+                    logger.error(f"Failed to list agent runs: {e}")
+                    agent_run = await self._get_agent_run(agent_run_id)
 
-                if module_run is None:
-                    module_run = await self._get_module_run(module_run_id)
-                return module_run
+                if agent_run is None:
+                    agent_run = await self._get_agent_run(agent_run_id)
+                return agent_run
         except Exception as e:
-            logger.error(f"Failed to list module runs: {e}")
+            logger.error(f"Failed to list agent runs: {e}")
             raise
 
-    async def delete_module_run(self, module_run_id: str) -> bool:
+    async def delete_agent_run(self, agent_run_id: str) -> bool:
         try:
-            await self.surrealdb.delete(module_run_id)
+            await self.surrealdb.delete(agent_run_id)
             return True
         except Exception as e:
-            logger.error(f"Failed to delete module run: {e}")
+            logger.error(f"Failed to delete agent run: {e}")
             return False
 
     async def query(self, query: str) -> List:
