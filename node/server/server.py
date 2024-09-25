@@ -52,7 +52,11 @@ async def run_servers():
         for i in range(node_config.num_servers):
             if node_config.server_type == "http":
                 logger.info(f"Creating direct HTTP server {i+1} on port {port}...")
-                http_server = HTTPServer(node_config.ip, port)
+                if 'http://' in node_config.ip:
+                    ip = node_config.ip.split('//')[1]
+                else:
+                    ip = node_config.ip
+                http_server = HTTPServer(ip, port)
                 http_servers.append(http_server)
                 tasks.append(http_server.launch_server())
             elif node_config.server_type == "ws":
