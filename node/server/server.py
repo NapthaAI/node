@@ -50,7 +50,6 @@ async def run_servers():
         successful_servers = 0
         actual_ports = []
         for i in range(node_config.num_servers):
-            logger.info(f"Creating direct server {i+1} on port {port}...")
             if node_config.server_type == "http":
                 logger.info(f"Creating direct HTTP server {i+1} on port {port}...")
                 http_server = HTTPServer(node_config.ip, port)
@@ -65,7 +64,6 @@ async def run_servers():
             successful_servers += 1
 
             port += 1
-            logger.info(f"Created direct server {i+1} on port {port}")
 
         node_config.ports = actual_ports
         node_config.num_servers = successful_servers
