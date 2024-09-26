@@ -707,49 +707,75 @@ for name, value in constants:
 }
 
 linux_start_servers() {
-    # Echo start Node
-    echo "Starting Node..." | log_with_service_name "Node" $BLUE
+    # Echo start Servers
+    echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
-    # Get the port from the .env file
+    # Get the port and number of servers from the .env file
     port=${NODE_PORT:-7001} # Default to 7001 if not set
-    echo "Node Port: $port" | log_with_service_name "Node" $BLUE
-
-    # Check if the port is already in use
-    # if lsof -i :$port &> /dev/null; then
-    #     echo "Port $port is already in use. Please stop the application running on this port and try again." | log_with_service_name "Node" "error"
-    #     exit 1
-    # fi
-
-    echo "Starting Node application..." | log_with_service_name "Server" $BLUE
+    num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
+    echo "Port: $port" | log_with_service_name "Server" $BLUE
+    echo "Number of servers: $num_servers" | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
     CURRENT_DIR=$(pwd)
-    PYTHON_APP_PATH="$CURRENT_DIR/.venv/bin/poetry run python server/server.py"
+    PYTHON_APP_PATH="$CURRENT_DIR/.venv/bin/poetry"
     WORKING_DIR="$CURRENT_DIR/node"
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
-    SERVICE_FILE="nodeapp.service"
 
-    # Move and configure the nodeapp.service file
-    if [ -f "ops/systemd/$SERVICE_FILE" ]; then
-        sed -i "s|ExecStart=.*|ExecStart=$PYTHON_APP_PATH|" "ops/systemd/$SERVICE_FILE"
-        sed -i "s|WorkingDirectory=.*|WorkingDirectory=$WORKING_DIR|" "ops/systemd/$SERVICE_FILE"
-        sed -i "s|EnvironmentFile=.*|EnvironmentFile=$ENVIRONMENT_FILE_PATH|" "ops/systemd/$SERVICE_FILE"
-        sed -i "/^User=/c\User=$USER_NAME" "ops/systemd/$SERVICE_FILE"
+    # Array to store server ports
+    server_ports=()
 
-        sudo cp "ops/systemd/$SERVICE_FILE" /etc/systemd/system/
+    for ((i=0; i<num_servers; i++))
+    do
+        server_port=$((port + i))
+        SERVICE_FILE="nodeapp_$i.service"
+        server_ports+=($server_port)
+
+        echo "Starting application server $i on port $server_port..." | log_with_service_name "Server" $BLUE
+
+        # Create the systemd service file for nodeapp
+        cat <<EOF > /tmp/$SERVICE_FILE
+[Unit]
+Description=Node Application Server $i
+After=network.target
+
+[Service]
+ExecStart=$PYTHON_APP_PATH run python server/server.py --port $server_port
+WorkingDirectory=$WORKING_DIR
+EnvironmentFile=$ENVIRONMENT_FILE_PATH
+User=$USER_NAME
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # Check if the service file was created successfully
+        if [ ! -f /tmp/$SERVICE_FILE ]; then
+            echo "Failed to create service file for server $i" | log_with_service_name "Server" $RED
+            continue
+        fi
+
+        # Move the service file to the systemd directory
+        sudo mv /tmp/$SERVICE_FILE /etc/systemd/system/
 
         # Reload systemd, enable and start the service
         sudo systemctl daemon-reload
-        sudo systemctl enable nodeapp
-        sudo systemctl start nodeapp
+        if sudo systemctl enable $SERVICE_FILE && sudo systemctl start $SERVICE_FILE; then
+            echo "Node application $i service started successfully on port $server_port." | log_with_service_name "Server" $BLUE
+        else
+            echo "Failed to start Node application $i service on port $server_port." | log_with_service_name "Server" $RED
+        fi
+    done
 
-        echo "Node application service started successfully." | log_with_service_name "Server" $BLUE
-    else
-        echo "The systemd service file does not exist in the expected location." | log_with_service_name "Server" $BLUE
-        exit 1
-    fi
+    # Update NODE_PORTS in .env file
+    node_ports_string=$(IFS=,; echo "${server_ports[*]}")
+    sed -i '/^NODE_PORTS=/d' $ENVIRONMENT_FILE_PATH
+    echo "NODE_PORTS=$node_ports_string" >> $ENVIRONMENT_FILE_PATH
+    echo "Updated NODE_PORTS in .env: $node_ports_string" | log_with_service_name "Server" $BLUE
 }
+
 darwin_start_servers() {
     # Echo start Node
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE

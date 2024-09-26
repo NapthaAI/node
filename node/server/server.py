@@ -17,9 +17,8 @@ load_dotenv()
 FILE_PATH = Path(__file__).resolve()
 PARENT_DIR = FILE_PATH.parent
 
-http_servers = []
-websocket_server = None
 hub = None
+LEAD_SERVER = None
 
 def find_available_port(start_port: int = 7001) -> int:
     """Find an available port starting from start_port."""
@@ -31,16 +30,22 @@ def find_available_port(start_port: int = 7001) -> int:
             port += 1
 
 async def run_server(port: int):
-    global http_servers, websocket_server, hub
+    global hub, LEAD_SERVER
     
     node_config = get_node_config()
-    node_id = node_config.public_key.split(':')[-1]
+    node_id = node_config.id.split(":")[1]
+    ports = node_config.ports
+
+    if port == ports[-1]:
+        LEAD_SERVER = True
+    else:
+        LEAD_SERVER = False
+
 
     if node_config.node_type == "indirect": 
         logger.info("Creating indirect websocket server...")
         uri = f"{NODE_ROUTING}/ws/{node_id}"
-        websocket_server = WebSocketServer(uri, port, node_type=node_config.node_type, node_id=node_id)
-        await websocket_server.launch_server()
+        server = WebSocketServer(uri, port, node_type=node_config.node_type, node_id=node_id)
 
     elif node_config.node_type == "direct":
         if node_config.server_type == "http":
@@ -49,13 +54,10 @@ async def run_server(port: int):
                 ip = node_config.ip.split('//')[1]
             else:
                 ip = node_config.ip
-            http_server = HTTPServer(ip, port)
-            http_servers.append(http_server)
-            await http_server.launch_server()
+            server = HTTPServer(ip, port)
         elif node_config.server_type == "ws":
             logger.info(f"Creating direct WebSocket server on port {port}...")
-            websocket_server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
-            await websocket_server.launch_server()
+            server = WebSocketServer(node_config.ip, port, node_config.node_type, node_id=node_id)
 
     else:
         raise Exception(f"Invalid node type: {node_config.node_type}")
@@ -63,17 +65,15 @@ async def run_server(port: int):
     # Create and sign in to the hub
     async with Hub() as hub:
         success, user, user_id = await hub.signin(os.getenv('HUB_USERNAME'), os.getenv('HUB_PASSWORD'))
-        node_config = await hub.create_node(node_config)
-        logger.info(f"Node Config: {node_config}")
-    
+        if LEAD_SERVER:
+            node_config = await hub.create_node(node_config=node_config)
+
     if not success:
         logger.error("Failed to sign in to the hub")
         return
     
     try:
-        # Keep the script running
-        while True:
-            await asyncio.sleep(3600)  # Sleep for an hour
+        await server.launch_server()
     except Exception as e:
         logger.error(f"Error during server execution: {e}")
     finally:
@@ -87,16 +87,25 @@ async def on_shutdown():
     """
     try:
         logger.info("Unregistering node with hub")
+        global hub, LEAD_SERVER
+        if LEAD_SERVER:
+            node_config = hub.node_config
+            if isinstance(node_config, dict):
+                node_id = node_config["id"]
+            else:
+                node_id = node_config.id
+            logger.info(f"Node ID: {node_id}")
+            logger.info(f"Node Config: {node_config}")
 
-        global hub
-        logger.info(f"Node Config: {hub.node_config}")
-        success = await hub.delete_node(hub.node_config[0]["id"])
+            async with Hub() as hub:
+                success, user, user_id = await hub.signin(os.getenv('HUB_USERNAME'), os.getenv('HUB_PASSWORD'))
+                success = await hub.delete_node(node_id=node_id)
 
-        if success:
-            logger.info("Deleted node")
-        else:
-            logger.error("Failed to delete node")
-            raise Exception("Failed to delete node")
+            if success:
+                logger.info("Deleted node")
+            else:
+                logger.error("Failed to delete node")
+                raise Exception("Failed to delete node")
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 
