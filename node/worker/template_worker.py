@@ -28,12 +28,11 @@ from node.worker.utils import (
     upload_json_string_to_ipfs
 )
 from node.worker.main import app
-from node.engine.ws.node import Node as WsNode
-from node.engine.ws.node import NodeIndirect as WsNodeIndirect
-from naptha_sdk.client.node import Node
+from node.client import Node, NodeIndirect
 from node.schemas import AgentRun
 from node.utils import get_logger
 from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
+from node.worker.task_engine import TaskEngine
 
 logger = get_logger(__name__)
 
@@ -267,14 +266,15 @@ class FlowEngine:
         self.parameters = flow_run.agent_run_params
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
+        self.task_engine = TaskEngine(flow_run)
         if self.node_type == "direct" and self.server_type == "http":
-            self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}')
+            self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}', SERVER_TYPE)
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
         elif self.node_type == "direct" and self.server_type == "ws":
             ip = NODE_IP
             if 'http' in ip:
                 ip = ip.replace('http://', 'ws://')
-            self.orchestrator_node = WsNode(f'{ip}:{NODE_PORT}')
+            self.orchestrator_node = Node(f'{ip}:{NODE_PORT}', SERVER_TYPE)
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
         elif self.node_type == "indirect":
             node_id = requests.get("http://localhost:7001/node_id").json()
@@ -291,11 +291,11 @@ class FlowEngine:
             self.worker_nodes = []
             for worker_node in flow_run.worker_nodes:
                 if 'ws' in worker_node:
-                    self.worker_nodes.append(WsNode(worker_node))
+                    self.worker_nodes.append(Node(worker_node, SERVER_TYPE))
                 elif ":" not in worker_node:
-                    self.worker_nodes.append(WsNodeIndirect(worker_node, routing_url=NODE_ROUTING))
+                    self.worker_nodes.append(NodeIndirect(worker_node, routing_url=NODE_ROUTING))
                 else:
-                    self.worker_nodes.append(Node(worker_node))
+                    self.worker_nodes.append(Node(worker_node, SERVER_TYPE))
         else:
             self.worker_nodes = None
 
@@ -347,8 +347,8 @@ class FlowEngine:
                 inputs=self.validated_data, 
                 worker_nodes=self.worker_nodes,
                 orchestrator_node=self.orchestrator_node, 
-                flow_run=self.flow_run, 
-                cfg=self.cfg
+                cfg=self.cfg,
+                task_engine=self.task_engine,
             )
         except Exception as e:
             logger.error(f"Error running flow: {e}")
