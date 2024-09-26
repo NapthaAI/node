@@ -46,8 +46,6 @@ BASE_OUTPUT_DIR=f"{repo_dir}/node/storage/fs"
 AGENTS_SOURCE_DIR=f"{repo_dir}/node/storage/hub/agents"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
-
-
 # Hub
 LOCAL_HUB=True
 LOCAL_HUB_URL="ws://localhost:3001/rpc"
@@ -59,8 +57,10 @@ HUB_DB="naptha"
 def get_node_config():
     """Get the node configuration."""
     from node.user import get_public_key
+    public_key = get_public_key(os.getenv("PRIVATE_KEY"))
     return NodeConfig(
-        public_key=get_public_key(os.getenv("PRIVATE_KEY")),
+        id=f"node:{public_key}",
+        public_key=public_key,
         ip=NODE_IP,
         ports=[NODE_PORT+i for i in range(NUM_SERVERS)],
         routing=NODE_ROUTING,

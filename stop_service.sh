@@ -23,18 +23,18 @@ stop_surrealdb() {
     fi
 }
 
+# Load the .env file
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+else
+    echo ".env file not found. Using default values."
+    NUM_SERVERS=1
+fi
+
+load_config_constants
+
 os=$(uname)
 if [ "$os" = "Darwin" ]; then
-    # Load the .env file
-    if [ -f .env ]; then
-        export $(cat .env | grep -v '^#' | xargs)
-    else
-        echo ".env file not found. Using default values."
-        NUM_SERVERS=1
-    fi
-
-    load_config_constants
-
     # Stop the services
     launchctl unload ~/Library/LaunchAgents/com.example.celeryworker.plist
     for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
@@ -59,19 +59,28 @@ if [ "$os" = "Darwin" ]; then
 else
     # Stop the services
     sudo systemctl stop celeryworker.service
-    sudo systemctl stop nodeapp.service
+    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+        echo "Stopping nodeapp_$i.service"
+        sudo systemctl stop nodeapp_$i.service
+    done
     sudo systemctl stop ollama.service
     sudo systemctl stop rabbitmq-server.service
 
     # Disable the services
     sudo systemctl disable celeryworker.service
-    sudo systemctl disable nodeapp.service
+    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+        echo "Disabling nodeapp_$i.service"
+        sudo systemctl disable nodeapp_$i.service
+    done
     sudo systemctl disable ollama.service
     sudo systemctl disable rabbitmq-server.service
 
     # Remove the service files
     sudo rm /etc/systemd/system/celeryworker.service
-    sudo rm /etc/systemd/system/nodeapp.service
+    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+        echo "Removing nodeapp_$i.service"
+        sudo rm /etc/systemd/system/nodeapp_$i.service
+    done
     sudo rm /etc/systemd/system/ollama.service
     sudo rm /etc/systemd/system/rabbitmq-server.service
 

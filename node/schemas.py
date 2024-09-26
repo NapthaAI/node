@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 class NodeConfig(BaseModel):
+    id: str
     public_key: str
     num_gpus: int
     vram: int

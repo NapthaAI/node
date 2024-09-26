@@ -105,10 +105,14 @@ class Hub(AsyncMixin):
 
     async def create_node(self, node_config: NodeConfig) -> Dict:
         node_config.owner = self.user_id
+        node_id = node_config.id
         logger.info(f"Creating node: {node_config}")
-        self.node_config = await self.surrealdb.create("node", node_config)
+        self.node_config = await self.surrealdb.create(node_id, node_config)
+        logger.info(f"Created node: {self.node_config}")
         if self.node_config is None:
             raise Exception("Failed to register node")
+        if isinstance(self.node_config, dict):
+            return self.node_config
         return self.node_config[0]
 
     async def get_node(self, node_id: str) -> Optional[Dict]:
