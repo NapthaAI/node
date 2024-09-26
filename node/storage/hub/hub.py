@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import jwt
 import os
 from naptha_sdk.utils import AsyncMixin
-from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL
+from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import NodeConfig
 from node.utils import get_logger
 from surrealdb import Surreal
@@ -15,7 +15,10 @@ logger = get_logger(__name__)
 
 class Hub(AsyncMixin):
     def __init__(self, *args, **kwargs):
-        self.hub_url = LOCAL_HUB_URL 
+        if LOCAL_HUB:
+            self.hub_url = LOCAL_HUB_URL 
+        else:
+            self.hub_url = PUBLIC_HUB_URL
         self.ns = HUB_NS
         self.db = HUB_DB
 
