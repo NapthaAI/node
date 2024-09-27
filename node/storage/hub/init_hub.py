@@ -1,5 +1,5 @@
 import asyncio
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 import os
 from pathlib import Path
 import subprocess
@@ -11,7 +11,7 @@ from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger
 
 
-load_dotenv()
+load_dotenv(find_dotenv(), override=True)
 logger = get_logger(__name__)
 
 file_path = os.path.dirname(os.path.realpath(__file__))
@@ -100,6 +100,7 @@ async def user_setup_flow():
         username, password = os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
         username_exists, password_exists = len(username) > 1, len(password) > 1
         public_key = get_public_key(os.getenv("PRIVATE_KEY"))
+        logger.info(f"Public key: {public_key}")
         logger.info(f"Checking if user exists... User: {username}")
         user = await hub.get_user_by_username(username)
         user_public_key = await hub.get_user_by_public_key(public_key)
@@ -172,6 +173,5 @@ if __name__ == "__main__":
             async with Hub() as hub:
                 await user_setup_flow()
         asyncio.run(run_user_setup())
-        # asyncio.run(register_node()) 
     else:
         asyncio.run(init_hub())
