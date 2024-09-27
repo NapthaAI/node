@@ -266,7 +266,6 @@ class FlowEngine:
         self.parameters = flow_run.agent_run_params
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
-        self.task_engine = TaskEngine(flow_run)
         if self.node_type == "direct" and self.server_type == "http":
             self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}', SERVER_TYPE)
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
@@ -286,20 +285,6 @@ class FlowEngine:
             )
         else:
             raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
-
-        if flow_run.worker_nodes is not None:
-            self.worker_nodes = []
-            for worker_node in flow_run.worker_nodes:
-                if 'ws' in worker_node:
-                    self.worker_nodes.append(Node(worker_node, SERVER_TYPE))
-                elif ":" not in worker_node:
-                    self.worker_nodes.append(NodeIndirect(worker_node, routing_url=NODE_ROUTING))
-                else:
-                    self.worker_nodes.append(Node(worker_node, SERVER_TYPE))
-        else:
-            self.worker_nodes = None
-
-        logger.info(f"Worker Nodes: {self.worker_nodes}")
 
         self.consumer = {
             "public_key": flow_run.consumer_id.split(':')[1],
@@ -345,10 +330,12 @@ class FlowEngine:
             response = await maybe_async_call(
                 self.flow_func,
                 inputs=self.validated_data, 
-                worker_nodes=self.worker_nodes,
+                worker_node_urls=self.flow_run.worker_nodes,
                 orchestrator_node=self.orchestrator_node, 
                 cfg=self.cfg,
-                task_engine=self.task_engine,
+                flow_run=self.flow_run,
+                task_engine_cls=TaskEngine,
+                node_cls=Node,
             )
         except Exception as e:
             logger.error(f"Error running flow: {e}")
