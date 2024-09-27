@@ -597,11 +597,11 @@ check_and_set_private_key() {
     if [[ "$response" == "yes" ]]; then
         private_key=$(poetry run python scripts/generate_user.py)
 
-        # Remove existing PRIVATE_KEY line if it exists and add the new one
+        # Remove existing PRIVATE_KEY line if it exists and add the new one without quotes
         if [ "$os" = "Darwin" ]; then
-            sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=\"$private_key\"/" .env
+            sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$private_key/" .env
         else
-            sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=\"$private_key\"\n" .env
+            sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=$private_key" .env
         fi
 
         echo "Key pair generated and saved to .env file."
