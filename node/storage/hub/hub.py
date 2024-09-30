@@ -2,7 +2,7 @@ import asyncio
 from dotenv import load_dotenv
 import jwt
 import os
-from naptha_sdk.utils import AsyncMixin
+from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import NodeConfig
 from node.utils import get_logger

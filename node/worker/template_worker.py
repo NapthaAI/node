@@ -28,12 +28,11 @@ from node.worker.utils import (
     upload_json_string_to_ipfs
 )
 from node.worker.main import app
-from node.engine.ws.node import Node as WsNode
-from node.engine.ws.node import NodeIndirect as WsNodeIndirect
-from naptha_sdk.client.node import Node
+from node.client import Node, NodeIndirect
 from node.schemas import AgentRun
 from node.utils import get_logger
 from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
+from node.worker.task_engine import TaskEngine
 
 logger = get_logger(__name__)
 
@@ -268,13 +267,13 @@ class FlowEngine:
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
         if self.node_type == "direct" and self.server_type == "http":
-            self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}')
+            self.orchestrator_node = Node(f'{NODE_IP}:{NODE_PORT}', SERVER_TYPE)
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
         elif self.node_type == "direct" and self.server_type == "ws":
             ip = NODE_IP
             if 'http' in ip:
                 ip = ip.replace('http://', 'ws://')
-            self.orchestrator_node = WsNode(f'{ip}:{NODE_PORT}')
+            self.orchestrator_node = Node(f'{ip}:{NODE_PORT}', SERVER_TYPE)
             logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
         elif self.node_type == "indirect":
             node_id = requests.get("http://localhost:7001/node_id").json()
@@ -286,20 +285,6 @@ class FlowEngine:
             )
         else:
             raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
-
-        if flow_run.worker_nodes is not None:
-            self.worker_nodes = []
-            for worker_node in flow_run.worker_nodes:
-                if 'ws' in worker_node:
-                    self.worker_nodes.append(WsNode(worker_node))
-                elif ":" not in worker_node:
-                    self.worker_nodes.append(WsNodeIndirect(worker_node, routing_url=NODE_ROUTING))
-                else:
-                    self.worker_nodes.append(Node(worker_node))
-        else:
-            self.worker_nodes = None
-
-        logger.info(f"Worker Nodes: {self.worker_nodes}")
 
         self.consumer = {
             "public_key": flow_run.consumer_id.split(':')[1],
@@ -345,10 +330,12 @@ class FlowEngine:
             response = await maybe_async_call(
                 self.flow_func,
                 inputs=self.validated_data, 
-                worker_nodes=self.worker_nodes,
+                worker_node_urls=self.flow_run.worker_nodes,
                 orchestrator_node=self.orchestrator_node, 
-                flow_run=self.flow_run, 
-                cfg=self.cfg
+                cfg=self.cfg,
+                flow_run=self.flow_run,
+                task_engine_cls=TaskEngine,
+                node_cls=Node,
             )
         except Exception as e:
             logger.error(f"Error running flow: {e}")
