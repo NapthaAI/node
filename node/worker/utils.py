@@ -15,16 +15,12 @@ import asyncio
 from functools import wraps
 
 from node.storage.storage import get_ipns_record
+from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
 
 load_dotenv()
 logger = get_logger(__name__)
 
 
-BASE_ROOT_DIR = os.getcwd()
-FILE_PATH = Path(__file__).resolve()
-CELERY_WORKER_DIR = FILE_PATH.parent
-NODE_DIR = CELERY_WORKER_DIR.parent
-BASE_OUTPUT_DIR = NODE_DIR / BASE_OUTPUT_DIR[2:]
 MAX_RETRIES = 3
 RETRY_DELAY = 1
 
