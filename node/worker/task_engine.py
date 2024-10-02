@@ -134,7 +134,7 @@ class TaskEngine:
         self.flow_run.results.extend(self.agent_result)
         self.agent_run.error = False
         self.agent_run.error_message = ""
-        self.agent_run.completed_time = datetime.now(pytz.utc)
+        self.agent_run.completed_time = datetime.now(pytz.utc).isoformat()
         
         start_time = self.agent_run.start_processing_time
         end_time = self.agent_run.completed_time
@@ -155,7 +155,7 @@ class TaskEngine:
         self.agent_run.status = "error"
         self.agent_run.error = True
         self.agent_run.error_message = error_details
-        self.agent_run.completed_time = datetime.now(pytz.utc)
+        self.agent_run.completed_time = datetime.now(pytz.utc).isoformat()
         
         start_time = self.agent_run.start_processing_time
         end_time = self.agent_run.completed_time

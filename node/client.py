@@ -14,21 +14,6 @@ import websockets
 logger = get_logger(__name__)
 HTTP_TIMEOUT = 300
 
-def parse_datetime(data):
-    if isinstance(data, dict):
-        for key, value in data.items():
-            if isinstance(value, str):
-                try:
-                    data[key] = datetime.fromisoformat(value)
-                except ValueError:
-                    pass
-            elif isinstance(value, (dict, list)):
-                parse_datetime(value)
-    elif isinstance(data, list):
-        for i, item in enumerate(data):
-            if isinstance(item, (dict, list)):
-                parse_datetime(item)
-    return data
 
 class Node:
     def __init__(self, node_url, server_type):
@@ -149,7 +134,7 @@ class Node:
         
         if response['status'] == 'success':
             logger.info(f"Ran agent successfully: {response['data']}")
-            response['data'] = parse_datetime(response['data'])
+            response['data'] = response['data']
             return AgentRun(**response['data'])
         else:
             logger.error(f"Error running agent: {response['message']}")
@@ -348,7 +333,6 @@ class NodeIndirect:
         
         if response['status'] == 'success':
             logger.info(f"Ran agent successfully: {response['data']}")
-            response['data'] = parse_datetime(response['data'])
             return AgentRun(**response['data'])
         else:
             logger.error(f"Error running agent: {response['message']}")

@@ -174,10 +174,10 @@ class HTTPServer:
 
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
-                logger.info("Created agent run")
+                logger.info(f"Created agent run")
 
                 updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
-                logger.info("Updated agent run")
+                logger.info(f"Updated agent run")
 
             # Enqueue the agent run in Celery
             if agent_run.agent_run_type == "package":

@@ -48,8 +48,6 @@ class DB():
         try:
             logger.info(f"Signing in... username: {self.username}, NS: {self.ns}, DB: {self.db}")
             user = await self.surrealdb.signin({
-                "NS": self.ns,
-                "DB": self.db,
                 "user": self.username,
                 "pass": self.password,
             })
@@ -72,7 +70,9 @@ class DB():
 
     async def create_user(self, user_input: Dict) -> Tuple[bool, Optional[Dict]]:
         user = await self.surrealdb.create("user", user_input)
-        return user[0]
+        if isinstance(user, list):
+            return user[0]
+        return user
 
     async def get_user(self, user_input: Dict) -> Optional[Dict]:
         user_id = "user:" + user_input['public_key']
@@ -205,7 +205,8 @@ class DB():
             try:
                 agent_run = await self.surrealdb.create("agent_run", input_dict)
                 logger.info(f"Created agent run")
-                agent_run = agent_run[0]
+                if isinstance(agent_run, list):
+                    agent_run = agent_run[0]
                 return AgentRun(**agent_run)
             except Exception as e:
                 logger.error(f"Failed to create agent run: {e}")
@@ -216,7 +217,7 @@ class DB():
 
         input_dict = agent_run.model_dict()
         input_dict = {k: v for k, v in input_dict.items() if v is not None}
-        input_dict = self._convert_datetimes(input_dict)
+        # input_dict = self._convert_datetimes(input_dict)
         input_json = json.dumps(input_dict)
 
         if len(input_json) > WS_PAYLOAD_THRESHOLD:

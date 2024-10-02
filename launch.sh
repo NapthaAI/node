@@ -16,34 +16,61 @@ log_with_service_name() {
     done
 }
 
-# Function to install SurrealDB
+get_surrealdb_version() {
+    surreal -V | awk '{print $6}'
+}
+
 install_surrealdb() {
     echo "Installing SurrealDB..." | log_with_service_name "SurrealDB" $GREEN
 
-    if [ "$(uname)" = "Darwin" ]; then
-        SURREALDB_INSTALL_PATH="/Users/$(whoami)/.surrealdb"
-    else
-        SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
-    fi
+    SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
     SURREALDB_BINARY="$SURREALDB_INSTALL_PATH/surreal"
 
+    # Check if SurrealDB is already installed
     if [ -f /usr/local/bin/surreal ]; then
-        echo "SurrealDB is already installed." | log_with_service_name "SurrealDB" $GREEN
-        return
+        CURRENT_VERSION=$(get_surrealdb_version)
+        if [[ $CURRENT_VERSION == 2.* ]]; then
+            echo "SurrealDB version 2 ($CURRENT_VERSION) is already installed." | log_with_service_name "SurrealDB" $GREEN
+            return
+        else
+            echo "Removing existing SurrealDB version $CURRENT_VERSION..." | log_with_service_name "SurrealDB" $YELLOW
+            sudo rm /usr/local/bin/surreal
+        fi
     fi
 
-    echo "Installing SurrealDB..." | log_with_service_name "SurrealDB" $GREEN
+    echo "Installing SurrealDB version 2..." | log_with_service_name "SurrealDB" $GREEN
 
     # Install SurrealDB
-    curl -sSf https://install.surrealdb.com | bash
+    curl -sSf https://install.surrealdb.com | sh
 
     if [ -f "$SURREALDB_BINARY" ]; then
+        echo "Moving SurrealDB binary to /usr/local/bin..." | log_with_service_name "SurrealDB" $GREEN
         sudo mv "$SURREALDB_BINARY" /usr/local/bin/surreal
-        echo "SurrealDB binary moved to /usr/local/bin."
+        if [ $? -ne 0 ]; then
+            echo "Failed to move SurrealDB binary. Trying to copy instead..." | log_with_service_name "SurrealDB" $YELLOW
+            sudo cp "$SURREALDB_BINARY" /usr/local/bin/surreal
+            if [ $? -ne 0 ]; then
+                echo "Failed to copy SurrealDB binary. Installation failed." | log_with_service_name "SurrealDB" $RED
+                exit 1
+            fi
+        fi
+        echo "SurrealDB binary installed in /usr/local/bin." | log_with_service_name "SurrealDB" $GREEN
+    else
+        echo "SurrealDB binary not found at $SURREALDB_BINARY. Installation may have failed." | log_with_service_name "SurrealDB" $RED
+        exit 1
     fi
 
-    if [ ! -f /usr/local/bin/surreal ]; then
-        echo "SurrealDB installation failed." | log_with_service_name "SurrealDB" $GREEN
+    # Verify installed version
+    if command -v surreal &> /dev/null; then
+        INSTALLED_VERSION=$(get_surrealdb_version)
+        if [[ $INSTALLED_VERSION == 2.* ]]; then
+            echo "SurrealDB version 2 ($INSTALLED_VERSION) installed successfully." | log_with_service_name "SurrealDB" $GREEN
+        else
+            echo "Failed to install SurrealDB version 2. Got version: $INSTALLED_VERSION" | log_with_service_name "SurrealDB" $RED
+            exit 1
+        fi
+    else
+        echo "SurrealDB command not found. Installation failed." | log_with_service_name "SurrealDB" $RED
         exit 1
     fi
 }
@@ -507,7 +534,7 @@ install_python312() {
 start_hub_surrealdb() {
     PWD=$(pwd)
     echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
-    if [ "$LOCAL_HUB" = True ]; then
+    if [ "$LOCAL_HUB" == "True" ]; then
         echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"

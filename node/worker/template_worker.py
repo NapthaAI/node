@@ -28,7 +28,7 @@ from node.worker.utils import (
     upload_json_string_to_ipfs
 )
 from node.worker.main import app
-from node.client import Node, NodeIndirect
+from node.client import Node
 from node.schemas import AgentRun
 from node.utils import get_logger
 from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
@@ -147,7 +147,7 @@ async def handle_failure(flow_run: Dict, error_msg: str) -> None:
     flow_run_obj.status = "error"
     flow_run_obj.error = True
     flow_run_obj.error_message = error_msg
-    flow_run_obj.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
+    flow_run_obj.completed_time = datetime.now(pytz.utc).isoformat()
     if hasattr(flow_run_obj, 'start_processing_time') and flow_run_obj.start_processing_time:
         flow_run_obj.duration = (datetime.fromisoformat(flow_run_obj.completed_time) - 
                                  datetime.fromisoformat(flow_run_obj.start_processing_time)).total_seconds()
@@ -294,7 +294,8 @@ class FlowEngine:
     async def init_run(self):
         logger.info("Initializing flow run")
         self.flow_run.status = "processing"
-        self.flow_run.start_processing_time = datetime.now(pytz.utc).isoformat()
+        self.flow_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
+
         await update_db_with_status_sync(agent_run=self.flow_run)
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
@@ -360,7 +361,7 @@ class FlowEngine:
         self.flow_run.status = "completed"
         self.flow_run.error = False
         self.flow_run.error_message = ""
-        self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
+        self.flow_run.completed_time = datetime.now(pytz.utc).isoformat()
         self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
         await update_db_with_status_sync(agent_run=self.flow_run)
         logger.info(f"Agent run completed")
@@ -372,7 +373,7 @@ class FlowEngine:
         self.flow_run.status = "error"
         self.flow_run.error = True
         self.flow_run.error_message = error_details
-        self.flow_run.completed_time = datetime.now(pytz.timezone("UTC")).isoformat()
+        self.flow_run.completed_time = datetime.now(pytz.utc).isoformat()
         self.flow_run.duration = (datetime.fromisoformat(self.flow_run.completed_time) - datetime.fromisoformat(self.flow_run.start_processing_time)).total_seconds()
         await update_db_with_status_sync(agent_run=self.flow_run)
 
