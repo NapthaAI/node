@@ -60,11 +60,11 @@ def init_db():
     logger.info("Initializing database")
 
     # use file storage
-    command = f"""surreal start -A --auth \
+    command = f"""surreal start -A \
                   --user {os.getenv('DB_ROOT_USER')} \
                   --bind 0.0.0.0:{SURREALDB_PORT} \
                   --pass {os.getenv('DB_ROOT_PASS')} \
-                  file:{local_db_file_path}"""
+                  rocksdb://{local_db_file_path}"""
 
     try:
         # Start the command in a new process and detach it

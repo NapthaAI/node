@@ -62,11 +62,11 @@ async def init_hub():
     logger.info("Initializing database")
 
     # use file storage
-    command = f"""surreal start -A --auth \
+    command = f"""surreal start -A \
                   --user {os.getenv('HUB_ROOT_USER')} \
                   --bind 0.0.0.0:{HUB_DB_PORT} \
                   --pass {os.getenv('HUB_ROOT_PASS')} \
-                  file:./node/storage/hub/hub.db"""
+                  rocksdb://./node/storage/hub/hub.db"""
 
     try:
         # Start the command in a new process and detach it
