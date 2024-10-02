@@ -24,8 +24,6 @@ class NodeConfig(BaseModel):
     class Config:
         allow_mutation = True
 
-
-
 class AgentRunType(str, Enum):
     package = "package"
     docker = "docker"
@@ -68,8 +66,8 @@ class AgentRun(BaseModel):
     worker_nodes: Optional[list[str]] = None
     error_message: Optional[str] = None
     created_time: Optional[str] = None
-    start_processing_time: Optional[datetime] = None
-    completed_time: Optional[datetime] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
     duration: Optional[float] = None
     agent_run_params: Optional[Union[Dict, DockerParams]] = None
     child_runs: List['AgentRun'] = []
@@ -85,21 +83,21 @@ class AgentRun(BaseModel):
         }
 
     def model_dict(self):
-        model_dict = self.dict()
-        for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-            elif isinstance(value, AgentRunType):
-                model_dict[key] = value.value
-        for i, parent_run in enumerate(model_dict['parent_runs']):
-            for key, value in parent_run.items():
-                if isinstance(value, datetime):
-                    model_dict['parent_runs'][i][key] = value.isoformat()
-        for i, child_run in enumerate(model_dict['child_runs']):
-            for key, value in child_run.items():
-                if isinstance(value, datetime):
-                    model_dict['child_runs'][i][key] = value.isoformat()
-        return model_dict
+        def convert_value(v):
+            if isinstance(v, datetime):
+                return v.isoformat()
+            elif isinstance(v, AgentRunType):
+                return v.value
+            elif isinstance(v, BaseModel):
+                return v.model_dict() if hasattr(v, 'model_dict') else v.dict()
+            elif isinstance(v, list):
+                return [convert_value(item) for item in v]
+            elif isinstance(v, dict):
+                return {k: convert_value(val) for k, val in v.items()}
+            else:
+                return v
+
+        return {k: convert_value(v) for k, v in self.dict(exclude_none=True).items()}
 
 class AgentRunInput(BaseModel):
     agent_name: str
