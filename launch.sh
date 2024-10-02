@@ -534,7 +534,7 @@ install_python312() {
 start_hub_surrealdb() {
     PWD=$(pwd)
     echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
-    if [ "$LOCAL_HUB" == "true" ]; then
+    if [ "$LOCAL_HUB" == "True" ]; then
         echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
