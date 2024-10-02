@@ -3,15 +3,11 @@ DEFINE SCOPE user SESSION 7d
         SELECT * FROM user WHERE username = $username AND crypto::argon2::compare(password, $password)
     )
     SIGNUP (
-        IF (SELECT * FROM invite WHERE code = $invite) THEN
-            ( CREATE user CONTENT {
-                name: $name,
-                username: $username,
-                password: crypto::argon2::generate($password),
-                public_key: $public_key
-            } )
-        ELSE
-            ( RETURN false )
-        END
+        CREATE user CONTENT {
+            name: $name,
+            username: $username,
+            password: crypto::argon2::generate($password),
+            public_key: $public_key
+        }
     )
 ;
