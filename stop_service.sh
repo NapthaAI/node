@@ -5,7 +5,20 @@ source ./launch.sh
 
 # Function to stop SurrealDB
 stop_surrealdb() {
-    # Find and kill the SurrealDB process running on port 3001
+    # Run the export_hub.py script using the project's virtual environment
+    echo "Exporting SurrealDB data..."
+    PROJECT_ROOT=$(pwd)
+    VENV_PATH="$PROJECT_ROOT/.venv"
+    EXPORT_SCRIPT_PATH="$PROJECT_ROOT/node/storage/hub/export_hub.py"
+    
+    if [ -f "$VENV_PATH/bin/activate" ]; then
+        source "$VENV_PATH/bin/activate"
+        python "$EXPORT_SCRIPT_PATH"
+        deactivate
+    else
+        echo "Virtual environment not found at $VENV_PATH"
+    fi
+    
     surrealdb_hub_pid=$(lsof -ti:3001)
     if [ ! -z "$surrealdb_hub_pid" ]; then
         echo "Stopping SurrealDB on port 3001"
