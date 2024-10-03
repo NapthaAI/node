@@ -4,12 +4,12 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import glob
 
 from node.config import get_node_config, HUB_DB_PORT, HUB_NS, HUB_DB
 from node.storage.hub.hub import Hub
 from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger
-
 
 load_dotenv(find_dotenv(), override=True)
 logger = get_logger(__name__)
@@ -18,50 +18,46 @@ file_path = os.path.dirname(os.path.realpath(__file__))
 surql_path = os.path.join(file_path, "data_structures")
 root_dir = Path(file_path).parent.parent
 
-def import_surql():
-    """Import SURQL files to the database"""
-    logger.info("Importing SURQL files")
-    import_files = [
-        f"{surql_path}/user.surql",
-        f"{surql_path}/agent.surql",
-        f"{surql_path}/auth.surql",
-        f"{surql_path}/node.surql",
-        f"{surql_path}/auction.surql",
-        f"{surql_path}/testdata.surql",
-    ]
+def import_surql(file):
+    """Import a single SURQL file to the database"""
+    command = f"""surreal import \
+                  --conn http://localhost:{HUB_DB_PORT} \
+                  --user {os.getenv('HUB_ROOT_USER')} \
+                  --pass {os.getenv('HUB_ROOT_PASS')} \
+                  --ns {HUB_NS} \
+                  --db {HUB_DB} \
+                {file}"""
 
-    for file in import_files:
-        command = f"""surreal import \
-                      --conn http://localhost:{HUB_DB_PORT} \
-                      --user {os.getenv('HUB_ROOT_USER')} \
-                      --pass {os.getenv('HUB_ROOT_PASS')} \
-                      --ns {HUB_NS} \
-                      --db {HUB_DB} \
-                    {file}"""
+    try:
+        logger.info(f"Importing {os.path.basename(file)}")
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        out, err = process.communicate()
+        logger.info(out)
+        if err:
+            logger.error(err)
+    except Exception as e:
+        logger.error(f"Error importing {file}")
+        logger.error(str(e))
+        raise
 
-        try:
-            logger.info(f"Importing {file.rsplit('/', 1)[-1]}")
-            process = subprocess.Popen(
-                command,
-                shell=True,
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                text=True,
-            )
-            out, err = process.communicate()
-            logger.info(out)
-            logger.info(err)
-        except Exception as e:
-            logger.error("Error creating scope")
-            logger.error(str(e))
-            raise
-
+def get_latest_export():
+    """Get the most recent export file"""
+    export_files = glob.glob(os.path.join(surql_path, "export_*.surql"))
+    if export_files:
+        return max(export_files, key=os.path.getctime)
+    return None
 
 async def init_hub():
     """Initialize the database"""
     logger.info("Initializing database")
 
-    # use file storage
+    # Start the SurrealDB process
     command = f"""surreal start -A \
                   --user {os.getenv('HUB_ROOT_USER')} \
                   --bind 0.0.0.0:{HUB_DB_PORT} \
@@ -69,7 +65,6 @@ async def init_hub():
                   rocksdb://./node/storage/hub/hub.db"""
 
     try:
-        # Start the command in a new process and detach it
         _ = subprocess.Popen(
             command,
             shell=True,
@@ -86,8 +81,25 @@ async def init_hub():
 
     time.sleep(5)
     logger.info("Database initialized")
-    import_surql()
 
+    # Check for the latest export file
+    latest_export = get_latest_export()
+
+    if latest_export:
+        logger.info(f"Found latest export: {os.path.basename(latest_export)}")
+        import_surql(latest_export)
+    else:
+        logger.info("No export file found. Importing individual SURQL files.")
+        import_files = [
+            "user.surql",
+            "agent.surql",
+            "auth.surql",
+            "node.surql",
+            "auction.surql",
+            "testdata.surql",
+        ]
+        for file in import_files:
+            import_surql(os.path.join(surql_path, file))
 
 async def register_node():
     node_config = get_node_config()
