@@ -175,3 +175,4 @@ input_folder/
 
 logs/
 .env copy
+node/storage/hub/data_structures/export_*.surql
