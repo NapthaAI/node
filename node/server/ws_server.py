@@ -864,9 +864,8 @@ class WebSocketServer:
                 port=self.port,
                 log_level="debug",
                 timeout_keep_alive=300,
-                limit_concurrency=200,
+                limit_concurrency=2000,
                 backlog=4096,
-                reload=True
             )
             server = uvicorn.Server(config)
             await server.serve()
