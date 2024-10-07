@@ -87,12 +87,8 @@ class TaskEngine:
         }
         self.agent_run_input = AgentRunInput(**agent_run_input)
         logger.info(f"Initializing agent run.")
-        self.agent_run = await create_agent_run(self.agent_run_input)
+        self.agent_run = AgentRun(**self.agent_run_input.model_dict())
         self.agent_run.start_processing_time = datetime.now(pytz.utc).isoformat()
-
-        # Relate new agent run with parent flow run
-        self.flow_run.child_runs.append(AgentRun(**{k: v for k, v in self.agent_run.model_dict().items() if k not in ["child_runs", "parent_runs"]}))
-        logger.info(f"Adding agent run to parent flow run: {self.flow_run}")
 
     async def start_run(self):
         logger.info(f"Starting agent run")
@@ -141,7 +137,7 @@ class TaskEngine:
             end_time = datetime.fromisoformat(end_time.rstrip('Z'))
 
         self.agent_run.duration = (end_time - start_time).total_seconds()
-        await update_agent_run(self.agent_run)
+        self.flow_run.child_runs.append(self.agent_run)
 
     async def fail(self):
         logger.error(f"Error running agent")
@@ -161,4 +157,4 @@ class TaskEngine:
             end_time = datetime.fromisoformat(end_time.rstrip('Z'))
 
         self.agent_run.duration = (end_time - start_time).total_seconds()
-        await update_agent_run(self.agent_run)
+        self.flow_run.child_runs.append(self.agent_run)
