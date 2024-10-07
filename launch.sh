@@ -23,7 +23,11 @@ get_surrealdb_version() {
 install_surrealdb() {
     echo "Installing SurrealDB..." | log_with_service_name "SurrealDB" $GREEN
 
-    SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
+    if [ "$os" = "Darwin" ]; then
+        SURREALDB_INSTALL_PATH="/Users/$(whoami)/.surrealdb"
+    else
+        SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
+    fi
     SURREALDB_BINARY="$SURREALDB_INSTALL_PATH/surreal"
 
     # Check if SurrealDB is already installed
