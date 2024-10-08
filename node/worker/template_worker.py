@@ -33,6 +33,7 @@ from node.schemas import AgentRun
 from node.utils import get_logger
 from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE
 from node.worker.task_engine import TaskEngine
+from node.worker.utils import download_from_ipfs, unzip_file
 
 logger = get_logger(__name__)
 
@@ -210,13 +211,12 @@ def verify_agent_installation(agent_name: str) -> bool:
         logger.error(f"Error importing agent {agent_name}: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return False
-    
-def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
+
+
+def install_agent_from_git(agent_name: str, agent_version: str, agent_source_url: str):
     logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-    
     agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
     logger.info(f"Agent path exists: {agents_source_dir.exists()}")
-
     try:
         if agents_source_dir.exists():
             logger.info(f"Updating existing repository for {agent_name}")
@@ -232,6 +232,42 @@ def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_ur
             repo.git.checkout(agent_version)
             logger.info(f"Successfully cloned {agent_name} version {agent_version}")
 
+    except Exception as e:
+        error_msg = f"Error installing {agent_name}: {str(e)}"
+        logger.error(error_msg)
+        logger.info(f"Traceback: {traceback.format_exc()}")
+        if "Dependency conflict detected" in str(e):
+            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
+        raise RuntimeError(error_msg) from e
+
+def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_url: str):
+    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
+    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
+    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
+    try:
+        agent_ipfs_hash = agent_source_url.split("ipfs://")[1]
+        agent_temp_zip_path = download_from_ipfs(agent_ipfs_hash, AGENTS_SOURCE_DIR)
+        unzip_file(agent_temp_zip_path, agents_source_dir)
+        os.remove(agent_temp_zip_path)
+
+    except Exception as e:
+        error_msg = f"Error installing {agent_name}: {str(e)}"
+        logger.error(error_msg)
+        logger.info(f"Traceback: {traceback.format_exc()}")
+        raise RuntimeError(error_msg) from e
+    
+def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
+    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
+    
+    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
+    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
+
+    try:
+        if "ipfs://" in agent_source_url:
+            install_agent_from_ipfs(agent_name, agent_version, agent_source_url)
+        else:
+            install_agent_from_git(agent_name, agent_version, agent_source_url)
+            
         # Reinstall the agent
         logger.info(f"Installing/Reinstalling {agent_name}")
         installation_output = run_poetry_command(["add", f"{agents_source_dir}"])

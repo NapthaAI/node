@@ -13,7 +13,7 @@ include = "node"
 from = "."
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = ">=3.12,<3.13"
 aiofiles = "^23.2.1"
 pydantic = "^2.5.3"
 uvicorn = "^0.25.0"
@@ -38,6 +38,7 @@ protobuf = "^4.25.2"
 ecdsa = "^0.19.0"
 ipfshttpclient = "^0.7.0"
 tenacity = "^8.4.1"
+hello-world-agent = {path = "/Users/richardblythman/code/node/node/storage/hub/agents/hello_world"}
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.11"
