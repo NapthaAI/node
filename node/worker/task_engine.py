@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 
 logger = get_logger(__name__)
-NUM_RETRIES = 3
+NUM_RETRIES = 10
 BACKOFF_MULTIPLIER = 1
 BACKOFF_MIN = 1
 BACKOFF_MAX = 10
@@ -87,18 +87,12 @@ class TaskEngine:
         }
         self.agent_run_input = AgentRunInput(**agent_run_input)
         logger.info(f"Initializing agent run.")
-        self.agent_run = await create_agent_run(self.agent_run_input)
+        self.agent_run = AgentRun(**self.agent_run_input.model_dict())
         self.agent_run.start_processing_time = datetime.now(pytz.utc).isoformat()
 
-        # Relate new agent run with parent flow run
-        self.flow_run.child_runs.append(AgentRun(**{k: v for k, v in self.agent_run.model_dict().items() if k not in ["child_runs", "parent_runs"]}))
-        logger.info(f"Adding agent run to parent flow run: {self.flow_run}")
-        _ = await update_agent_run(self.flow_run)
-
     async def start_run(self):
-        logger.info(f"Starting agent run: {self.agent_run}")
+        logger.info(f"Starting agent run")
         self.agent_run.status = "running"
-        await update_agent_run(self.agent_run)
 
         logger.info(f"Checking user: {self.consumer}")
         async with self.task.worker_node as node:
@@ -111,14 +105,12 @@ class TaskEngine:
                 consumer = await node.register_user(user_input=consumer)
             logger.info(f"User registered: {consumer}.")
 
-        logger.info(f"Running agent on worker node {self.task.worker_node.node_url}: {self.agent_run_input}")
+        logger.info(f"Running agent on worker node {self.task.worker_node.node_url}")
         async with self.task.worker_node as node:
             agent_run = await node.run_agent(agent_run_input=self.agent_run_input)
-        logger.info(f"Completed agent run on worker node {self.task.worker_node.node_url}: {agent_run}")
+        logger.info(f"Completed agent run on worker node {self.task.worker_node.node_url}")
 
         self.agent_run = agent_run
-
-        await update_agent_run(self.agent_run)
 
         if self.agent_run.status == 'completed':
             logger.info(f"Agent run completed: {self.agent_run}")
@@ -145,8 +137,7 @@ class TaskEngine:
             end_time = datetime.fromisoformat(end_time.rstrip('Z'))
 
         self.agent_run.duration = (end_time - start_time).total_seconds()
-        await update_agent_run(self.agent_run)
-        logger.info(f"Agent run completed: {self.agent_run}")
+        self.flow_run.child_runs.append(self.agent_run)
 
     async def fail(self):
         logger.error(f"Error running agent")
@@ -166,4 +157,4 @@ class TaskEngine:
             end_time = datetime.fromisoformat(end_time.rstrip('Z'))
 
         self.agent_run.duration = (end_time - start_time).total_seconds()
-        await update_agent_run(self.agent_run)
+        self.flow_run.child_runs.append(self.agent_run)

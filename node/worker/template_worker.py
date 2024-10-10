@@ -444,7 +444,7 @@ class FlowEngine:
                 os.makedirs(output_path)
 
         validated_data = self.load_and_validate_input_schema()
-        self.flow_run.input_schema_ipfs_hash = await self.upload_input_params_to_ipfs(validated_data)
+        # add code to upload input params to ipfs if needed
         tn = self.flow_name.replace("-", "_")
         entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
         main_module = importlib.import_module(f"{tn}.run")
