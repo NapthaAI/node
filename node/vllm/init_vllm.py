@@ -1,12 +1,13 @@
 import os
+import logging
 import subprocess
-from node.utils import get_logger
 from node.config import GPU
-logger = get_logger(__name__)
 
-if GPU == 'false':
+logger = logging.getLogger(__name__)
+
+if GPU == "false":
     GPU = False
-elif GPU == 'true':
+elif GPU == "true":
     GPU = True
 
 logger.info(f"GPU: {GPU}")
@@ -17,13 +18,14 @@ def setup_vllm(model):
     chat_template_path = os.path.join(current_dir, "chatml.jinja")
     if GPU:
         command = [
-            "vllm", "serve", model,
-            "--max-model-len", "2500",
-            "--chat-template", chat_template_path
+            "vllm",
+            "serve",
+            model,
+            "--max-model-len",
+            "2500",
+            "--chat-template",
+            chat_template_path,
         ]
     else:
-        command = [
-            "vllm", "serve", model,
-            "--chat-template", chat_template_path
-        ]
+        command = ["vllm", "serve", model, "--chat-template", chat_template_path]
     subprocess.run(command, check=True)

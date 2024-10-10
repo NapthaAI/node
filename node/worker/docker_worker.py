@@ -4,7 +4,6 @@ import time
 from typing import Dict, Optional
 from datetime import datetime
 import pytz
-import json
 import docker
 from docker.types import DeviceRequest
 from docker.models.containers import Container
@@ -12,7 +11,12 @@ from docker.errors import ContainerError, ImageNotFound, APIError
 from node.schemas import DockerParams, AgentRun
 from node.utils import get_logger
 from node.worker.main import app
-from node.worker.utils import handle_ipfs_input, BASE_OUTPUT_DIR, update_db_with_status_sync, upload_to_ipfs
+from node.worker.utils import (
+    handle_ipfs_input,
+    BASE_OUTPUT_DIR,
+    update_db_with_status_sync,
+    upload_to_ipfs,
+)
 import traceback
 
 logger = get_logger(__name__)
@@ -47,10 +51,8 @@ def prepare_volume_directory(
 
 
 def monitor_container_logs(
-        container: Container, 
-        agent_run: Dict, 
-        save_location: Optional[str] = None
-    ) -> str:
+    container: Container, agent_run: Dict, save_location: Optional[str] = None
+) -> str:
     """Monitor container logs"""
     output = ""
     for line in container.logs(stream=True, follow=True):
@@ -59,16 +61,10 @@ def monitor_container_logs(
         asyncio.run(update_db_with_status_sync(agent_run=agent_run))
 
     if save_location == "node":
-        out_msg = {
-            "output": str(output),
-            "node_storage_path": agent_run.id
-        }
+        out_msg = {"output": str(output), "node_storage_path": agent_run.id}
     elif save_location == "ipfs":
         out_msg = upload_to_ipfs(f"{BASE_OUTPUT_DIR}/{agent_run.id.split(':')[1]}")
-        out_msg = {
-            "output": str(output),
-            "output_ipfs_hash": out_msg
-        }
+        out_msg = {"output": str(output), "output_ipfs_hash": out_msg}
     else:
         out_msg = {
             "output": str(output),
@@ -118,7 +114,10 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
             raise ValueError("save_location must be either 'node' or 'ipfs'")
 
     volumes = {}
-    if agent_run.agent_run_params.input_dir or agent_run.agent_run_params.input_ipfs_hash:
+    if (
+        agent_run.agent_run_params.input_dir
+        or agent_run.agent_run_params.input_ipfs_hash
+    ):
         logger.info("Preparing input directory")
         inp_vol = prepare_volume_directory(
             base_dir=BASE_OUTPUT_DIR,
@@ -148,7 +147,9 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
     try:
         # GPU allocation
         if agent_run.agent_run_params.docker_num_gpus != 0:
-            gpu_request = DeviceRequest(count=agent_run.agent_run_params.docker_num_gpus, capabilities=[["gpu"]])
+            gpu_request = DeviceRequest(
+                count=agent_run.agent_run_params.docker_num_gpus, capabilities=[["gpu"]]
+            )
             kwargs["device_requests"] = [gpu_request]
 
         # Environment variables
@@ -162,14 +163,16 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
         logger.debug(f"Running container with kwargs: {kwargs}")
 
         container = client.containers.run(
-            image=agent_run.agent_run_params.docker_image, 
-            command=agent_run.agent_run_params.docker_command, 
-            detach=True, 
-            **kwargs
+            image=agent_run.agent_run_params.docker_image,
+            command=agent_run.agent_run_params.docker_command,
+            detach=True,
+            **kwargs,
         )
 
-        output = monitor_container_logs(container, agent_run, save_location=agent_run.agent_run_params.save_location)
-    
+        monitor_container_logs(
+            container, agent_run, save_location=agent_run.agent_run_params.save_location
+        )
+
         # Update the agent_run status to completed
         logger.info(f"Container finished running: {container}")
         logger.info(f"Container agent run completed: {agent_run}")
@@ -226,6 +229,7 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
         logger.info(f"Done. Removing container: {container}")
         if container:
             cleanup_container(container)
+
 
 # Function to execute a docker agent
 @app.task

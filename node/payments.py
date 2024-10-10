@@ -1,9 +1,8 @@
 import json
 from node.storage.hub.hub import Hub
-from node.utils import get_logger
+import logging
 
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 async def setup_payments_from_config(payments_config_path, node_id):

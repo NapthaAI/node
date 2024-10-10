@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Union
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+
 class NodeConfig(BaseModel):
     id: str
     public_key: str
@@ -24,9 +25,11 @@ class NodeConfig(BaseModel):
     class Config:
         allow_mutation = True
 
+
 class AgentRunType(str, Enum):
     package = "package"
     docker = "docker"
+
 
 class DockerParams(BaseModel):
     docker_image: str
@@ -41,9 +44,6 @@ class DockerParams(BaseModel):
 
     class Config:
         allow_mutation = True
-
-    class Config:
-        allow_mutation = True
         json_encoders = {
             datetime: lambda v: v.isoformat(),
         }
@@ -54,6 +54,7 @@ class DockerParams(BaseModel):
             if isinstance(value, datetime):
                 model_dict[key] = value.isoformat()
         return model_dict
+
 
 class AgentRun(BaseModel):
     agent_name: str
@@ -70,8 +71,8 @@ class AgentRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
     agent_run_params: Optional[Union[Dict, DockerParams]] = None
-    child_runs: List['AgentRun'] = []
-    parent_runs: List['AgentRun'] = []
+    child_runs: List["AgentRun"] = []
+    parent_runs: List["AgentRun"] = []
     input_schema_ipfs_hash: Optional[str] = None
     agent_source_url: Optional[str] = None
     agent_version: Optional[str] = None
@@ -89,7 +90,7 @@ class AgentRun(BaseModel):
             elif isinstance(v, AgentRunType):
                 return v.value
             elif isinstance(v, BaseModel):
-                return v.model_dict() if hasattr(v, 'model_dict') else v.dict()
+                return v.model_dict() if hasattr(v, "model_dict") else v.dict()
             elif isinstance(v, list):
                 return [convert_value(item) for item in v]
             elif isinstance(v, dict):
@@ -99,20 +100,21 @@ class AgentRun(BaseModel):
 
         return {k: convert_value(v) for k, v in self.dict(exclude_none=True).items()}
 
+
 class AgentRunInput(BaseModel):
     agent_name: str
     consumer_id: str
     worker_nodes: Optional[list[str]] = None
     agent_run_params: Optional[Union[Dict, DockerParams]] = None
     agent_run_type: Optional[AgentRunType] = None
-    parent_runs: List['AgentRun'] = []
+    parent_runs: List["AgentRun"] = []
     agent_source_url: Optional[str] = None
     agent_version: Optional[str] = None
 
     def model_dict(self):
         model_dict = self.dict()
-        for i, parent_run in enumerate(model_dict['parent_runs']):
+        for i, parent_run in enumerate(model_dict["parent_runs"]):
             for key, value in parent_run.items():
                 if isinstance(value, datetime):
-                    model_dict['parent_runs'][i][key] = value.isoformat()
+                    model_dict["parent_runs"][i][key] = value.isoformat()
         return model_dict

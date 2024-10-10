@@ -1,25 +1,59 @@
 import logging
+import logging.config
 import os
 import requests
 from pathlib import Path
 import subprocess
 from typing import List
 
+_logging_initialized = False
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(default_level=logging.INFO):
+    """Setup logging configuration"""
+    global _logging_initialized
+    if _logging_initialized:
+        return
+
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    date_format = "%Y-%m-%d %H:%M:%S"
+
+    logging_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": log_format,
+                "datefmt": date_format,
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "standard",
+                "level": "DEBUG",
+                "stream": "ext://sys.stdout",
+            },
+        },
+        "loggers": {
+            "": {  # root logger
+                "handlers": ["console"],
+                "level": default_level,
+                "propagate": True,
+            }
+        },
+    }
+
+    logging.config.dictConfig(logging_config)
+    _logging_initialized = True
+
 
 def get_logger(name):
-    """Get the logger for the node."""
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    return logger
+    if not _logging_initialized:
+        setup_logging()
+    return logging.getLogger(name)
 
-logger = get_logger(__name__)
 
 def get_external_ip():
     """Get the external IP address of the node. If the IP address is not found, raise an error."""
@@ -29,9 +63,9 @@ def get_external_ip():
     except requests.RequestException as e:
         raise f"""Error retrieving IP: {e}\n\nPlease pass the IP address manually in the .env file"""
 
+
 def create_output_dir(base_output_dir):
     """Create the output directory for the node."""
-    logger.info(f"Creating output directory: {base_output_dir}")
     if base_output_dir is None:
         raise Exception("base_output_dir not found in environment")
 
@@ -50,6 +84,7 @@ def create_output_dir(base_output_dir):
 
     except Exception as e:
         raise Exception(f"Error creating base_output_dir: {e}")
+
 
 def run_subprocess(cmd: List) -> str:
     """Run a subprocess"""
@@ -79,19 +114,20 @@ def run_subprocess(cmd: List) -> str:
         logger.error(f"An error occurred: {e}")
         raise
 
+
 def add_credentials_to_env(username, password):
-    env_file_path = os.path.join(os.getcwd(), '.env')
+    env_file_path = os.path.join(os.getcwd(), ".env")
     updated_lines = []
     hub_user_found = False
     hub_pass_found = False
 
     # Read the existing .env file
-    with open(env_file_path, 'r') as env_file:
+    with open(env_file_path, "r") as env_file:
         for line in env_file:
-            if line.startswith('HUB_USERNAME='):
+            if line.startswith("HUB_USERNAME="):
                 updated_lines.append(f"HUB_USERNAME={username}\n")
                 hub_user_found = True
-            elif line.startswith('HUB_PASSWORD='):
+            elif line.startswith("HUB_PASSWORD="):
                 updated_lines.append(f"HUB_PASSWORD={password}\n")
                 hub_pass_found = True
             else:
@@ -104,10 +140,13 @@ def add_credentials_to_env(username, password):
         updated_lines.append(f"HUB_PASSWORD={password}\n")
 
     # Write the updated content back to the .env file
-    with open(env_file_path, 'w') as env_file:
+    with open(env_file_path, "w") as env_file:
         env_file.writelines(updated_lines)
 
-    print("Your credentials have been updated in the .env file. You can now use these credentials to authenticate in future sessions.")
+    print(
+        "Your credentials have been updated in the .env file. You can now use these credentials to authenticate in future sessions."
+    )
+
 
 class AsyncMixin:
     def __init__(self, *args, **kwargs):
