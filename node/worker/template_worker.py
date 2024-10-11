@@ -323,6 +323,33 @@ def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_ur
         logger.error(error_msg)
         logger.info(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
+
+def install_agent_from_git(agent_name: str, agent_version: str, agent_source_url: str):
+    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
+    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
+    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
+    try:
+        if agents_source_dir.exists():
+            logger.info(f"Updating existing repository for {agent_name}")
+            repo = Repo(agents_source_dir)
+            repo.remotes.origin.fetch()
+            repo.git.checkout(agent_version)
+            logger.info(f"Successfully updated {agent_name} to version {agent_version}")
+        else:
+            # Clone new repository
+            logger.info(f"Cloning new repository for {agent_name}")
+            Repo.clone_from(agent_source_url, agents_source_dir)
+            repo = Repo(agents_source_dir)
+            repo.git.checkout(agent_version)
+            logger.info(f"Successfully cloned {agent_name} version {agent_version}")
+
+    except Exception as e:
+        error_msg = f"Error installing {agent_name}: {str(e)}"
+        logger.error(error_msg)
+        logger.info(f"Traceback: {traceback.format_exc()}")
+        if "Dependency conflict detected" in str(e):
+            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
+        raise RuntimeError(error_msg) from e
     
 def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
     logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
