@@ -89,6 +89,8 @@ RUN curl https://ollama.ai/install.sh | sh
 # Create conda environment with Python 3.12
 RUN conda create -n myenv python=3.12 -y
 
+RUN pip install poetry
+
 # Activate conda environment
 SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
 
@@ -123,6 +125,9 @@ COPY ./pyproject.toml /app/
 COPY ./poetry.lock /app/
 COPY ./README.md /app/
 COPY ./start.sh /app/
+COPY ./init_rabbitmq.sh /app/
+
+RUN chmod +x /app/init_rabbitmq.sh
 
 # After copying all files
 WORKDIR /app

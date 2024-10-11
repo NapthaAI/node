@@ -6,7 +6,7 @@ import subprocess
 import time
 import logging
 
-from node.config import get_node_config, HUB_DB_PORT, HUB_NS, HUB_DB
+from node.config import get_node_config, HUB_DB_PORT, HUB_NS, HUB_DB, IN_DOCKER, LOCAL_HUB
 from node.storage.hub.hub import Hub
 from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger
@@ -61,6 +61,10 @@ def import_surql():
 
 async def init_hub():
     """Initialize the database"""
+    if IN_DOCKER and not LOCAL_HUB:
+        logger.info("Running in Docker and LOCAL_HUB is False. Skipping database initialization.")
+        return
+
     logger.info("Initializing database")
 
     # use file storage
@@ -105,6 +109,43 @@ async def user_setup_flow():
         username, password = os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
         username_exists, password_exists = len(username) > 1, len(password) > 1
         public_key = get_public_key(os.getenv("PRIVATE_KEY"))
+
+        # Flow when we are in DOCKER
+        if IN_DOCKER:
+            logger.info(f"Username: {username}, Password: {password}")
+            logger.info(f"Running in Docker. Username exists: {username_exists}, Password exists: {password_exists}")
+
+            if not username_exists or not password_exists:
+                raise Exception("Username and password must be set in the .env file when running in Docker.")
+
+            private_key = os.getenv("PRIVATE_KEY")
+            if not private_key:
+                raise Exception("PRIVATE_KEY must be set in the .env file when running in Docker.")
+
+            print(f"Signing up user: {username} with public key: {public_key}")
+            try:
+                #  try to signin first
+                success, token, user_id = await hub.signin(username, password)
+                if success:
+                    logger.info("Sign in successful!")
+                    return token, user_id
+
+                success, token, user_id = await hub.signup(
+                    username, 
+                    password, 
+                    public_key
+                )
+                if success:
+                    logger.info("Sign up successful!")
+                    return token, user_id
+                else:
+                    logger.error("Sign up failed.")
+                    raise Exception("Sign up failed.")
+            except Exception as e:
+                logger.error(f"Sign up failed with error: {e}")
+                raise e
+
+        username_exists, password_exists = len(username) > 1, len(password) > 1
         logger.info(f"Public key: {public_key}")
         logger.info(f"Checking if user exists... User: {username}")
         user = await hub.get_user_by_username(username)

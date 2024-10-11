@@ -97,6 +97,7 @@ if [ "$GPU" = "true" ] && [[ "$OSTYPE" != "darwin"* ]]; then
     docker run -d \
         --gpus all \
         --name $CONTAINER_NAME \
+        -p 3001:3001 \
         -p 3002:3002 \
         -p 8000:8000 \
         -p 7001:7001 \
@@ -113,12 +114,14 @@ else
     # CPU version (Linux and macOS)
     docker run -d \
         --name $CONTAINER_NAME \
+        -p 3001:3001 \
         -p 3002:3002 \
         -p 8000:8000 \
         -p 7001:7001 \
         -p 5672:5672 \
         -p 15672:15672 \
         -p 11434:11434 \
+        -v "$(pwd)/node/storage/hub/hub.db:/app/node/storage/hub/hub.db" \
         -v "$(pwd)/node/storage/fs:/app/node/storage/fs" \
         -v "$(pwd)/node/storage/db/db.db:/app/node/storage/db/db.db" \
         -v "$(pwd)/logs:/var/log" \
