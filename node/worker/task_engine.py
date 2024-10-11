@@ -109,12 +109,13 @@ class TaskEngine:
             ],
         }
         self.agent_run_input = AgentRunInput(**agent_run_input)
-        logger.info("Initializing agent run.")
+        logger.info(f"Initializing agent run.")
+
         self.agent_run = AgentRun(**self.agent_run_input.model_dict())
         self.agent_run.start_processing_time = datetime.now(pytz.utc).isoformat()
 
     async def start_run(self):
-        logger.info("Starting agent run")
+        logger.info(f"Starting agent run")
         self.agent_run.status = "running"
 
         logger.info(f"Checking user: {self.consumer}")
