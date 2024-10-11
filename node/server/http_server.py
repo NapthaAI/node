@@ -4,34 +4,46 @@ from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 import uvicorn
 import io
 import os
+import logging
 import traceback
 from typing import Optional
 from node.schemas import AgentRun, AgentRunInput, DockerParams
 
-from node.utils import get_logger
-from node.storage.storage import write_to_ipfs, read_from_ipfs_or_ipns, write_storage, read_storage
+from node.storage.storage import (
+    write_to_ipfs,
+    read_from_ipfs_or_ipns,
+    write_storage,
+    read_storage,
+)
 from node.user import check_user, register_user
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_flow
 from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-import asyncio 
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
+import asyncio
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 load_dotenv()
+
 
 class TransientDatabaseError(Exception):
     pass
+
 
 class HTTPServer:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
-        
+
         self.app = FastAPI()
-        
+
         router = APIRouter()
 
         @router.post("/agent/run")
@@ -68,10 +80,12 @@ class HTTPServer:
                     path=message_dict["path"],
                     media_type=message_dict["media_type"],
                     filename=message_dict["filename"],
-                    headers=message_dict["headers"]
+                    headers=message_dict["headers"],
                 )
             else:
-                raise HTTPException(status_code=status_code, detail=message_dict["message"])
+                raise HTTPException(
+                    status_code=status_code, detail=message_dict["message"]
+                )
 
         @router.post("/storage/write_ipfs")
         async def storage_write_ipfs_endpoint(
@@ -83,14 +97,18 @@ class HTTPServer:
             logger.info(f"Writing to IPFS: {file.filename}")
             logger.info(f"Publish to IPNS: {publish_to_ipns}")
             logger.info(f"Update IPNS name: {update_ipns_name}")
-            status_code, message_dict = await write_to_ipfs(file, publish_to_ipns, update_ipns_name)
+            status_code, message_dict = await write_to_ipfs(
+                file, publish_to_ipns, update_ipns_name
+            )
             logger.info(f"Status code: {status_code}")
             logger.info(f"Message dict: {message_dict}")
 
             if status_code == 201:
                 return JSONResponse(status_code=status_code, content=message_dict)
             else:
-                raise HTTPException(status_code=status_code, detail=message_dict["message"])
+                raise HTTPException(
+                    status_code=status_code, detail=message_dict["message"]
+                )
 
         @router.get("/storage/read_ipfs/{hash_or_name}")
         async def storage_read_ipfs_or_ipns_endpoint(hash_or_name: str):
@@ -102,7 +120,7 @@ class HTTPServer:
                     return StreamingResponse(
                         io.BytesIO(message_dict["content"]),
                         media_type=message_dict["media_type"],
-                        headers=message_dict["headers"]
+                        headers=message_dict["headers"],
                     )
                 else:
                     # For single file content
@@ -110,10 +128,12 @@ class HTTPServer:
                         path=message_dict["path"],
                         media_type=message_dict["media_type"],
                         filename=message_dict["filename"],
-                        headers=message_dict["headers"]
+                        headers=message_dict["headers"],
                     )
             else:
-                raise HTTPException(status_code=status_code, detail=message_dict["message"])
+                raise HTTPException(
+                    status_code=status_code, detail=message_dict["message"]
+                )
 
         # User endpoints
         @router.post("/user/check")
@@ -128,7 +148,9 @@ class HTTPServer:
 
         # Monitor endpoints
         @router.post("/monitor/create_agent_run")
-        async def monitor_create_agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
+        async def monitor_create_agent_run_endpoint(
+            agent_run_input: AgentRunInput,
+        ) -> AgentRun:
             """Log a new agent run with orchestrator."""
             return await self.monitor_create_agent_run(agent_run_input)
 
@@ -158,7 +180,9 @@ class HTTPServer:
             logger.info(f"Received request to run an agent: {agent_run_input}")
 
             async with Hub() as hub:
-                success, user, user_id = await hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD"))
+                success, user, user_id = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
                 agent = await hub.list_agents(f"agent:{agent_run_input.agent_name}")
                 logger.info(f"Found Agent: {agent}")
 
@@ -170,14 +194,16 @@ class HTTPServer:
                 agent_run_input.agent_source_url = agent["url"]
 
                 if agent["type"] == "docker":
-                    agent_run_input.agent_run_params = DockerParams(**agent_run_input.agent_run_params)
+                    agent_run_input.agent_run_params = DockerParams(
+                        **agent_run_input.agent_run_params
+                    )
 
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
-                logger.info(f"Created agent run")
+                logger.info("Created agent run")
 
-                updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
-                logger.info(f"Updated agent run")
+                await db.update_agent_run(agent_run.id, agent_run)
+                logger.info("Updated agent run")
 
             # Enqueue the agent run in Celery
             if agent_run.agent_run_type == "package":
@@ -193,11 +219,13 @@ class HTTPServer:
             logger.error(f"Failed to run agent: {str(e)}")
             error_details = traceback.format_exc()
             logger.error(f"Full traceback: {error_details}")
-            raise HTTPException(status_code=500, detail=f"Failed to run agent: {agent_run_input}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to run agent: {agent_run_input}"
+            )
 
     async def agent_check(self, agent_run: AgentRun) -> AgentRun:
         """
-        Check an agent 
+        Check an agent
         :param agent_run: AgentRun details
         :return: Status
         """
@@ -217,10 +245,14 @@ class HTTPServer:
             logger.info(f"Found agent status: {status}")
 
             if agent_run.status == "completed":
-                logger.info(f"Agent run completed. Returning output: {agent_run.results}")
+                logger.info(
+                    f"Agent run completed. Returning output: {agent_run.results}"
+                )
                 response = agent_run.results
             elif agent_run.status == "error":
-                logger.info(f"Agent run failed. Returning error: {agent_run.error_message}")
+                logger.info(
+                    f"Agent run failed. Returning error: {agent_run.error_message}"
+                )
                 response = agent_run.error_message
             else:
                 response = None
@@ -234,47 +266,70 @@ class HTTPServer:
         except Exception as e:
             logger.error(f"Failed to check agent run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
-            raise HTTPException(status_code=500, detail="Internal server error occurred while checking agent run")
-        
+            raise HTTPException(
+                status_code=500,
+                detail="Internal server error occurred while checking agent run",
+            )
+
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=0.5, max=10),
         retry=retry_if_exception_type(TransientDatabaseError),
-        before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
+        before_sleep=lambda retry_state: logger.info(
+            f"Retrying operation, attempt {retry_state.attempt_number}"
+        ),
     )
-    async def monitor_create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
+    async def monitor_create_agent_run(
+        self, agent_run_input: AgentRunInput
+    ) -> AgentRun:
         try:
-            logger.info(f"Creating agent run for worker node {agent_run_input.worker_nodes[0]}")
+            logger.info(
+                f"Creating agent run for worker node {agent_run_input.worker_nodes[0]}"
+            )
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
-            logger.info(f"Created agent run for worker node {agent_run_input.worker_nodes[0]}")
+            logger.info(
+                f"Created agent run for worker node {agent_run_input.worker_nodes[0]}"
+            )
             return agent_run
         except Exception as e:
             logger.error(f"Failed to create agent run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
                 raise TransientDatabaseError(str(e))
-            raise HTTPException(status_code=500, detail=f"Internal server error occurred while creating agent run")
+            raise HTTPException(
+                status_code=500,
+                detail="Internal server error occurred while creating agent run",
+            )
 
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1, min=0.5, max=10),
         retry=retry_if_exception_type(TransientDatabaseError),
-        before_sleep=lambda retry_state: logger.info(f"Retrying operation, attempt {retry_state.attempt_number}")
+        before_sleep=lambda retry_state: logger.info(
+            f"Retrying operation, attempt {retry_state.attempt_number}"
+        ),
     )
     async def monitor_update_agent_run(self, agent_run: AgentRun) -> AgentRun:
         try:
-            logger.info(f"Updating agent run for worker node {agent_run.worker_nodes[0]}")
+            logger.info(
+                f"Updating agent run for worker node {agent_run.worker_nodes[0]}"
+            )
             async with DB() as db:
                 updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
-            logger.info(f"Updated agent run for worker node {agent_run.worker_nodes[0]}")
+            logger.info(
+                f"Updated agent run for worker node {agent_run.worker_nodes[0]}"
+            )
             return updated_agent_run
         except Exception as e:
             logger.error(f"Failed to update agent run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
                 raise TransientDatabaseError(str(e))
-            raise HTTPException(status_code=500, detail=f"Internal server error occurred while updating agent run")
+            raise HTTPException(
+                status_code=500,
+                detail="Internal server error occurred while updating agent run",
+            )
 
     async def launch_server(self):
         logger.info(f"Launching HTTP server on 0.0.0.0:{self.port}...")
@@ -286,7 +341,7 @@ class HTTPServer:
             timeout_keep_alive=300,
             limit_concurrency=200,
             backlog=4096,
-            reload=True
+            reload=True,
         )
         server = uvicorn.Server(config)
         await server.serve()

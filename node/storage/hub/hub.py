@@ -1,22 +1,21 @@
-import asyncio
 from dotenv import load_dotenv
 import jwt
-import os
+import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import NodeConfig
-from node.utils import get_logger
 from surrealdb import Surreal
 import traceback
 from typing import Dict, List, Optional, Tuple
 
 load_dotenv()
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+
 
 class Hub(AsyncMixin):
     def __init__(self, *args, **kwargs):
         if LOCAL_HUB:
-            self.hub_url = LOCAL_HUB_URL 
+            self.hub_url = LOCAL_HUB_URL
         else:
             self.hub_url = PUBLIC_HUB_URL
         self.ns = HUB_NS
@@ -48,7 +47,9 @@ class Hub(AsyncMixin):
             logger.error(f"Token decoding failed: {e}")
             return None
 
-    async def signin(self, username: str, password: str) -> Tuple[bool, Optional[str], Optional[str]]:
+    async def signin(
+        self, username: str, password: str
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
             user = await self.surrealdb.signin(
                 {
@@ -68,17 +69,20 @@ class Hub(AsyncMixin):
             logger.error(traceback.format_exc())
             return False, None, None
 
-    async def signup(self, username: str, password: str, public_key: str) -> Tuple[bool, Optional[str], Optional[str]]:
-
-        user = await self.surrealdb.signup({
-            "NS": self.ns,
-            "DB": self.db,
-            "AC": "user",
-            "name": username,
-            "username": username,
-            "password": password,
-            "public_key": public_key,
-        })
+    async def signup(
+        self, username: str, password: str, public_key: str
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        user = await self.surrealdb.signup(
+            {
+                "NS": self.ns,
+                "DB": self.db,
+                "AC": "user",
+                "name": username,
+                "username": username,
+                "password": password,
+                "public_key": public_key,
+            }
+        )
         if not user:
             return False, None, None
         self.user_id = self._decode_token(user)
@@ -90,7 +94,7 @@ class Hub(AsyncMixin):
     async def get_user_by_username(self, username: str) -> Optional[Dict]:
         result = await self.surrealdb.query(
             "SELECT * FROM user WHERE username = $username LIMIT 1",
-            {"username": username}
+            {"username": username},
         )
         if result and result[0]["result"]:
             return result[0]["result"][0]
@@ -99,7 +103,7 @@ class Hub(AsyncMixin):
     async def get_user_by_public_key(self, public_key: str) -> Optional[Dict]:
         result = await self.surrealdb.query(
             "SELECT * FROM user WHERE public_key = $public_key LIMIT 1",
-            {"public_key": public_key}
+            {"public_key": public_key},
         )
         if result and result[0]["result"]:
             return result[0]["result"][0]
@@ -144,7 +148,8 @@ class Hub(AsyncMixin):
             )
             try:
                 return agent[0]["result"][0]
-            except:
+            except Exception as e:
+                logger.error(f"Failed to get agent: {e}")
                 return None
 
     async def create_plan(self, plan_config: Dict) -> Tuple[bool, Optional[Dict]]:

@@ -1,7 +1,6 @@
 import os
 import io
 from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
-from node.utils import get_logger
 from uuid import uuid4
 from pathlib import Path
 import ipfshttpclient
@@ -9,8 +8,9 @@ import zipfile
 import shutil
 import requests
 import tempfile
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def zip_dir(directory_path: str) -> io.BytesIO:
@@ -52,10 +52,12 @@ async def write_storage(file):
 
 
 def zip_directory(file_path, zip_path):
-    """Utility function to recursively zip the content of a directory and its subdirectories, 
+    """Utility function to recursively zip the content of a directory and its subdirectories,
     placing the contents in the zip as if the provided file_path was the root."""
-    base_path_len = len(Path(file_path).parts)  # Number of path segments in the base path
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+    base_path_len = len(
+        Path(file_path).parts
+    )  # Number of path segments in the base path
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(file_path):
             for file in files:
                 full_path = os.path.join(root, file)
@@ -80,22 +82,27 @@ async def read_storage(job_id: str):
         return (404, {"message": "Output directory not found"})
 
     # Create a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmpfile:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmpfile:
         zip_directory(output_path, tmpfile.name)
         tmpfile.close()
 
-        return (200, {
-            "path": tmpfile.name,
-            "media_type": "application/zip",
-            "filename": f"{job_id}.zip",
-            "headers": {"Content-Disposition": f"attachment; filename={job_id}.zip"}
-        })
+        return (
+            200,
+            {
+                "path": tmpfile.name,
+                "media_type": "application/zip",
+                "filename": f"{job_id}.zip",
+                "headers": {
+                    "Content-Disposition": f"attachment; filename={job_id}.zip"
+                },
+            },
+        )
 
 
 def get_api_url():
-    domain = IPFS_GATEWAY_URL.split('/')[2]
-    port = IPFS_GATEWAY_URL.split('/')[4]
-    return f'http://{domain}:{port}/api/v0'
+    domain = IPFS_GATEWAY_URL.split("/")[2]
+    port = IPFS_GATEWAY_URL.split("/")[4]
+    return f"http://{domain}:{port}/api/v0"
 
 
 async def write_to_ipfs(file, publish_to_ipns=False, update_ipns_name=None):
@@ -104,18 +111,18 @@ async def write_to_ipfs(file, publish_to_ipns=False, update_ipns_name=None):
         logger.info(f"Writing file to IPFS: {file.filename}")
         if not IPFS_GATEWAY_URL:
             return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
-        
+
         client = ipfshttpclient.connect(IPFS_GATEWAY_URL)
         with tempfile.NamedTemporaryFile(mode="wb", delete=False) as tmpfile:
             content = await file.read()
             tmpfile.write(content)
             tmpfile_name = tmpfile.name
         file.file.close()
-        
+
         result = client.add(tmpfile_name)
         client.pin.add(result["Hash"])
         os.unlink(tmpfile_name)
-        
+
         ipfs_hash = result["Hash"]
         response = {
             "message": "File written and pinned to IPFS",
@@ -145,7 +152,7 @@ async def read_from_ipfs_or_ipns(hash_or_name: str):
             return (500, {"message": "IPFS_GATEWAY_URL not found in environment"})
 
         # If it's an IPNS name, resolve it to an IPFS hash
-        if hash_or_name.startswith('k'):
+        if hash_or_name.startswith("k"):
             ipfs_hash = get_ipns_record(hash_or_name)
         else:
             ipfs_hash = hash_or_name
@@ -157,22 +164,28 @@ async def read_from_ipfs_or_ipns(hash_or_name: str):
 
         if os.path.isdir(file_path):
             zip_buffer = zip_dir(file_path)
-            return (200, {
-                "content": zip_buffer.getvalue(),
-                "media_type": "application/zip",
-                "headers": {
-                    "Content-Disposition": f"attachment; filename={ipfs_hash}.zip"
+            return (
+                200,
+                {
+                    "content": zip_buffer.getvalue(),
+                    "media_type": "application/zip",
+                    "headers": {
+                        "Content-Disposition": f"attachment; filename={ipfs_hash}.zip"
+                    },
                 },
-            })
+            )
         else:
-            return (200, {
-                "path": file_path,
-                "media_type": "application/octet-stream",
-                "filename": os.path.basename(file_path),
-                "headers": {
-                    "Content-Disposition": f"attachment; filename={os.path.basename(file_path)}"
+            return (
+                200,
+                {
+                    "path": file_path,
+                    "media_type": "application/octet-stream",
+                    "filename": os.path.basename(file_path),
+                    "headers": {
+                        "Content-Disposition": f"attachment; filename={os.path.basename(file_path)}"
+                    },
                 },
-            })
+            )
     except Exception as e:
         logger.error(f"Error reading from IPFS/IPNS: {e}")
         return (500, {"message": f"Error reading from IPFS/IPNS: {e}"})
@@ -180,20 +193,27 @@ async def read_from_ipfs_or_ipns(hash_or_name: str):
 
 def publish_to_ipns_func(ipfs_hash: str) -> str:
     api_url = get_api_url()
-    params = {'arg': ipfs_hash, 'lifetime': '876000h'}  # Set lifetime to infinity (100 years)
-    ipns_pub = requests.post(f'{api_url}/name/publish', params=params)
-    return ipns_pub.json()['Name']
+    params = {
+        "arg": ipfs_hash,
+        "lifetime": "876000h",
+    }  # Set lifetime to infinity (100 years)
+    ipns_pub = requests.post(f"{api_url}/name/publish", params=params)
+    return ipns_pub.json()["Name"]
 
 
 def get_ipns_record(ipns_name: str) -> str:
     api_url = get_api_url()
-    params = {'arg': ipns_name}
-    ipns_get = requests.post(f'{api_url}/name/resolve', params=params)
-    return ipns_get.json()['Path'].split('/')[-1]
+    params = {"arg": ipns_name}
+    ipns_get = requests.post(f"{api_url}/name/resolve", params=params)
+    return ipns_get.json()["Path"].split("/")[-1]
 
 
 def update_ipns_record(ipns_name: str, ipfs_hash: str) -> str:
     api_url = get_api_url()
-    params = {'arg': ipfs_hash, 'key': ipns_name, 'lifetime': '876000h'}  # Set lifetime to infinity (100 years)
-    ipns_pub = requests.post(f'{api_url}/name/publish', params=params)
-    return ipns_pub.json()['Name']
+    params = {
+        "arg": ipfs_hash,
+        "key": ipns_name,
+        "lifetime": "876000h",
+    }  # Set lifetime to infinity (100 years)
+    ipns_pub = requests.post(f"{api_url}/name/publish", params=params)
+    return ipns_pub.json()["Name"]

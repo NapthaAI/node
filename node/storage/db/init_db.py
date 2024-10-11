@@ -1,14 +1,15 @@
 from dotenv import load_dotenv
 from node.config import BASE_OUTPUT_DIR, DB_NS, DB_DB, SURREALDB_PORT
 from node.agent_manager import install_agents_from_config
-from node.utils import create_output_dir, get_logger
+from node.utils import create_output_dir
 import os
+import logging
 from pathlib import Path
 import subprocess
 import time
 
 load_dotenv()
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 file_path = Path(__file__).resolve().parent
 local_db_file_path = f"{file_path}/db.db"

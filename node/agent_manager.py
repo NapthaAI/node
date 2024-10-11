@@ -3,11 +3,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import logging
 from node.config import AGENTS_SOURCE_DIR
 from node.utils import run_subprocess
-from node.utils import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 PARENT_DIR = Path(__file__).resolve().parent
 logger.info(f"AGENTS_SOURCE_DIR: {AGENTS_SOURCE_DIR}")

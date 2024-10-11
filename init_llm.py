@@ -6,6 +6,7 @@ from node.vllm.init_vllm import setup_vllm
 
 logger = get_logger(__name__)
 
+
 async def main():
     llm_backend = LLM_BACKEND
     if llm_backend == "ollama":
@@ -19,6 +20,7 @@ async def main():
         await setup_vllm(vllm_model)
     else:
         logger.error(f"Unsupported LLM backend: {llm_backend}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

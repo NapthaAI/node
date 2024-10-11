@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package agent;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/empty.proto";
+
+service GrpcServer {
+    // check server is alive
+    rpc is_alive (google.protobuf.Empty) returns (GeneralResponse) {}
+
+    // stop the server
+    rpc stop (google.protobuf.Empty) returns (GeneralResponse) {}
+
+    // check user
+    rpc CheckUser (CheckUserRequest) returns (CheckUserResponse) {}
+
+    // register user
+    rpc RegisterUser (RegisterUserRequest) returns (RegisterUserResponse) {}
+
+    // run agent
+    rpc RunAgent (RunAgentRequest) returns (stream RunAgentResponse) {}
+}
+
+// Message classes for agent server management
+message GeneralResponse {
+    bool ok = 1;
+    string message = 2;
+}
+
+message CheckUserRequest {
+  optional string user_id = 1;
+  string public_key = 2;
+}
+
+message CheckUserResponse {
+  bool is_registered = 1;
+  string id = 2;
+  string public_key = 3;
+}
+
+message RegisterUserRequest {
+  string public_key = 1;
+}
+
+message RegisterUserResponse {
+  string id = 1;
+  string public_key = 2;
+}
+
+message RunAgentRequest {
+  string agent_name = 1;
+  string consumer_id = 2;
+  google.protobuf.Struct agent_run_params = 3;
+  optional string agent_type = 4;
+  repeated string worker_nodes = 5;
+}
+
+message RunAgentResponse {
+  string agent_name = 1;
+  string agent_run_type = 2;
+  string consumer_id = 3;
+  string status = 4;
+  bool error = 5;
+  optional string id = 6;
+  repeated string results = 7;
+  repeated string worker_nodes = 8;
+  optional string error_message = 9;
+  optional string created_time = 10;
+  optional string start_processing_time = 11;
+  optional string completed_time = 12;
+  optional float duration = 13;
+  google.protobuf.Struct agent_run_params = 14;
+  repeated RunAgentResponse child_runs = 15;
+  repeated RunAgentResponse parent_runs = 16;
+  optional string input_schema_ipfs_hash = 17;
+  optional string agent_source_url = 18;
+  optional string agent_version = 19;
+}

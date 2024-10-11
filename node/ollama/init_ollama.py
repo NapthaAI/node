@@ -1,9 +1,9 @@
 import asyncio
 import platform
-from node.utils import get_logger
+import logging
 
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 async def run(cmd):
@@ -75,7 +75,7 @@ async def setup_ollama(ollama_models):
 
         if not out:
             return
-        
+
     # wait for ollama to start
     await asyncio.sleep(20)
 
