@@ -10,11 +10,10 @@ from node.storage.hub.hub import Hub
 from node.server.http_server import HTTPServer
 from node.server.ws_server import WebSocketServer
 from node.server.grpc_server import GrpcServer
-from node.utils import setup_logging
+from node.utils import get_logger
 
 
-setup_logging()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 load_dotenv()
 
 FILE_PATH = Path(__file__).resolve()
