@@ -10,8 +10,8 @@ NODE_PATH = FILE_PATH.parent
 load_dotenv()
 
 # Node
-IN_DOCKER=False
-GPU=False # set to true if gpu is available (Only for running node with IN_DOCKER=true)
+IN_DOCKER=os.getenv("IN_DOCKER", "false").lower() == "true"
+GPU=os.getenv("GPU", "false").lower() == "true"
 NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
