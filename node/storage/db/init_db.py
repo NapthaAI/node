@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from node.config import BASE_OUTPUT_DIR, DB_NS, DB_DB, SURREALDB_PORT
+from node.config import BASE_OUTPUT_DIR, DB_NS, DB_DB, SURREALDB_PORT, IN_DOCKER
 from node.agent_manager import install_agents_from_config
 from node.utils import create_output_dir, get_logger
 import os
@@ -88,7 +88,8 @@ def init_db():
     import_surql()
 
     create_output_dir(BASE_OUTPUT_DIR)
-    install_agents_from_config(Path(f"{root_dir}/storage/hub/packages.json"))
+    if not IN_DOCKER:
+        install_agents_from_config(Path(f"{root_dir}/storage/hub/packages.json"))
 
 
 if __name__ == "__main__":

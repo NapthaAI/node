@@ -39,7 +39,7 @@ else
         BASE_IMAGE="nvidia/cuda:12.2.0-base-ubuntu22.04"
         BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=true --build-arg OS_TYPE=linux"
     else
-        BASE_IMAGE="ubuntu:24.04"
+        BASE_IMAGE="ubuntu:22.04"
         BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=false --build-arg OS_TYPE=linux"
     fi
     echo "Detected Linux. Using base image: $BASE_IMAGE"

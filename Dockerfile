@@ -1,5 +1,5 @@
-# Use Ubuntu 24.04 as the base image, with an option for CUDA
-ARG BASE_IMAGE=ubuntu:24.04
+# Use Ubuntu 22.04 as the base image, with an option for CUDA
+ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE}
 
 # Set environment variables
@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     supervisor \
-    gcc \
-    g++ \
+    gcc-12 \
+    g++-12 \
     python3-dev \
     net-tools \  
     psmisc \     
@@ -33,6 +33,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     git \
     cmake \
+    ninja-build \
+    libtcmalloc-minimal4 \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 10 --slave /usr/bin/g++ g++ /usr/bin/g++-12 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Miniforge
@@ -78,21 +81,17 @@ RUN mkdir -p /var/log/rabbitmq /var/lib/rabbitmq && \
     chown -R rabbitmq:rabbitmq /var/log/rabbitmq /var/lib/rabbitmq && \
     chmod 777 /var/log/rabbitmq /var/lib/rabbitmq
 
-# Set up RabbitMQ directories and permissions
-RUN mkdir -p /var/log/rabbitmq /var/lib/rabbitmq && \
-    chown -R rabbitmq:rabbitmq /var/log/rabbitmq /var/lib/rabbitmq && \
-    chmod 777 /var/log/rabbitmq /var/lib/rabbitmq
-
 # Install Ollama
 RUN curl https://ollama.ai/install.sh | sh
 
 # Create conda environment with Python 3.12
 RUN conda create -n myenv python=3.12 -y
 
-RUN pip install poetry
-
 # Activate conda environment
 SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
+
+# Install poetry
+RUN pip install poetry
 
 # Install vLLM dependencies based on GPU flag and OS type
 RUN if [ "$OS_TYPE" = "macos" ]; then \
@@ -101,17 +100,27 @@ RUN if [ "$OS_TYPE" = "macos" ]; then \
         pip install -vv vllm poetry; \
     else \
         pip install -vv poetry && \
+        pip install intel-openmp && \
+        pip install --upgrade pip && \
+        pip install cmake>=3.26 wheel packaging ninja "setuptools-scm>=8" numpy && \
+        git clone -b rls-v3.5 https://github.com/oneapi-src/oneDNN.git && \
+        cmake -B ./oneDNN/build -S ./oneDNN -G Ninja -DONEDNN_LIBRARY_TYPE=STATIC \
+            -DONEDNN_BUILD_DOC=OFF \
+            -DONEDNN_BUILD_EXAMPLES=OFF \
+            -DONEDNN_BUILD_TESTS=OFF \
+            -DONEDNN_BUILD_GRAPH=OFF \
+            -DONEDNN_ENABLE_WORKLOAD=INFERENCE \
+            -DONEDNN_ENABLE_PRIMITIVE=MATMUL && \
+        cmake --build ./oneDNN/build --target install --config Release && \
         git clone https://github.com/vllm-project/vllm.git /app/vllm && \
         cd /app/vllm && \
-        pip install --upgrade pip && \
-        pip install wheel packaging ninja "setuptools>=49.4.0" numpy && \
         pip install -v -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu && \
-        pip uninstall -y torchvision && \
-        wget https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp312-cp312-linux_x86_64.whl && \
-        pip install torchvision-0.19.0+cpu-cp312-cp312-linux_x86_64.whl && \
         VLLM_TARGET_DEVICE=cpu python setup.py install && \
         cd /app; \
     fi
+
+# Set LD_PRELOAD for tcmalloc
+ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
 
 # Copy the project files
 COPY ./.dockerignore /app/
