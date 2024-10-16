@@ -13,8 +13,6 @@ logger = get_logger(__name__)
 
 load_dotenv()
 
-logger.info(f"Connecting to local DB: {LOCAL_DB_URL}")
-
 engine = create_engine(LOCAL_DB_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
