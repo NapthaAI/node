@@ -19,11 +19,11 @@ DEV_MODE=True
 
 # Servers
 NODE_TYPE="direct"
-SERVER_TYPE="http" # http or ws
+SERVER_TYPE="grpc" # http or ws
 NODE_IP="http://localhost"
 NODE_PORT=7001
 NODE_ROUTING="ws://node.naptha.ai:8765"
-NUM_SERVERS=1
+NUM_SERVERS=3
 
 # MQ
 CELERY_BROKER_URL="amqp://localhost:5672/"
@@ -34,10 +34,11 @@ VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
 OLLAMA_MODELS="phi"
 
 # Local DB
-SURREALDB_PORT=3002
-DB_NS="naptha"
-DB_DB="naptha"
-DB_URL="ws://localhost:3002/rpc"
+LOCAL_DB_PORT=3002
+LOCAL_DB_USER="naptha"
+LOCAL_DB_PASSWORD="napthapassword"
+LOCAL_DB_NAME="naptha"
+LOCAL_DB_URL=f"postgresql://{LOCAL_DB_USER}:{LOCAL_DB_PASSWORD}@localhost:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}"
 
 # Storage
 file_path = Path(__file__).resolve()
@@ -47,7 +48,7 @@ AGENTS_SOURCE_DIR=f"{repo_dir}/node/storage/hub/agents"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
-LOCAL_HUB=False
+LOCAL_HUB=True
 LOCAL_HUB_URL="ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_PORT=3001

@@ -1002,6 +1002,111 @@ EOF
     echo "Celery worker service started successfully." | log_with_service_name "Celery" $GREEN
 }
 
+linux_setup_local_db() {
+    echo "Starting PostgreSQL setup..." | log_with_service_name "PostgreSQL" $BLUE
+
+    POSTGRES_BIN_PATH="/usr/lib/postgresql/16/bin"
+    PSQL_BIN="$POSTGRES_BIN_PATH/psql"
+    POSTGRESQL_CONF="/etc/postgresql/16/main/postgresql.conf"
+    PG_HBA_CONF="/etc/postgresql/16/main/pg_hba.conf"
+
+    # Install PostgreSQL if not installed
+    if command -v $PSQL_BIN &> /dev/null; then
+        echo "PostgreSQL is already installed." | log_with_service_name "PostgreSQL" $BLUE
+    else
+        echo "Installing PostgreSQL..." | log_with_service_name "PostgreSQL" $BLUE
+        sudo apt-get update
+        sudo apt-get install -y postgresql postgresql-contrib
+        echo "PostgreSQL installed successfully." | log_with_service_name "PostgreSQL" $GREEN
+    fi
+
+    echo "Configuring PostgreSQL..." | log_with_service_name "PostgreSQL" $BLUE
+    
+    sudo cp $POSTGRESQL_CONF ${POSTGRESQL_CONF}.bak
+    
+    echo "Setting port to $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $BLUE
+    sudo sed -i "s/^\s*#*\s*port\s*=.*/port = $LOCAL_DB_PORT/" $POSTGRESQL_CONF
+    
+    echo "Setting listen_addresses to '*'" | log_with_service_name "PostgreSQL" $BLUE
+    sudo sed -i "s/^\s*#*\s*listen_addresses\s*=.*/listen_addresses = '*'/" $POSTGRESQL_CONF
+    
+    echo "Updating pg_hba.conf" | log_with_service_name "PostgreSQL" $BLUE
+    if ! sudo grep -q "0.0.0.0/0" $PG_HBA_CONF; then
+        echo "host    all             all             0.0.0.0/0               md5" | sudo tee -a $PG_HBA_CONF > /dev/null
+    fi
+
+    sudo sed -i "s/^local\s\+all\s\+all\s\+\(peer\|ident\)/local   all             all                                     md5/" $PG_HBA_CONF
+
+    echo "PostgreSQL configured to listen on port $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $GREEN
+
+    echo "Restarting PostgreSQL service..." | log_with_service_name "PostgreSQL" $BLUE
+    sudo systemctl restart postgresql
+    sleep 5
+
+    echo "Verifying PostgreSQL is running..." | log_with_service_name "PostgreSQL" $BLUE
+    if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
+        echo "PostgreSQL service started successfully on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $GREEN
+    else
+        echo "Failed to connect to PostgreSQL on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $RED
+        exit 1
+    fi
+
+    echo "Creating database and user..." | log_with_service_name "PostgreSQL" $BLUE
+    
+    # Create user
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT <<EOF
+    DO \$\$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$LOCAL_DB_USER') THEN
+            CREATE USER $LOCAL_DB_USER WITH ENCRYPTED PASSWORD '$LOCAL_DB_PASSWORD';
+        END IF;
+    END
+    \$\$;
+EOF
+
+    # Create database
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "CREATE DATABASE $LOCAL_DB_NAME WITH OWNER $LOCAL_DB_USER;"
+
+    # Set permissions
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME <<EOF
+    GRANT ALL PRIVILEGES ON DATABASE $LOCAL_DB_NAME TO $LOCAL_DB_USER;
+    GRANT ALL ON SCHEMA public TO $LOCAL_DB_USER;
+    ALTER SCHEMA public OWNER TO $LOCAL_DB_USER;
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO $LOCAL_DB_USER;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_USER;
+EOF
+    
+    echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $GREEN
+}
+
+linux_start_local_db() {
+    PWD=$(pwd)
+    POSTGRES_BIN_PATH="/usr/lib/postgresql/16/bin"
+    PSQL_BIN="$POSTGRES_BIN_PATH/psql"
+
+    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    
+    INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
+    chmod +x "$INIT_PYTHON_PATH"
+
+    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $BLUE
+    poetry run python "$INIT_PYTHON_PATH" 2>&1
+    PYTHON_EXIT_STATUS=$?
+
+    if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        exit 1
+    fi
+
+    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDB" $BLUE
+    if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
+        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDB" $GREEN
+    else
+        echo "Local DB (PostgreSQL) failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        exit 1
+    fi
+}
+
 print_logo(){
     printf """
                  █▀█                  
@@ -1062,7 +1167,8 @@ main() {
         check_and_set_private_key
         check_and_set_stability_key
         start_hub_surrealdb
-        start_local_surrealdb
+        linux_setup_local_db
+        linux_start_local_db
         linux_start_servers
         linux_start_celery_worker
     fi
