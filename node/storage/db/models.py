@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, ARRAY, JSON, DateTime, ForeignKey
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy import Column, String, JSON, ARRAY, Boolean, DateTime, Integer, ForeignKey
+from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.dialects.postgresql import JSONB
+import uuid
 
 Base = declarative_base()
 
@@ -12,7 +14,7 @@ class User(Base):
 class AgentRun(Base):
     __tablename__ = 'agent_runs'
 
-    id = Column(Integer, primary_key=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
     agent_name = Column(String)
     agent_run_params = Column(JSON)
@@ -22,8 +24,8 @@ class AgentRun(Base):
     error = Column(Boolean, default=False)
     error_message = Column(String)
     worker_nodes = Column(ARRAY(String))
-    child_runs = Column(ARRAY(Integer), default=[])
-    parent_runs = Column(ARRAY(Integer), default=[])
+    child_runs = Column(JSONB, default=[])
+    parent_runs = Column(JSONB, default=[])
     created_time = Column(DateTime)
     start_processing_time = Column(DateTime)
     completed_time = Column(DateTime)

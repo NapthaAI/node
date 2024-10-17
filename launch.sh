@@ -1010,14 +1010,23 @@ linux_setup_local_db() {
     POSTGRESQL_CONF="/etc/postgresql/16/main/postgresql.conf"
     PG_HBA_CONF="/etc/postgresql/16/main/pg_hba.conf"
 
-    # Install PostgreSQL if not installed
+    # Check if PostgreSQL 16 is installed
     if command -v $PSQL_BIN &> /dev/null; then
-        echo "PostgreSQL is already installed." | log_with_service_name "PostgreSQL" $BLUE
+        echo "PostgreSQL 16 is already installed." | log_with_service_name "PostgreSQL" $BLUE
     else
-        echo "Installing PostgreSQL..." | log_with_service_name "PostgreSQL" $BLUE
+        echo "Installing PostgreSQL 16..." | log_with_service_name "PostgreSQL" $BLUE
+        
+        # Add PostgreSQL 16 repository
+        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+        
+        # Update package lists
         sudo apt-get update
-        sudo apt-get install -y postgresql postgresql-contrib
-        echo "PostgreSQL installed successfully." | log_with_service_name "PostgreSQL" $GREEN
+        
+        # Install PostgreSQL 16
+        sudo apt-get install -y postgresql-16 postgresql-contrib-16
+        
+        echo "PostgreSQL 16 installed successfully." | log_with_service_name "PostgreSQL" $BLUE
     fi
 
     echo "Configuring PostgreSQL..." | log_with_service_name "PostgreSQL" $BLUE
@@ -1037,7 +1046,7 @@ linux_setup_local_db() {
 
     sudo sed -i "s/^local\s\+all\s\+all\s\+\(peer\|ident\)/local   all             all                                     md5/" $PG_HBA_CONF
 
-    echo "PostgreSQL configured to listen on port $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $GREEN
+    echo "PostgreSQL configured to listen on port $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $BLUE
 
     echo "Restarting PostgreSQL service..." | log_with_service_name "PostgreSQL" $BLUE
     sudo systemctl restart postgresql
@@ -1045,9 +1054,9 @@ linux_setup_local_db() {
 
     echo "Verifying PostgreSQL is running..." | log_with_service_name "PostgreSQL" $BLUE
     if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
-        echo "PostgreSQL service started successfully on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $GREEN
+        echo "PostgreSQL service started successfully on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $BLUE
     else
-        echo "Failed to connect to PostgreSQL on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $RED
+        echo "Failed to connect to PostgreSQL on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $BLUE
         exit 1
     fi
 
@@ -1076,7 +1085,7 @@ EOF
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_USER;
 EOF
     
-    echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $GREEN
+    echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $BLUE
 }
 
 linux_start_local_db() {
@@ -1089,7 +1098,7 @@ linux_start_local_db() {
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
 
-    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $BLUE
+    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $RED
     poetry run python "$INIT_PYTHON_PATH" 2>&1
     PYTHON_EXIT_STATUS=$?
 
@@ -1098,9 +1107,9 @@ linux_start_local_db() {
         exit 1
     fi
 
-    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDB" $BLUE
+    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDB" $RED
     if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
-        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDB" $GREEN
+        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDB" $RED
     else
         echo "Local DB (PostgreSQL) failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
         exit 1

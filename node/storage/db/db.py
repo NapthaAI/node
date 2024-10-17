@@ -8,6 +8,7 @@ from node.schemas import AgentRunInput
 from node.storage.db.models import User, AgentRun
 from node.config import LOCAL_DB_URL
 from node.utils import get_logger
+from node.schemas import AgentRun as AgentRunSchema
 
 logger = get_logger(__name__)
 
@@ -38,14 +39,16 @@ class DB:
         user = self.db.query(User).filter_by(public_key=user_input["public_key"]).first()
         return user.__dict__ if user else None
 
-    async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
+    async def create_agent_run(self, agent_run_input: AgentRunInput) -> Dict:
         agent_run = AgentRun(**agent_run_input.model_dict())
         self.db.add(agent_run)
         self.db.commit()
         self.db.refresh(agent_run)
-        return agent_run
+        return agent_run.__dict__
 
-    async def update_agent_run(self, agent_run_id: int, agent_run: Dict) -> bool:
+    async def update_agent_run(self, agent_run_id: int, agent_run: AgentRunSchema) -> bool:
+        if isinstance(agent_run, AgentRunSchema):
+            agent_run = agent_run.model_dict()
         db_agent_run = self.db.query(AgentRun).filter(AgentRun.id == agent_run_id).first()
         if db_agent_run:
             for key, value in agent_run.items():
@@ -54,10 +57,10 @@ class DB:
             return True
         return False
 
-    async def list_agent_runs(self, agent_run_id=None) -> List[AgentRun]:
+    async def list_agent_runs(self, agent_run_id=None) -> List[Dict]:
         if agent_run_id:
-            return self.db.query(AgentRun).filter(AgentRun.id == agent_run_id).first()
-        return self.db.query(AgentRun).all()
+            return self.db.query(AgentRun).filter(AgentRun.id == agent_run_id).first().__dict__
+        return [run.__dict__ for run in self.db.query(AgentRun).all()]
 
     async def delete_agent_run(self, agent_run_id: int) -> bool:
         agent_run = self.db.query(AgentRun).filter(AgentRun.id == agent_run_id).first()

@@ -162,6 +162,11 @@ class TaskEngine:
         if isinstance(end_time, str):
             end_time = datetime.fromisoformat(end_time.rstrip("Z"))
 
+        if start_time.tzinfo is None:
+            start_time = pytz.utc.localize(start_time)
+        if end_time.tzinfo is None:
+            end_time = pytz.utc.localize(end_time)
+
         self.agent_run.duration = (end_time - start_time).total_seconds()
         self.flow_run.child_runs.append(self.agent_run)
 
@@ -181,6 +186,12 @@ class TaskEngine:
             start_time = datetime.fromisoformat(start_time.rstrip("Z"))
         if isinstance(end_time, str):
             end_time = datetime.fromisoformat(end_time.rstrip("Z"))
+
+        # Ensure both datetimes are timezone-aware
+        if start_time.tzinfo is None:
+            start_time = pytz.utc.localize(start_time)
+        if end_time.tzinfo is None:
+            end_time = pytz.utc.localize(end_time)
 
         self.agent_run.duration = (end_time - start_time).total_seconds()
         self.flow_run.child_runs.append(self.agent_run)

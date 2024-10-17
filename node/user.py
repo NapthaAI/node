@@ -54,3 +54,5 @@ def generate_user():
     private_key = SigningKey.generate(curve=SECP256k1).to_string().hex()
     public_key = get_public_key(private_key)
     return public_key, private_key
+
+
