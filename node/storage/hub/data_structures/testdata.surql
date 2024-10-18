@@ -98,7 +98,7 @@ RELATE user:seller1->is_associated_with->organization:naptha;
 
 -- AGENTS
 CREATE agent:hello_world_agent SET name="Hello World Agent", description="A simple hello world agent", author=user:naptha, url="https://github.com/NapthaAI/hello_world_agent", type="package", version="0.13";
-CREATE agent:simple_chat_agent SET name="Simple Chat Agent", description="A simple chat agent", author=user:naptha, url="https://github.com/NapthaAI/simple_chat_agent", type="package", version="0.9";
+CREATE agent:simple_chat_agent SET name="Simple Chat Agent", description="A simple chat agent", author=user:naptha, url="https://github.com/NapthaAI/simple_chat_agent", type="package", version="0.10";
 CREATE agent:generate_image SET name="Generate Image Stable Diffusion", description="A simple agent for generating an image from text", author=user:naptha, url="https://github.com/NapthaAI/module_generate_image", type="package", version="0.9";
 CREATE agent:image_to_image SET name="Image to Image Stable Diffusion", description="A simple agent for generating an image from another image", author=user:naptha, url="https://github.com/NapthaAI/module_image2image", type="package", version="0.8";
 CREATE agent:babyagi_task_initiator SET name="Babyagi Initiator Agent", description="A simple agent for initiating tasks in BabyAGI", author=user:naptha, url="https://github.com/NapthaAI/babyagi_task_initiator", type="package", version="0.2";
@@ -112,7 +112,7 @@ CREATE agent:module_test SET name="Module Test", description="A simple test agen
 CREATE agent:random_number_agent SET name="Random Number Agent", description="A simple agent for taking part in Keynesian beauty contests", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.3";
 
 -- AGENT NETWORKS
-CREATE agent:multiagent_chat SET name="Chat Network", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.8";
+CREATE agent:multiagent_chat SET name="Chat Network", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.9";
 CREATE agent:babyagi SET name="Babyagi", description="Multi-agent network for running task-solving", author=user:naptha, url="https://github.com/NapthaAI/babyagi", type="package", version="0.2";
 CREATE agent:multiagent_debate SET name="Multi-agent network for running debate protocols", description="A network of debating agents", author=user:naptha, url="https://github.com/NapthaAI/multiagent_debate", type="package", version="0.6";
 CREATE agent:keynesian_beauty_contest SET name="Multi-agent network for running a Keynesian beauty contest", description="A network of agents that guess random numbers", author=user:naptha, url="https://github.com/NapthaAI/keynesian_beauty_contest", type="package", version="0.11";
