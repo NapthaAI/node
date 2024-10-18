@@ -1031,6 +1031,7 @@ main() {
         print_logo
         install_python312
         install_surrealdb
+        check_and_copy_env
         load_env_file
         load_config_constants
         darwin_install_ollama
@@ -1039,7 +1040,6 @@ main() {
         darwin_clean_node
         darwin_start_rabbitmq
         setup_poetry
-        check_and_copy_env
         check_and_set_private_key
         check_and_set_stability_key
         start_hub_surrealdb
@@ -1050,6 +1050,7 @@ main() {
         print_logo
         install_python312
         install_surrealdb
+        check_and_copy_env
         load_env_file
         load_config_constants
         linux_install_ollama
@@ -1058,7 +1059,6 @@ main() {
         linux_clean_node
         linux_start_rabbitmq
         setup_poetry
-        check_and_copy_env
         check_and_set_private_key
         check_and_set_stability_key
         start_hub_surrealdb
