@@ -118,17 +118,6 @@ class TaskEngine:
         logger.info(f"Starting agent run")
         self.agent_run.status = "running"
 
-        logger.info(f"Checking user: {self.consumer}")
-        async with self.task.worker_node as node:
-            consumer = await node.check_user(user_input=self.consumer)
-        if consumer["is_registered"] is True:
-            logger.info("Found user...", consumer)
-        elif consumer["is_registered"] is False:
-            logger.info("No user found. Registering user...")
-            async with self.task.worker_node as node:
-                consumer = await node.register_user(user_input=consumer)
-            logger.info(f"User registered: {consumer}.")
-
         logger.info(f"Running agent on worker node {self.task.worker_node.node_url}")
         async with self.task.worker_node as node:
             agent_run = await node.run_agent(agent_run_input=self.agent_run_input)

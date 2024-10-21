@@ -13,7 +13,7 @@ import subprocess
 import traceback
 import logging
 from git import Repo
-from typing import Dict
+from typing import Dict, List
 from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
@@ -445,7 +445,42 @@ class FlowEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
+        # Check if the user has the right to use the worker nodes if not register the user
+        await self.check_register_worker_nodes(self.flow_run.worker_nodes)
+
+        # Load the flow
         self.flow_func, self.validated_data, self.cfg = await self.load_flow()
+
+    def node_url_to_node(self, node_url: str):
+        """
+        Converts the node url to a node object
+        """
+        if 'ws://' in node_url:
+            return Node(node_url=node_url, server_type='ws')
+        elif 'http://' in node_url:
+            return Node(node_url=node_url, server_type='http')
+        elif '://' not in node_url:
+            return Node(node_url=node_url, server_type='grpc')
+        else:
+            raise ValueError(f"Invalid node URL: {node_url}")
+        
+    async def check_register_worker_nodes(self, worker_node_urls: List[str]):
+        """
+        Checks if the user has the right to use the worker nodes
+        """
+        logger.info(f"Checking user: {self.consumer} on worker nodes: {worker_node_urls}")
+        for worker_node_url in worker_node_urls:
+            worker_node = self.node_url_to_node(worker_node_url)
+            logger.info(f"Checking user: {self.consumer} on worker node: {worker_node_url}")
+            async with worker_node as node:
+                consumer = await node.check_user(user_input=self.consumer)
+            if consumer["is_registered"] is True:
+                logger.info(f"Found user: {consumer} on worker node: {worker_node_url}")
+            elif consumer["is_registered"] is False:
+                logger.info(f"No user found. Registering user: {consumer} on worker node: {worker_node_url}")
+                async with worker_node as node:
+                    consumer = await node.register_user(user_input=consumer)
+                    logger.info(f"User registered: {consumer} on worker node: {worker_node_url}")
 
     async def handle_ipfs_output(self, cfg, results):
         """
