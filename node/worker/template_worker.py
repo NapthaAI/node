@@ -472,6 +472,9 @@ class FlowEngine:
         for worker_node_url in worker_node_urls:
             worker_node = self.node_url_to_node(worker_node_url)
             logger.info(f"Checking user: {self.consumer} on worker node: {worker_node_url}")
+            if worker_node_url == self.orchestrator_node.node_url:
+                logger.info(f"Skipping check user on orchestrator node: {worker_node_url}")
+                continue
             async with worker_node as node:
                 consumer = await node.check_user(user_input=self.consumer)
             if consumer["is_registered"] is True:
