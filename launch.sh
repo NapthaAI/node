@@ -959,7 +959,8 @@ darwin_start_celery_worker() {
     # Write celery_worker_start.sh
     echo "#!/bin/bash" > celery_worker_start.sh
     echo "source $CURRENT_DIR/.venv/bin/activate" >> celery_worker_start.sh
-    echo "exec celery -A node.worker.main.app worker --loglevel=info --concurrency=50 --pool=gevent" >> celery_worker_start.sh
+    echo "ulimit -n 1000000" >> celery_worker_start.sh
+    echo "exec celery -A node.worker.main.app worker --loglevel=info --concurrency=120" >> celery_worker_start.sh
 
     # Make the script executable
     chmod +x celery_worker_start.sh
@@ -1145,6 +1146,9 @@ darwin_setup_local_db() {
     
     echo "Setting listen_addresses to '*'" | log_with_service_name "PostgreSQL" $BLUE
     sed -i '' "s/^#listen_addresses = .*/listen_addresses = '*'/" $POSTGRESQL_CONF
+
+    echo "Setting max_connections to 1000" | log_with_service_name "PostgreSQL" $BLUE
+    sed -i '' "s/^#max_connections = .*/max_connections = 1000/" $POSTGRESQL_CONF
     
     echo "Updating pg_hba.conf" | log_with_service_name "PostgreSQL" $BLUE
     echo "host    all             all             0.0.0.0/0               md5" >> $PG_HBA_CONF
