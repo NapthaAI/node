@@ -956,16 +956,41 @@ darwin_start_celery_worker() {
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
     EXECUTION_PATH="$CURRENT_DIR/celery_worker_start.sh"
 
-    # Write celery_worker_start.sh
-    echo "#!/bin/bash" > celery_worker_start.sh
-    echo "source $CURRENT_DIR/.venv/bin/activate" >> celery_worker_start.sh
-    echo "ulimit -n 1000000" >> celery_worker_start.sh
-    echo "exec celery -A node.worker.main.app worker --loglevel=info --concurrency=120" >> celery_worker_start.sh
+    # Write celery_worker_start.sh with correct venv path
+    cat <<EOF > celery_worker_start.sh
+#!/bin/bash
 
-    # Make the script executable
+# Exit on error
+set -e
+
+# Log function
+log_error() {
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') ERROR: \$1" >> /tmp/celeryworker.err
+}
+
+# Check if virtual environment exists
+if [ ! -f "$CURRENT_DIR/.venv/bin/activate" ]; then
+    log_error "Virtual environment not found at $CURRENT_DIR/.venv/bin/activate"
+    exit 1
+fi
+
+# Activate virtual environment
+source "$CURRENT_DIR/.venv/bin/activate"
+
+# Set file descriptor limits
+ulimit -n 65536 || log_error "Failed to set ulimit"
+
+# Start Celery
+exec celery -A node.worker.main.app worker \
+    --loglevel=info \
+    --concurrency=120 \
+    --max-tasks-per-child=100 \
+    --max-memory-per-child=350000
+EOF
+
     chmod +x celery_worker_start.sh
 
-    # Create the launchd plist file for Celery worker
+    # Create the launchd plist
     cat <<EOF > ~/Library/LaunchAgents/com.example.celeryworker.plist
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -983,11 +1008,26 @@ darwin_start_celery_worker() {
     <dict>
         <key>ENVIRONMENT_FILE_PATH</key>
         <string>$ENVIRONMENT_FILE_PATH</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
+    </dict>
+    <key>HardResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>65536</integer>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
     <key>StandardOutPath</key>
     <string>/tmp/celeryworker.out</string>
     <key>StandardErrorPath</key>
@@ -996,11 +1036,17 @@ darwin_start_celery_worker() {
 </plist>
 EOF
 
-    # Load and start the celeryworker service
-    launchctl load ~/Library/LaunchAgents/com.example.celeryworker.plist
-    launchctl start com.example.celeryworker
-
-    echo "Celery worker service started successfully." | log_with_service_name "Celery" $GREEN
+    # Unload if exists
+    launchctl unload ~/Library/LaunchAgents/com.example.celeryworker.plist 2>/dev/null || true
+    
+    # Load and start
+    if launchctl load ~/Library/LaunchAgents/com.example.celeryworker.plist; then
+        echo "Celery worker service started successfully." | log_with_service_name "Celery" $GREEN
+        return 0
+    else
+        echo "Failed to start Celery worker service." | log_with_service_name "Celery" $RED
+        return 1
+    fi
 }
 
 linux_setup_local_db() {
@@ -1147,8 +1193,8 @@ darwin_setup_local_db() {
     echo "Setting listen_addresses to '*'" | log_with_service_name "PostgreSQL" $BLUE
     sed -i '' "s/^#listen_addresses = .*/listen_addresses = '*'/" $POSTGRESQL_CONF
 
-    echo "Setting max_connections to 1000" | log_with_service_name "PostgreSQL" $BLUE
-    sed -i '' "s/^#max_connections = .*/max_connections = 1000/" $POSTGRESQL_CONF
+    echo "Setting max_connections to 2000" | log_with_service_name "PostgreSQL" $BLUE
+    sed -i '' "s/^#max_connections = .*/max_connections = 2000/" $POSTGRESQL_CONF
     
     echo "Updating pg_hba.conf" | log_with_service_name "PostgreSQL" $BLUE
     echo "host    all             all             0.0.0.0/0               md5" >> $PG_HBA_CONF
@@ -1316,8 +1362,6 @@ main() {
 
     echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN
 
-    # Keep the script running to maintain background processes
-    wait
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
