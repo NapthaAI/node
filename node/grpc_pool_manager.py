@@ -11,19 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 class GlobalGrpcPool:
-    _instance = None  # Singleton instance
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(GlobalGrpcPool, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self, max_channels=50, buffer_size=5, channel_options=None):
-        if hasattr(self, "_initialized") and self._initialized:
-            return  # Prevent re-initialization
+        self._initialized = False
         self.max_channels = max_channels
         self.buffer_size = buffer_size
-        self.available_queue = asyncio.Queue(maxsize=self.buffer_size)
+        # Use separate queue per target
+        self.available_queues = defaultdict(lambda: asyncio.Queue(maxsize=self.buffer_size))
         self.semaphore = asyncio.Semaphore(self.max_channels - self.buffer_size)
         self.channel_options = channel_options or [
             ("grpc.max_send_message_length", 100 * 1024 * 1024),  # 100 MB
@@ -35,29 +28,26 @@ class GlobalGrpcPool:
             ("grpc.max_connection_idle_ms", 60 * 60 * 1000),  # 1 hour
             ("grpc.max_connection_age_ms", 2 * 60 * 60 * 1000),  # 2 hours
         ]
-        # Initialize statistics
-        self.channel_stats = defaultdict(
-            lambda: {"acquired": 0, "released": 0, "total_channels": 0}
-        )
+        self.channel_stats = defaultdict(lambda: {"acquired": 0, "released": 0, "total_channels": 0})
         self._initialized = True
         logger.info(
             f"GlobalGrpcPool initialized with max_channels={self.max_channels} and buffer_size={self.buffer_size}"
         )
 
     async def get_channel(self, target: str):
-        logger.info(f"Attempting to acquire channel for {target}")
         await self.semaphore.acquire()
-        channel = None
         try:
-            if not self.available_queue.empty():
-                channel = await self.available_queue.get()
-                logger.info(f"Reusing channel from buffer for {target}.")
+            # Get queue specific to this target
+            target_queue = self.available_queues[target]
+            
+            if not target_queue.empty():
+                channel = await target_queue.get()
+                logger.info(f"Reusing channel from buffer for {target}")
             else:
                 channel = insecure_channel(target, options=self.channel_options)
                 self.channel_stats[target]["total_channels"] += 1
-                logger.info(
-                    f"New channel created for {target}. Total channels: {self.channel_stats[target]['total_channels']}"
-                )
+                logger.info(f"New channel created for {target}")
+            
             self.channel_stats[target]["acquired"] += 1
             return channel
         except Exception as e:
@@ -66,46 +56,36 @@ class GlobalGrpcPool:
             raise
 
     async def release_channel(self, target: str, channel):
-        logger.info(
-            f"Attempting to release channel for {target} (Channel ID: {id(channel)})"
-        )
         if channel is None:
-            logger.warning(
-                f"Attempted to release a None channel for {target}. Ignoring."
-            )
             self.semaphore.release()
-            return  # Don't try to release a None channel
+            return
 
         try:
             connectivity = channel.get_state(True)
             if connectivity == grpc.ChannelConnectivity.SHUTDOWN:
-                logger.warning(f"Attempted to release a closed channel for {target}.")
+                logger.warning(f"Channel for {target} is shutdown")
                 self.channel_stats[target]["total_channels"] -= 1
                 self.channel_stats[target]["released"] += 1
                 self.semaphore.release()
                 return
 
+            target_queue = self.available_queues[target]
             try:
-                self.available_queue.put_nowait(channel)
+                target_queue.put_nowait(channel)
                 self.channel_stats[target]["released"] += 1
-                logger.info(f"Channel released back to buffer for {target}.")
+                logger.info(f"Channel released back to buffer for {target}")
             except asyncio.QueueFull:
-                logger.warning(f"Buffer full for {target}. Closing channel.")
                 await channel.close()
                 self.channel_stats[target]["total_channels"] -= 1
                 self.channel_stats[target]["released"] += 1
-        except Exception as e:
-            logger.error(f"Error releasing channel for {target}: {e}")
-            logger.error(traceback.format_exc())
         finally:
             self.semaphore.release()
-            logger.debug(f"Semaphore released for {target}.")
 
     async def close_all(self):
         logger.info("Closing all channels in the pool.")
         # Close channels in the buffer
-        while not self.available_queue.empty():
-            channel = await self.available_queue.get()
+        while not self.available_queues.empty():
+            channel = await self.available_queues.get()
             await channel.close()
             # Update statistics
             for target, stats in self.channel_stats.items():
