@@ -118,17 +118,6 @@ class TaskEngine:
         logger.info(f"Starting agent run")
         self.agent_run.status = "running"
 
-        logger.info(f"Checking user: {self.consumer}")
-        async with self.task.worker_node as node:
-            consumer = await node.check_user(user_input=self.consumer)
-        if consumer["is_registered"] is True:
-            logger.info("Found user...", consumer)
-        elif consumer["is_registered"] is False:
-            logger.info("No user found. Registering user...")
-            async with self.task.worker_node as node:
-                consumer = await node.register_user(user_input=consumer)
-            logger.info(f"User registered: {consumer}.")
-
         logger.info(f"Running agent on worker node {self.task.worker_node.node_url}")
         async with self.task.worker_node as node:
             agent_run = await node.run_agent(agent_run_input=self.agent_run_input)
@@ -162,6 +151,11 @@ class TaskEngine:
         if isinstance(end_time, str):
             end_time = datetime.fromisoformat(end_time.rstrip("Z"))
 
+        if start_time.tzinfo is None:
+            start_time = pytz.utc.localize(start_time)
+        if end_time.tzinfo is None:
+            end_time = pytz.utc.localize(end_time)
+
         self.agent_run.duration = (end_time - start_time).total_seconds()
         self.flow_run.child_runs.append(self.agent_run)
 
@@ -181,6 +175,12 @@ class TaskEngine:
             start_time = datetime.fromisoformat(start_time.rstrip("Z"))
         if isinstance(end_time, str):
             end_time = datetime.fromisoformat(end_time.rstrip("Z"))
+
+        # Ensure both datetimes are timezone-aware
+        if start_time.tzinfo is None:
+            start_time = pytz.utc.localize(start_time)
+        if end_time.tzinfo is None:
+            end_time = pytz.utc.localize(end_time)
 
         self.agent_run.duration = (end_time - start_time).total_seconds()
         self.flow_run.child_runs.append(self.agent_run)

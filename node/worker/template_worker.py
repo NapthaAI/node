@@ -13,7 +13,7 @@ import subprocess
 import traceback
 import logging
 from git import Repo
-from typing import Dict
+from typing import Dict, List
 from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
@@ -89,12 +89,15 @@ def file_lock(lock_file, timeout=30):
             lock_fd.close()
 
 
-@app.task(bind=True)
+@app.task(bind=True, acks_late=True)
 def run_flow(self, flow_run):
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(_run_flow_async(flow_run))
-
-
+    try:
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(_run_flow_async(flow_run))
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
+        
 async def install_agent_if_not_present(flow_run_obj, agent_version):
     agent_name = flow_run_obj.agent_name
     if agent_name in INSTALLED_MODULES:
@@ -445,7 +448,66 @@ class FlowEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
+        # Check if the user has the right to use the worker nodes if not register the user
+        if self.flow_run.worker_nodes:
+            await self.check_register_worker_nodes(self.flow_run.worker_nodes)
+
+        # Load the flow
         self.flow_func, self.validated_data, self.cfg = await self.load_flow()
+
+    def node_url_to_node(self, node_url: str):
+        """
+        Converts the node url to a node object
+        """
+        if 'ws://' in node_url:
+            return Node(node_url=node_url, server_type='ws')
+        elif 'http://' in node_url:
+            return Node(node_url=node_url, server_type='http')
+        elif '://' not in node_url:
+            return Node(node_url=node_url, server_type='grpc')
+        else:
+            raise ValueError(f"Invalid node URL: {node_url}")
+        
+    async def check_register_worker_nodes(self, worker_node_urls: List[str]):
+        """
+        Checks if the user has the right to use the worker nodes
+        """
+        logger.info(f"Checking user: {self.consumer} on worker nodes: {worker_node_urls}")
+        for worker_node_url in worker_node_urls:
+            worker_node = self.node_url_to_node(worker_node_url)
+            logger.info(f"Checking user: {self.consumer} on worker node: {worker_node_url}")
+
+            # get only the domain from the node url
+            if "://" in worker_node_url:
+                worker_node_url_domain = worker_node_url.split("://")[1]
+            else:
+                worker_node_url_domain = worker_node_url
+
+            if ":" in worker_node_url_domain:
+                worker_node_url_domain = worker_node_url_domain.split(":")[0]
+
+            # get only the domain from the orchestrator node url
+            if "://" in self.orchestrator_node.node_url:
+                orchestrator_node_url_domain = self.orchestrator_node.node_url.split("://")[1]
+            else:
+                orchestrator_node_url_domain = self.orchestrator_node.node_url
+            
+            if ":" in orchestrator_node_url_domain:
+                orchestrator_node_url_domain = orchestrator_node_url_domain.split(":")[0]
+
+            if worker_node_url_domain == orchestrator_node_url_domain:
+                logger.info(f"Skipping check user on orchestrator node: {worker_node_url}")
+                continue
+
+            async with worker_node as node:
+                consumer = await node.check_user(user_input=self.consumer)
+            if consumer["is_registered"] is True:
+                logger.info(f"Found user: {consumer} on worker node: {worker_node_url}")
+            elif consumer["is_registered"] is False:
+                logger.info(f"No user found. Registering user: {consumer} on worker node: {worker_node_url}")
+                async with worker_node as node:
+                    consumer = await node.register_user(user_input=consumer)
+                    logger.info(f"User registered: {consumer} on worker node: {worker_node_url}")
 
     async def handle_ipfs_output(self, cfg, results):
         """

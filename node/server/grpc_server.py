@@ -3,7 +3,7 @@ import asyncio
 import grpc
 import signal
 import logging
-from node.server import grpc_server_pb2, grpc_server_pb2_grpc
+from datetime import datetime
 from google.protobuf.empty_pb2 import Empty
 from grpc import ServicerContext
 
@@ -13,6 +13,7 @@ from node.storage.hub.hub import Hub
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_flow
+from node.server import grpc_server_pb2, grpc_server_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +23,26 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
         logger.info(f"Checking user: {request.public_key}")
         input_data = {"public_key": request.public_key}
 
-        result = await check_user(input_data)
-        logger.info(f"User check result: {result}")
-        return grpc_server_pb2.CheckUserResponse(**result)
+        _, user_data = await check_user(input_data)
+        logger.info(f"User check result: {user_data}")
+        return grpc_server_pb2.CheckUserResponse(**user_data)
+
 
     async def RegisterUser(self, request, context):
         logger.info(f"Registering user: {request.public_key}")
-        input_data = {
-            "public_key": request.public_key,
-        }
+        input_data = {"public_key": request.public_key}
         logger.info(f"Registering user: {input_data}")
-        result = await register_user(input_data)
-        logger.info(f"User registration result: {result}")
-        return grpc_server_pb2.RegisterUserResponse(**result)
+        
+        # Unpack the result tuple to get the success flag and data dictionary separately
+        success, user_data = await register_user(input_data)
+        
+        if success:
+            logger.info(f"User registration result: {user_data}")
+            return grpc_server_pb2.RegisterUserResponse(**user_data)
+        else:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details('User registration failed')
+            return grpc_server_pb2.RegisterUserResponse()
 
     async def RunAgent(self, request, context):
         try:
@@ -80,31 +88,36 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
 
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
-                logger.info("Created agent run")
+                logger.info(f"Created agent run")
+
+            if agent_run:
+                agent_run_data = agent_run.copy()
+                agent_run_data.pop("_sa_instance_state", None)
 
             yield grpc_server_pb2.RunAgentResponse(
                 status="started",
                 agent_name=request.agent_name,
                 consumer_id=request.consumer_id,
                 agent_run_type=agent_run_input.agent_run_type,
-                id=agent_run.id,
-                worker_nodes=agent_run.worker_nodes,
+                id=agent_run["id"],
+                worker_nodes=agent_run["worker_nodes"],
             )
 
             # Execute the task
-            if agent_run.agent_run_type == "package":
-                task = run_flow.delay(agent_run.dict())
-            elif agent_run.agent_run_type == "docker":
-                task = execute_docker_agent.delay(agent_run.dict())
+            if agent_run['agent_run_type'] == "package":
+                logger.info(f"Running package agent: {agent_run_data}")
+                task = run_flow.delay(agent_run_data)
+            elif agent_run['agent_run_type'] == "docker":
+                task = execute_docker_agent.delay(agent_run_data)
             else:
                 yield grpc_server_pb2.RunAgentResponse(
                     status="error",
                     error_message="Invalid module type",
                     agent_name=request.agent_name,
                     consumer_id=request.consumer_id,
-                    agent_run_type=agent_run.agent_run_type,
-                    id=agent_run.id,
-                    worker_nodes=agent_run.worker_nodes,
+                    agent_run_type=agent_run['agent_run_type'],
+                    id=agent_run["id"],
+                    worker_nodes=agent_run["worker_nodes"],
                 )
                 return
 
@@ -114,17 +127,28 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                     status="running",
                     agent_name=request.agent_name,
                     consumer_id=request.consumer_id,
-                    agent_run_type=agent_run.agent_run_type,
-                    id=agent_run.id,
-                    worker_nodes=agent_run.worker_nodes,
+                    agent_run_type=agent_run['agent_run_type'],
+                    id=agent_run["id"],
+                    worker_nodes=agent_run["worker_nodes"],
                 )
-                await asyncio.sleep(5)  # Send an update every 5 seconds
-
+                await asyncio.sleep(5)
+            
             # Retrieve the updated module run from the database
             async with DB() as db:
-                updated_agent_run = await db.list_agent_runs(agent_run.id)
+                updated_agent_run = await db.list_agent_runs(agent_run['id'])
+                if isinstance(updated_agent_run, list):
+                    updated_agent_run = updated_agent_run[0]
+                updated_agent_run.pop("_sa_instance_state", None)
+                logger.info(f"Updated agent run: {updated_agent_run}")
 
-            yield grpc_server_pb2.RunAgentResponse(**updated_agent_run.model_dict())
+            if 'created_time' in updated_agent_run and isinstance(updated_agent_run['created_time'], datetime):
+                updated_agent_run['created_time'] = updated_agent_run['created_time'].isoformat()
+            if 'start_processing_time' in updated_agent_run and isinstance(updated_agent_run['start_processing_time'], datetime):
+                updated_agent_run['start_processing_time'] = updated_agent_run['start_processing_time'].isoformat()
+            if 'completed_time' in updated_agent_run and isinstance(updated_agent_run['completed_time'], datetime):
+                updated_agent_run['completed_time'] = updated_agent_run['completed_time'].isoformat()
+            logger.info(f"Yielding updated agent run: {updated_agent_run}")
+            yield grpc_server_pb2.RunAgentResponse(**updated_agent_run)
 
         except Exception as e:
             logger.error(f"Error running agent: {e}")

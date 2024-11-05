@@ -6,7 +6,6 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from tenacity import retry, stop_after_attempt, wait_exponential
-import asyncio
 import threading
 
 from node.schemas import AgentRunInput
@@ -32,18 +31,18 @@ class DatabasePool:
         self.engine = create_engine(
             LOCAL_DB_URL,
             poolclass=QueuePool,
-            pool_size=120,          # Base pool size
-            max_overflow=240,      # More overflow for 120 workers
-            pool_timeout=30,
-            pool_recycle=300,      # 5 minute recycle
-            pool_pre_ping=True,
+            pool_size=40,          
+            max_overflow=160,      
+            pool_timeout=20,       
+            pool_recycle=3600,     # 1 hour recycle
+            pool_pre_ping=True,    
             echo=False,
             connect_args={
                 'keepalives': 1,
-                'keepalives_idle': 30,
+                'keepalives_idle': 60,
                 'keepalives_interval': 10,
                 'keepalives_count': 5,
-                'options': '-c statement_timeout=30000'  # 30 second timeout
+                'options': '-c statement_timeout=60000'
             }
         )
         
@@ -56,21 +55,7 @@ class DatabasePool:
             )
         )
 
-        self._setup_engine_events()
-
-    def _setup_engine_events(self):
-        @event.listens_for(self.engine, 'checkout')
-        def on_checkout(dbapi_conn, connection_rec, connection_proxy):
-            try:
-                cursor = dbapi_conn.cursor()
-                cursor.execute('SELECT 1')
-                cursor.close()
-            except Exception:
-                logger.error("Connection verification failed")
-                raise OperationalError("Invalid connection")
-
     def dispose(self):
-        """Dispose the engine and all connections"""
         if hasattr(self, 'engine'):
             self.engine.dispose()
 
@@ -78,20 +63,24 @@ class DB:
     def __init__(self):
         self.is_authenticated = False
         self.pool = DatabasePool()
+        self._session = None
 
     @contextmanager
     def session(self):
-        session = self.pool.session_factory()
+        if self._session is None:
+            self._session = self.pool.session_factory()
+        
         try:
-            yield session
-            session.commit()
+            yield self._session
         except SQLAlchemyError as e:
-            session.rollback()
+            if self._session:
+                self._session.rollback()
             logger.error(f"Database error: {str(e)}")
             raise
         finally:
-            session.close()
-            self.pool.session_factory.remove()
+            if self._session:
+                self._session.close()
+                self._session = None
 
     def get_pool_stats(self) -> Dict:
         return {
@@ -106,7 +95,7 @@ class DB:
             with self.session() as db:
                 user = User(**user_input)
                 db.add(user)
-                db.flush()
+                db.commit()
                 db.refresh(user)
                 return user.__dict__
         except SQLAlchemyError as e:
@@ -127,7 +116,7 @@ class DB:
             with self.session() as db:
                 agent_run = AgentRun(**agent_run_input.model_dict())
                 db.add(agent_run)
-                db.flush()
+                db.commit()
                 db.refresh(agent_run)
                 return agent_run.__dict__
         except SQLAlchemyError as e:
@@ -145,7 +134,7 @@ class DB:
                 if db_agent_run:
                     for key, value in agent_run.items():
                         setattr(db_agent_run, key, value)
-                    db.flush()
+                    db.commit()
                     return True
                 return False
         except SQLAlchemyError as e:
@@ -153,27 +142,17 @@ class DB:
             raise
 
     async def list_agent_runs(self, agent_run_id=None) -> List[Dict]:
-        max_retries = 3
-        retry_delay = 1  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                with self.session() as db:
-                    if agent_run_id:
-                        result = db.query(AgentRun).filter(
-                            AgentRun.id == agent_run_id
-                        ).first()
-                        if not result:
-                            logger.warning(f"Agent run {agent_run_id} not found on attempt {attempt + 1}")
-                            await asyncio.sleep(retry_delay)
-                            continue
-                        return result.__dict__ if result else None
-                    return [run.__dict__ for run in db.query(AgentRun).all()]
-            except SQLAlchemyError as e:
-                logger.error(f"Database error on attempt {attempt + 1}: {str(e)}")
-                if attempt == max_retries - 1:
-                    raise
-                await asyncio.sleep(retry_delay)
+        try:
+            with self.session() as db:
+                if agent_run_id:
+                    result = db.query(AgentRun).filter(
+                        AgentRun.id == agent_run_id
+                    ).first()
+                    return result.__dict__ if result else None
+                return [run.__dict__ for run in db.query(AgentRun).all()]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to list agent runs: {str(e)}")
+            raise
 
     async def delete_agent_run(self, agent_run_id: int) -> bool:
         try:
@@ -183,7 +162,7 @@ class DB:
                 ).first()
                 if agent_run:
                     db.delete(agent_run)
-                    db.flush()
+                    db.commit()
                     return True
                 return False
         except SQLAlchemyError as e:
@@ -221,6 +200,17 @@ class DB:
             logger.error(f"Failed to get connection stats: {str(e)}")
             return {}
 
+    async def create_multiple_agent_runs(self, agent_runs: List[AgentRunInput]) -> List[Dict]:
+        try:
+            with self.session() as db:
+                runs = [AgentRun(**run.model_dict()) for run in agent_runs]
+                db.add_all(runs)
+                db.commit()
+                return [run.__dict__ for run in runs]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to create agent runs: {str(e)}")
+            raise
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=0.5, min=0.5, max=2)
@@ -231,6 +221,9 @@ class DB:
 
     async def close(self):
         self.is_authenticated = False
+        if self._session:
+            self._session.close()
+            self._session = None
         self.pool.dispose()
 
     async def __aenter__(self):

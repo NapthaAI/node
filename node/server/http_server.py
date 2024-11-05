@@ -6,6 +6,7 @@ import io
 import os
 import logging
 import traceback
+from datetime import datetime
 from typing import Optional
 from node.schemas import AgentRun, AgentRunInput, DockerParams
 
@@ -139,12 +140,18 @@ class HTTPServer:
         @router.post("/user/check")
         async def user_check_endpoint(user_input: dict):
             """Check if a user exists."""
-            return await check_user(user_input)
+            _, response = await check_user(user_input)
+            if '_sa_instance_state' in response:
+                response.pop('_sa_instance_state')
+            return response
 
         @router.post("/user/register")
         async def user_register_endpoint(user_input: dict):
             """Register a new user."""
-            return await register_user(user_input)
+            _, response = await register_user(user_input)
+            if '_sa_instance_state' in response:
+                response.pop('_sa_instance_state')
+            return response
 
         # Monitor endpoints
         @router.post("/monitor/create_agent_run")
@@ -202,18 +209,19 @@ class HTTPServer:
                 agent_run = await db.create_agent_run(agent_run_input)
                 logger.info("Created agent run")
 
-                await db.update_agent_run(agent_run.id, agent_run)
-                logger.info("Updated agent run")
+            if agent_run:
+                agent_run_data = agent_run.copy()
+                agent_run_data.pop("_sa_instance_state", None)
 
-            # Enqueue the agent run in Celery
-            if agent_run.agent_run_type == "package":
-                run_flow.delay(agent_run.dict())
-            elif agent_run.agent_run_type == "docker":
-                execute_docker_agent.delay(agent_run.dict())
+            # Execute the task
+            if agent_run['agent_run_type'] == "package":
+                task = run_flow.delay(agent_run_data)
+            elif agent_run['agent_run_type'] == "docker":
+                task = execute_docker_agent.delay(agent_run_data)
             else:
                 raise HTTPException(status_code=400, detail="Invalid agent run type")
 
-            return agent_run
+            return agent_run_data
 
         except Exception as e:
             logger.error(f"Failed to run agent: {str(e)}")
@@ -237,6 +245,16 @@ class HTTPServer:
 
             async with DB() as db:
                 agent_run = await db.list_agent_runs(id_)
+                if isinstance(agent_run, list):
+                    agent_run = agent_run[0]
+                agent_run.pop("_sa_instance_state", None)
+                if 'created_time' in agent_run and isinstance(agent_run['created_time'], datetime):
+                    agent_run['created_time'] = agent_run['created_time'].isoformat()
+                if 'start_processing_time' in agent_run and isinstance(agent_run['start_processing_time'], datetime):
+                    agent_run['start_processing_time'] = agent_run['start_processing_time'].isoformat()
+                if 'completed_time' in agent_run and isinstance(agent_run['completed_time'], datetime):
+                    agent_run['completed_time'] = agent_run['completed_time'].isoformat()
+                agent_run = AgentRun(**agent_run)
 
             if not agent_run:
                 raise HTTPException(status_code=404, detail="Agent run not found")
@@ -288,6 +306,10 @@ class HTTPServer:
             )
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
+                if isinstance(agent_run, list):
+                    agent_run = agent_run[0]
+                agent_run.pop("_sa_instance_state", None)
+                agent_run = AgentRun(**agent_run)
             logger.info(
                 f"Created agent run for worker node {agent_run_input.worker_nodes[0]}"
             )
@@ -317,6 +339,10 @@ class HTTPServer:
             )
             async with DB() as db:
                 updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
+                if isinstance(updated_agent_run, list):
+                    updated_agent_run = updated_agent_run[0]
+                updated_agent_run.pop("_sa_instance_state", None)
+                updated_agent_run = AgentRun(**updated_agent_run)
             logger.info(
                 f"Updated agent run for worker node {agent_run.worker_nodes[0]}"
             )

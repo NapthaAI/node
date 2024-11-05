@@ -241,7 +241,7 @@ class WebSocketServer:
             result = await self.run_agent(agent_run_input)
             logger.info(f"run_agent_direct: Got result: {result}")
             return json.dumps(
-                {"status": "success", "data": result.dict()}, cls=DateTimeEncoder
+                {"status": "success", "data": result}, cls=DateTimeEncoder
             )
         except Exception as e:
             logger.error(f"Error processing job: {str(e)}")
@@ -260,7 +260,7 @@ class WebSocketServer:
         try:
             agent_run_input = AgentRunInput(**params)
             result = await self.run_agent(agent_run_input)
-            response["params"] = result.dict()
+            response["params"] = result
         except Exception as e:
             response["params"] = {"error": str(e)}
         return response
@@ -292,11 +292,15 @@ class WebSocketServer:
                 agent_run = await db.create_agent_run(agent_run_input)
                 logger.info("Created agent run")
 
+            if agent_run:
+                agent_run_data = agent_run.copy()
+                agent_run_data.pop("_sa_instance_state", None)
+
             # Execute the task
-            if agent_run.agent_run_type == "package":
-                task = run_flow.delay(agent_run.dict())
-            elif agent_run.agent_run_type == "docker":
-                task = execute_docker_agent.delay(agent_run.dict())
+            if agent_run['agent_run_type'] == "package":
+                task = run_flow.delay(agent_run_data)
+            elif agent_run['agent_run_type'] == "docker":
+                task = execute_docker_agent.delay(agent_run_data)
             else:
                 raise ValueError("Invalid module type")
 
@@ -306,8 +310,20 @@ class WebSocketServer:
 
             # Retrieve the updated module run from the database
             async with DB() as db:
-                updated_agent_run = await db.list_agent_runs(agent_run.id)
+                updated_agent_run = await db.list_agent_runs(agent_run['id'])
+                if isinstance(updated_agent_run, list):
+                    updated_agent_run = updated_agent_run[0]
+                updated_agent_run.pop("_sa_instance_state", None)
+                logger.info(f"Updated agent run: {updated_agent_run}")
 
+            if 'created_time' in updated_agent_run and isinstance(updated_agent_run['created_time'], datetime):
+                updated_agent_run['created_time'] = updated_agent_run['created_time'].isoformat()
+            if 'start_processing_time' in updated_agent_run and isinstance(updated_agent_run['start_processing_time'], datetime):
+                updated_agent_run['start_processing_time'] = updated_agent_run['start_processing_time'].isoformat()
+            if 'completed_time' in updated_agent_run and isinstance(updated_agent_run['completed_time'], datetime):
+                updated_agent_run['completed_time'] = updated_agent_run['completed_time'].isoformat()
+            logger.info(f"Yielding updated agent run: {updated_agent_run}")
+            
             return updated_agent_run
 
         except Exception as e:
@@ -405,7 +421,9 @@ class WebSocketServer:
 
     async def check_user_direct(self, data: str) -> str:
         data = json.loads(data)
-        response = await check_user(data)
+        _, response = await check_user(data)
+        if '_sa_instance_state' in response:
+            response.pop('_sa_instance_state')
         return json.dumps(response)
 
     async def check_user_indirect(self, message: dict, client_id: str) -> str:
@@ -419,6 +437,8 @@ class WebSocketServer:
         }
         try:
             result = await check_user(params)
+            if '_sa_instance_state' in result:
+                result.pop('_sa_instance_state')
             response["params"] = result
         except Exception as e:
             response["params"] = {"error": str(e)}
@@ -436,7 +456,9 @@ class WebSocketServer:
 
     async def register_user_direct(self, data: str) -> str:
         data = json.loads(data)
-        response = await register_user(data)
+        _, response = await register_user(data)
+        if '_sa_instance_state' in response:
+            response.pop('_sa_instance_state')
         return json.dumps(response)
 
     async def register_user_indirect(self, message: dict, client_id: str) -> str:
@@ -449,7 +471,9 @@ class WebSocketServer:
             "task": "register_user",
         }
         try:
-            result = await register_user(params)
+            _, result = await register_user(params)
+            if '_sa_instance_state' in result:
+                result.pop('_sa_instance_state')
             response["params"] = result
         except Exception as e:
             logger.error(f"Error registering user: {e}")

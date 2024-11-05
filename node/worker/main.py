@@ -1,23 +1,46 @@
-# worker/main.py
 from celery import Celery
 from dotenv import load_dotenv
 from node.utils import get_logger
-from celery.signals import worker_init, worker_shutdown
+from celery.signals import worker_init, worker_shutdown, celeryd_after_setup
 import os
 import asyncio
+import resource
 from node.grpc_pool_manager import get_grpc_pool_instance, close_grpc_pool
+import psutil
 
 logger = get_logger(__name__)
 
+def log_system_limits():
+    """Log current system limits and resource usage"""
+    try:
+        # Get file descriptor limits
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        logger.info(f"File descriptor limits - Soft: {soft}, Hard: {hard}")
+
+        # Get process information
+        process = psutil.Process()
+        logger.info(f"Open files count: {len(process.open_files())}")
+        logger.info(f"Process memory usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+        logger.info(f"CPU usage: {process.cpu_percent()}%")
+        
+        # Log event loop info
+        loop = asyncio.get_event_loop()
+        logger.info(f"Event loop running: {loop.is_running()}")
+        logger.info(f"Event loop closed: {loop.is_closed()}")
+
+    except Exception as e:
+        logger.error(f"Error logging system limits: {e}")
+
 # Load environment variables
 load_dotenv(".env")
+logger.info("Environment variables loaded")
 
-# Make sure OPENAI_API_KEY is set
+# Validate OPENAI_API_KEY
 try:
     OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-    logger.info("OPENAI_API_KEY found in environment")
+    logger.info("✓ OPENAI_API_KEY found in environment")
 except KeyError:
-    logger.error("OPENAI_API_KEY not found in environment")
+    logger.error("✗ OPENAI_API_KEY not found in environment")
     raise Exception("OPENAI_API_KEY not found in environment")
 
 # Celery config
@@ -25,50 +48,67 @@ RMQ_USER = os.environ.get("RMQ_USER")
 RMQ_PASSWORD = os.environ.get("RMQ_PASSWORD")
 BROKER_URL = f"amqp://{RMQ_USER}:{RMQ_PASSWORD}@localhost:5672/"
 BACKEND_URL = f"rpc://{RMQ_USER}:{RMQ_PASSWORD}@localhost:5672/"
-NUM_GRPC_CONNECTIONS = 300
-BUFFER_SIZE = 30
+NUM_GRPC_CONNECTIONS = 200
+BUFFER_SIZE = 20
 
-logger.info(f"BROKER_URL: {BROKER_URL}")
-
+logger.info(f"Configuration loaded:")
+logger.info(f"✓ BROKER_URL configured: {BROKER_URL}")
+logger.info(f"✓ NUM_GRPC_CONNECTIONS: {NUM_GRPC_CONNECTIONS}")
+logger.info(f"✓ BUFFER_SIZE: {BUFFER_SIZE}")
 
 @worker_init.connect
 def initialize_grpc_pool(**kwargs):
-    """
-    Initializes the GlobalGrpcPool when a Celery worker starts.
-    Starts the monitor_pool coroutine within the worker's event loop.
-    """
-    logger.info("Initializing GlobalGrpcPool for Celery worker.")
-    pool = get_grpc_pool_instance(
-        max_channels=NUM_GRPC_CONNECTIONS, buffer_size=BUFFER_SIZE
-    )
-
-    # Start the monitor_pool coroutine
+    """Initializes the GlobalGrpcPool when a Celery worker starts."""
+    logger.info("Starting GlobalGrpcPool initialization...")
+    
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        loop.create_task(pool.monitor_pool())
-        logger.info("GlobalGrpcPool initialized and monitor_pool started.")
-    except Exception as e:
-        logger.error(f"Failed to start monitor_pool: {e}")
+        pool = get_grpc_pool_instance(
+            max_channels=NUM_GRPC_CONNECTIONS, buffer_size=BUFFER_SIZE
+        )
+        logger.info(f"✓ gRPC pool created with {NUM_GRPC_CONNECTIONS} max channels")
 
+        # Set up event loop
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                logger.info("Creating new event loop as current one is closed")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            loop.create_task(pool.monitor_pool())
+            logger.info("✓ Pool monitor task created successfully")
+            
+        except Exception as e:
+            logger.error(f"✗ Event loop setup failed: {e}")
+            raise
+
+        log_system_limits()
+        logger.info("✓ GlobalGrpcPool initialization complete")
+
+    except Exception as e:
+        logger.error(f"✗ Failed to initialize GlobalGrpcPool: {e}")
+        raise
 
 @worker_shutdown.connect
 def shutdown_grpc_pool_signal(**kwargs):
-    """
-    Shuts down the GlobalGrpcPool when a Celery worker stops.
-    Ensures that all channels are closed gracefully.
-    """
-    logger.info("Shutting down GlobalGrpcPool for Celery worker.")
+    """Shuts down the GlobalGrpcPool when a Celery worker stops."""
+    logger.info("Starting GlobalGrpcPool shutdown...")
+    
     try:
         loop = asyncio.get_event_loop()
         if not loop.is_closed():
+            logger.info("Closing gRPC pool connections...")
             loop.run_until_complete(close_grpc_pool())
+            logger.info("✓ gRPC pool connections closed")
+        else:
+            logger.warning("Event loop was already closed")
+            
+        log_system_limits()
+        logger.info("✓ GlobalGrpcPool shutdown complete")
+        
     except Exception as e:
-        logger.error(f"Error during gRPC pool shutdown: {e}")
-    logger.info("GlobalGrpcPool shut down.")
-
+        logger.error(f"✗ Error during gRPC pool shutdown: {e}")
+        raise
 
 # Celery app
 app = Celery(
@@ -78,14 +118,50 @@ app = Celery(
     include=["node.worker.template_worker", "node.worker.docker_worker"],
 )
 
-
 @app.on_after_configure.connect
 def setup_eventloop(sender, **kwargs):
+    logger.info("Setting up event loop...")
     try:
         loop = asyncio.get_event_loop()
         if loop.is_closed():
+            logger.info("Creating new event loop as current one is closed")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-    except RuntimeError:
+        logger.info("✓ Event loop setup complete")
+        log_system_limits()
+    except RuntimeError as e:
+        logger.warning(f"RuntimeError during event loop setup: {e}")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+        logger.info("✓ New event loop created and set")
+    except Exception as e:
+        logger.error(f"✗ Unexpected error setting up event loop: {e}")
+        raise
+
+@celeryd_after_setup.connect
+def capture_worker_settings(sender, instance, **kwargs):
+    """Log worker settings after setup is complete"""
+    logger.info(f"Worker {sender} initialized with settings:")
+    logger.info(f"✓ Concurrency: {instance.concurrency}")
+    logger.info(f"✓ Pool: {instance.pool}")
+    logger.info(f"✓ Consumer: {instance.consumer}")
+    log_system_limits()
+
+
+app.conf.update(
+    broker_transport_options={
+        'consumer_timeout': 3600*2,
+        'consumer_cancel_on_timeout': False,
+        'socket_timeout': 3600*2,
+        'connection_max_retries': 3,
+        'connection_retry_on_startup': True,
+    },
+    broker_connection_retry=True,
+    broker_connection_retry_on_startup=True,
+    broker_connection_max_retries=3,
+    broker_connection_timeout=30,
+    broker_heartbeat=60,
+    broker_pool_limit=10,  # Limit connection pool size
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,  # Requeue task if worker dies
+)

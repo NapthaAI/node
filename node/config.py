@@ -34,10 +34,11 @@ VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
 OLLAMA_MODELS="phi"
 
 # Local DB
-SURREALDB_PORT=3002
-DB_NS="naptha"
-DB_DB="naptha"
-DB_URL="ws://localhost:3002/rpc"
+LOCAL_DB_PORT=3002
+LOCAL_DB_USER="naptha"
+LOCAL_DB_PASSWORD="napthapassword"
+LOCAL_DB_NAME="naptha"
+LOCAL_DB_URL=f"postgresql://{LOCAL_DB_USER}:{LOCAL_DB_PASSWORD}@localhost:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}"
 
 # Storage
 file_path = Path(__file__).resolve()

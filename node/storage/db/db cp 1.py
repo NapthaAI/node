@@ -32,8 +32,8 @@ class DatabasePool:
         self.engine = create_engine(
             LOCAL_DB_URL,
             poolclass=QueuePool,
-            pool_size=120,          # Base pool size
-            max_overflow=240,      # More overflow for 120 workers
+            pool_size=40,          # Base pool size
+            max_overflow=160,      # More overflow for 120 workers
             pool_timeout=30,
             pool_recycle=300,      # 5 minute recycle
             pool_pre_ping=True,
@@ -153,27 +153,17 @@ class DB:
             raise
 
     async def list_agent_runs(self, agent_run_id=None) -> List[Dict]:
-        max_retries = 3
-        retry_delay = 1  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                with self.session() as db:
-                    if agent_run_id:
-                        result = db.query(AgentRun).filter(
-                            AgentRun.id == agent_run_id
-                        ).first()
-                        if not result:
-                            logger.warning(f"Agent run {agent_run_id} not found on attempt {attempt + 1}")
-                            await asyncio.sleep(retry_delay)
-                            continue
-                        return result.__dict__ if result else None
-                    return [run.__dict__ for run in db.query(AgentRun).all()]
-            except SQLAlchemyError as e:
-                logger.error(f"Database error on attempt {attempt + 1}: {str(e)}")
-                if attempt == max_retries - 1:
-                    raise
-                await asyncio.sleep(retry_delay)
+        try:
+            with self.session() as db:
+                if agent_run_id:
+                    result = db.query(AgentRun).filter(
+                        AgentRun.id == agent_run_id
+                    ).first()
+                    return result.__dict__ if result else None
+                return [run.__dict__ for run in db.query(AgentRun).all()]
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to list agent runs: {str(e)}")
+            raise
 
     async def delete_agent_run(self, agent_run_id: int) -> bool:
         try:
