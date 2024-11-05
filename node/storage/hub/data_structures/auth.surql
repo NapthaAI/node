@@ -7,7 +7,8 @@ DEFINE SCOPE user SESSION 7d
             name: $name,
             username: $username,
             password: crypto::argon2::generate($password),
-            public_key: $public_key
+            public_key: $public_key,
+            id: $public_key
         }
     )
 ;
