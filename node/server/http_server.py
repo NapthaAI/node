@@ -196,6 +196,12 @@ class HTTPServer:
                 if not agent:
                     raise HTTPException(status_code=404, detail="Agent not found")
 
+                if agent_run_input.agent_personas:
+                    personas = await hub.list_personas(agent_run_input.agent_personas)
+                    logger.info(f"Found Persona: {personas}")
+                    personas_url = personas[0]["url"]
+                    agent_run_input.agent_personas = personas_url
+
                 agent_run_input.agent_run_type = agent["type"]
                 agent_run_input.agent_version = agent["version"]
                 agent_run_input.agent_source_url = agent["url"]
@@ -224,9 +230,9 @@ class HTTPServer:
             return agent_run_data
 
         except Exception as e:
-            logger.error(f"Failed to run agent: {str(e)}")
+            logger.info(f"Failed to run agent: {str(e)}")
             error_details = traceback.format_exc()
-            logger.error(f"Full traceback: {error_details}")
+            logger.info(f"Full traceback: {error_details}")
             raise HTTPException(
                 status_code=500, detail=f"Failed to run agent: {agent_run_input}"
             )

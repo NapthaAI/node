@@ -69,3 +69,6 @@ def install_agents_from_config(agents_config_path):
             raise e
 
     logger.info(f"Done downloading and installing AI agents in {agents_config_path}")
+
+def load_persona(agent_personas_url: str):
+    logger.info(f"5555555Loading persona from {agent_personas_url}")

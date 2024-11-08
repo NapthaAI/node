@@ -64,6 +64,7 @@ class AgentRun(BaseModel):
     error: bool = False
     id: Optional[str] = None
     results: list[str] = []
+    agent_personas: Optional[str] = None
     worker_nodes: Optional[list[str]] = None
     error_message: Optional[str] = None
     created_time: Optional[str] = None
@@ -104,6 +105,7 @@ class AgentRun(BaseModel):
 class AgentRunInput(BaseModel):
     agent_name: str
     consumer_id: str
+    agent_personas: Optional[str] = None
     worker_nodes: Optional[list[str]] = None
     agent_run_params: Optional[Union[Dict, DockerParams]] = None
     agent_run_type: Optional[AgentRunType] = None

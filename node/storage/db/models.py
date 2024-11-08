@@ -19,6 +19,7 @@ class AgentRun(Base):
     agent_name = Column(String)
     agent_run_params = Column(JSON)
     results = Column(ARRAY(JSON), default=[])
+    agent_personas = Column(String, default=None)
     status = Column(String, default="created")
     agent_run_type = Column(String, default="docker")
     error = Column(Boolean, default=False)

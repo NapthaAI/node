@@ -20,6 +20,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from contextlib import contextmanager
 from git.exc import GitCommandError, InvalidGitRepositoryError
+from node.agent_manager import load_persona
 from node.worker.utils import (
     load_yaml_config,
     prepare_input_dir,
@@ -268,6 +269,7 @@ def run_poetry_command(command):
         return result.stdout
     except subprocess.CalledProcessError as e:
         error_msg = f"Poetry command failed: {e.cmd}"
+        logger.info(f"Traceback: {traceback.format_exc()}")
         logger.error(error_msg)
         logger.error(f"Stdout: {e.stdout}")
         logger.error(f"Stderr: {e.stderr}")
@@ -629,4 +631,6 @@ class FlowEngine:
         main_module = importlib.import_module(f"{tn}.run")
         main_module = importlib.reload(main_module)
         flow_func = getattr(main_module, entrypoint)
+
+        persona = load_persona(self.flow_run.agent_personas)
         return flow_func, validated_data, cfg
