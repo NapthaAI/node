@@ -110,6 +110,7 @@ CREATE agent:napthaville_module SET name="Napthaville Agent", description="An ag
 CREATE agent:docker_hello_world SET name="Hello World Docker Agent", description="A simple hello world app using docker", author=user:naptha, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1";
 CREATE agent:module_test SET name="Module Test", description="A simple test agent", author=user:naptha, url="https://github.com/moarshy/module_test", type="package", version="0.4";
 CREATE agent:random_number_agent SET name="Random Number Agent", description="A simple agent for taking part in Keynesian beauty contests", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.3";
+CREATE agent:market_agent SET name="Market Agent", description="An agent that takes part in markets", author=user:naptha, url="https://github.com/NapthaAI/market_agent", type="package", version="0.1";
 
 -- AGENT NETWORKS
 CREATE agent:multiagent_chat SET name="Chat Network", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.11";
@@ -120,6 +121,8 @@ CREATE agent:napthaville_chat SET name="Napthaville Chat Network", description="
 CREATE agent:napthaville_move SET name="Napthaville Social Network", description="Multi-agent network for social simulations in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26";
 CREATE agent:multiagent_prediction SET name="Prediction Network", description="Multi-agent network for forecasting future events", author=user:naptha, url="https://github.com/NapthaAI/multiagent_prediction", type="package", version="0.2";
 
+-- PERSONAS
+CREATE persona:market_agents_personas SET name="Market Agents Personas", description="Personas for market agents", author=user:naptha, url="https://huggingface.co/datasets/NapthaAI/market_agents_personas", version="0.1";
 
 -- NODES
 
