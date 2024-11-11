@@ -38,6 +38,7 @@ from node.config import (
     NODE_PORT,
     NODE_ROUTING,
     SERVER_TYPE,
+    LOCAL_DB_URL,
 )
 from node.worker.task_engine import TaskEngine
 from node.worker.utils import download_from_ipfs, unzip_file
@@ -539,6 +540,7 @@ class FlowEngine:
                 flow_run=self.flow_run,
                 task_engine_cls=TaskEngine,
                 node_cls=Node,
+                db_url=LOCAL_DB_URL,
             )
         except Exception as e:
             logger.error(f"Error running flow: {e}")
@@ -612,7 +614,10 @@ class FlowEngine:
 
         # If the output is set to save, save the output to the outputs folder
         if cfg["outputs"]["save"]:
-            output_path = f"{BASE_OUTPUT_DIR}/{self.flow_run.id.split(':')[1]}"
+            if ':' in self.flow_run.id:
+                output_path = f"{BASE_OUTPUT_DIR}/{self.flow_run.id.split(':')[1]}"
+            else:
+                output_path = f"{BASE_OUTPUT_DIR}/{self.flow_run.id}"
             self.parameters["output_path"] = output_path
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
