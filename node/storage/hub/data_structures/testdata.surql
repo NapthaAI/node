@@ -121,6 +121,10 @@ CREATE agent:napthaville_chat SET name="Napthaville Chat Network", description="
 CREATE agent:napthaville_move SET name="Napthaville Social Network", description="Multi-agent network for social simulations in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26";
 CREATE agent:multiagent_prediction SET name="Prediction Network", description="Multi-agent network for forecasting future events", author=user:naptha, url="https://github.com/NapthaAI/multiagent_prediction", type="package", version="0.2";
 
+-- PERSONAS
+CREATE persona:market_agents_personas SET name="Market Agents Personas", description="Personas for market agents", author=user:naptha, url="https://huggingface.co/datasets/NapthaAI/market_agents_personas", version="0.1";
+CREATE persona:twitter_personas SET name="Twitter Personas", description="Personas generated from twitter exports", author=user:naptha, url="https://huggingface.co/datasets/NapthaAI/twitter_personas", version="0.1";
+CREATE persona:one_million_personas SET name="One Million Personas", description="Personas generated from the paper Scaling Synthetic Data Creation with 1M Personas", author=user:naptha, url="https://huggingface.co/datasets/proj-persona/PersonaHub", version="0.1";
 
 -- NODES
 
