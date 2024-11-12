@@ -32,6 +32,7 @@ class AgentRun(Base):
     duration = Column(Integer)
     agent_version = Column(String, default="0.1")
     agent_source_url = Column(String, default="")
+    personas_urls = Column(ARRAY(String))
 
     consumer = relationship("User", back_populates="agent_runs")
 
