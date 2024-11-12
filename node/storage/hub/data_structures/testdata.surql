@@ -110,6 +110,7 @@ CREATE agent:napthaville_module SET name="Napthaville Agent", description="An ag
 CREATE agent:docker_hello_world SET name="Hello World Docker Agent", description="A simple hello world app using docker", author=user:naptha, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1";
 CREATE agent:module_test SET name="Module Test", description="A simple test agent", author=user:naptha, url="https://github.com/moarshy/module_test", type="package", version="0.4";
 CREATE agent:random_number_agent SET name="Random Number Agent", description="A simple agent for taking part in Keynesian beauty contests", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.3";
+CREATE agent:test_personas SET name="Test Personas", description="A simple test agent for testing personas", author=user:naptha, url="https://github.com/moarshy/test_personas", type="package", version="0.1", personas_urls=["https://huggingface.co/datasets/NapthaAI/market_agents_personas"];
 
 -- AGENT NETWORKS
 CREATE agent:multiagent_chat SET name="Chat Network", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.11";

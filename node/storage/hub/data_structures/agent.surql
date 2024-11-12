@@ -9,3 +9,4 @@ DEFINE FIELD author ON TABLE agent TYPE record<user>;
 DEFINE FIELD url ON TABLE agent TYPE string;
 DEFINE FIELD type ON TABLE agent TYPE string;
 DEFINE FIELD version ON TABLE agent TYPE string;
+DEFINE FIELD personas_urls ON TABLE agent TYPE option<array<string>>;
