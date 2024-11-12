@@ -2,34 +2,19 @@ import os
 import sys
 import pytz
 import json
-import fcntl
-import time
 import functools
 import inspect
 import asyncio
 import requests
 import importlib
-import subprocess
 import traceback
 import logging
-from git import Repo
 from typing import Dict, List
-from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
 from dotenv import load_dotenv
-from contextlib import contextmanager
-from git.exc import GitCommandError, InvalidGitRepositoryError
-from node.worker.utils import (
-    load_yaml_config,
-    prepare_input_dir,
-    update_db_with_status_sync,
-    upload_to_ipfs,
-    upload_json_string_to_ipfs,
-)
-from node.worker.main import app
+
 from node.client import Node
-from node.schemas import AgentRun
 from node.config import (
     BASE_OUTPUT_DIR,
     AGENTS_SOURCE_DIR,
@@ -40,8 +25,17 @@ from node.config import (
     SERVER_TYPE,
     LOCAL_DB_URL,
 )
+from node.module_manager import install_agent_if_not_present
+from node.schemas import AgentRun
+from node.worker.main import app
 from node.worker.task_engine import TaskEngine
-from node.worker.utils import download_from_ipfs, unzip_file
+from node.worker.utils import (
+    load_yaml_config,
+    prepare_input_dir,
+    update_db_with_status_sync,
+    upload_to_ipfs,
+    upload_json_string_to_ipfs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,45 +44,8 @@ load_dotenv(".env")
 os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 
 
-INSTALLED_MODULES = {}
-
-
 if AGENTS_SOURCE_DIR not in sys.path:
     sys.path.append(AGENTS_SOURCE_DIR)
-
-
-class LockAcquisitionError(Exception):
-    pass
-
-
-@contextmanager
-def file_lock(lock_file, timeout=30):
-    lock_fd = None
-    try:
-        # Ensure the directory exists
-        lock_dir = os.path.dirname(lock_file)
-        os.makedirs(lock_dir, exist_ok=True)
-
-        start_time = time.time()
-        while True:
-            try:
-                lock_fd = open(lock_file, "w")
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except IOError:
-                if time.time() - start_time > timeout:
-                    raise LockAcquisitionError(
-                        f"Failed to acquire lock after {timeout} seconds"
-                    )
-                time.sleep(1)
-
-        yield lock_fd
-
-    finally:
-        if lock_fd:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            lock_fd.close()
-
 
 @app.task(bind=True, acks_late=True)
 def run_flow(self, flow_run):
@@ -99,55 +56,6 @@ def run_flow(self, flow_run):
         # Force cleanup of channels
         app.backend.cleanup()
         
-async def install_agent_if_not_present(flow_run_obj, agent_version):
-    agent_name = flow_run_obj.agent_name
-    if agent_name in INSTALLED_MODULES:
-        installed_version = INSTALLED_MODULES[agent_name]
-        if installed_version == agent_version:
-            logger.info(
-                f"Agent {agent_name} version {agent_version} is already installed"
-            )
-            return True
-
-    lock_file = Path(AGENTS_SOURCE_DIR) / f"{agent_name}.lock"
-    logger.info(f"Lock file: {lock_file}")
-    try:
-        with file_lock(lock_file):
-            logger.info(f"Acquired lock for {agent_name}")
-
-            if not is_agent_installed(agent_name, agent_version):
-                logger.info(
-                    f"Agent {agent_name} version {agent_version} is not installed. Attempting to install..."
-                )
-                if not flow_run_obj.agent_source_url:
-                    raise ValueError(
-                        f"Agent URL is required for installation of {agent_name}"
-                    )
-                install_agent_if_needed(
-                    agent_name, agent_version, flow_run_obj.agent_source_url
-                )
-
-            # Verify agent installation
-            if not verify_agent_installation(agent_name):
-                raise RuntimeError(
-                    f"Agent {agent_name} failed verification after installation"
-                )
-
-            logger.info(
-                f"Agent {agent_name} version {agent_version} is installed and verified"
-            )
-            INSTALLED_MODULES[agent_name] = agent_version
-    except LockAcquisitionError as e:
-        error_msg = f"Failed to acquire lock for agent {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise RuntimeError(error_msg) from e
-    except Exception as e:
-        error_msg = f"Failed to install or verify agent {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        raise RuntimeError(error_msg) from e
-
 
 async def _run_flow_async(flow_run: Dict) -> None:
     try:
@@ -213,180 +121,6 @@ async def handle_failure(flow_run: Dict, error_msg: str) -> None:
         await update_db_with_status_sync(flow_run_obj)
     except Exception as db_error:
         logger.error(f"Failed to update database after error: {str(db_error)}")
-
-
-def is_agent_installed(agent_name: str, required_version: str) -> bool:
-    try:
-        importlib.import_module(agent_name)
-        agents_source_dir = os.path.join(AGENTS_SOURCE_DIR, agent_name)
-
-        if not Path(agents_source_dir).exists():
-            logger.warning(f"Agents source directory for {agent_name} does not exist")
-            return False
-
-        try:
-            repo = Repo(agents_source_dir)
-            if repo.head.is_detached:
-                current_tag = next(
-                    (tag.name for tag in repo.tags if tag.commit == repo.head.commit),
-                    None,
-                )
-            else:
-                current_tag = next(
-                    (tag.name for tag in repo.tags if tag.commit == repo.head.commit),
-                    None,
-                )
-
-            if current_tag:
-                logger.info(f"Agent {agent_name} is at tag: {current_tag}")
-                current_version = (
-                    current_tag[1:] if current_tag.startswith("v") else current_tag
-                )
-                required_version = (
-                    required_version[1:]
-                    if required_version.startswith("v")
-                    else required_version
-                )
-                return current_version == required_version
-            else:
-                logger.warning(f"No tag found for current commit in {agent_name}")
-                return False
-        except (InvalidGitRepositoryError, GitCommandError) as e:
-            logger.error(f"Git error for {agent_name}: {str(e)}")
-            return False
-
-    except ImportError:
-        logger.warning(f"Agent {agent_name} not found")
-        return False
-
-
-def run_poetry_command(command):
-    try:
-        result = subprocess.run(
-            ["poetry"] + command, check=True, capture_output=True, text=True
-        )
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        error_msg = f"Poetry command failed: {e.cmd}"
-        logger.error(error_msg)
-        logger.error(f"Stdout: {e.stdout}")
-        logger.error(f"Stderr: {e.stderr}")
-        raise RuntimeError(error_msg)
-
-
-def verify_agent_installation(agent_name: str) -> bool:
-    try:
-        importlib.import_module(f"{agent_name}.run")
-        return True
-    except ImportError as e:
-        logger.error(f"Error importing agent {agent_name}: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return False
-
-
-def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
-    try:
-        if agents_source_dir.exists():
-            logger.info(f"Updating existing repository for {agent_name}")
-            repo = Repo(agents_source_dir)
-            repo.remotes.origin.fetch()
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully updated {agent_name} to version {agent_version}")
-        else:
-            # Clone new repository
-            logger.info(f"Cloning new repository for {agent_name}")
-            Repo.clone_from(agent_source_url, agents_source_dir)
-            repo = Repo(agents_source_dir)
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully cloned {agent_name} version {agent_version}")
-
-    except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.info(f"Traceback: {traceback.format_exc()}")
-        if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
-        raise RuntimeError(error_msg) from e
-
-def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
-    try:
-        agent_ipfs_hash = agent_source_url.split("ipfs://")[1]
-        agent_temp_zip_path = download_from_ipfs(agent_ipfs_hash, AGENTS_SOURCE_DIR)
-        unzip_file(agent_temp_zip_path, agents_source_dir)
-        os.remove(agent_temp_zip_path)
-
-    except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.info(f"Traceback: {traceback.format_exc()}")
-        raise RuntimeError(error_msg) from e
-
-def install_agent_from_git(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
-    try:
-        if agents_source_dir.exists():
-            logger.info(f"Updating existing repository for {agent_name}")
-            repo = Repo(agents_source_dir)
-            repo.remotes.origin.fetch()
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully updated {agent_name} to version {agent_version}")
-        else:
-            # Clone new repository
-            logger.info(f"Cloning new repository for {agent_name}")
-            Repo.clone_from(agent_source_url, agents_source_dir)
-            repo = Repo(agents_source_dir)
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully cloned {agent_name} version {agent_version}")
-
-    except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.info(f"Traceback: {traceback.format_exc()}")
-        if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
-        raise RuntimeError(error_msg) from e
-    
-def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-    
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
-
-    try:
-        if "ipfs://" in agent_source_url:
-            install_agent_from_ipfs(agent_name, agent_version, agent_source_url)
-        else:
-            install_agent_from_git(agent_name, agent_version, agent_source_url)
-            
-        # Reinstall the agent
-        logger.info(f"Installing/Reinstalling {agent_name}")
-        installation_output = run_poetry_command(["add", f"{agents_source_dir}"])
-        logger.info(f"Installation output: {installation_output}")
-
-        if not verify_agent_installation(agent_name):
-            raise RuntimeError(
-                f"Agent {agent_name} failed verification after installation"
-            )
-
-        logger.info(
-            f"Successfully installed and verified {agent_name} version {agent_version}"
-        )
-    except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.info(f"Traceback: {traceback.format_exc()}")
-        if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
-        raise RuntimeError(error_msg) from e
 
 
 async def maybe_async_call(func, *args, **kwargs):
@@ -541,6 +275,7 @@ class FlowEngine:
                 task_engine_cls=TaskEngine,
                 node_cls=Node,
                 db_url=LOCAL_DB_URL,
+                agents_dir=AGENTS_SOURCE_DIR,
             )
         except Exception as e:
             logger.error(f"Error running flow: {e}")
