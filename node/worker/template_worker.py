@@ -133,6 +133,11 @@ async def install_agent_if_not_present(flow_run_obj, agent_version):
                     f"Agent {agent_name} failed verification after installation"
                 )
 
+            # Install personas if they exist in flow_run_obj
+            if hasattr(flow_run_obj, 'personas_urls') and flow_run_obj.personas_urls:
+                logger.info(f"Installing personas for agent {agent_name}")
+                await install_personas_if_needed(agent_name, flow_run_obj.personas_urls)
+
             logger.info(
                 f"Agent {agent_name} version {agent_version} is installed and verified"
             )
@@ -284,33 +289,41 @@ def verify_agent_installation(agent_name: str) -> bool:
         return False
 
 
-def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
+async def install_personas_if_needed(agent_name: str, personas_urls: List[str]):
+    if not personas_urls:
+        logger.info("No personas to install")
+        return
+        
+    personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
+    personas_base_dir.mkdir(exist_ok=True)
+    
+    logger.info(f"Installing personas for agent {agent_name}")
+    
+    for persona_url in personas_urls:
+        try:
+            # Extract repo name from URL
+            repo_name = persona_url.split('/')[-1]
+            persona_dir = personas_base_dir / repo_name
+            
+            if persona_dir.exists():
+                logger.info(f"Updating existing persona repository: {repo_name}")
+                repo = Repo(persona_dir)
+                repo.remotes.origin.fetch()
+                repo.git.pull('origin', 'main')  # Assuming main branch
+                logger.info(f"Successfully updated persona: {repo_name}")
+            else:
+                # Clone new repository
+                logger.info(f"Cloning new persona repository: {repo_name}")
+                Repo.clone_from(persona_url, persona_dir)
+                logger.info(f"Successfully cloned persona: {repo_name}")
 
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
-    try:
-        if agents_source_dir.exists():
-            logger.info(f"Updating existing repository for {agent_name}")
-            repo = Repo(agents_source_dir)
-            repo.remotes.origin.fetch()
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully updated {agent_name} to version {agent_version}")
-        else:
-            # Clone new repository
-            logger.info(f"Cloning new repository for {agent_name}")
-            Repo.clone_from(agent_source_url, agents_source_dir)
-            repo = Repo(agents_source_dir)
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully cloned {agent_name} version {agent_version}")
+        except Exception as e:
+            error_msg = f"Error installing persona from {persona_url}: {str(e)}"
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Continue with other personas even if one fails
+            continue
 
-    except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
-        logger.error(error_msg)
-        logger.info(f"Traceback: {traceback.format_exc()}")
-        if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
-        raise RuntimeError(error_msg) from e
 
 def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_url: str):
     logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
@@ -327,6 +340,7 @@ def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_ur
         logger.error(error_msg)
         logger.info(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
+
 
 def install_agent_from_git(agent_name: str, agent_version: str, agent_source_url: str):
     logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
@@ -541,6 +555,7 @@ class FlowEngine:
                 task_engine_cls=TaskEngine,
                 node_cls=Node,
                 db_url=LOCAL_DB_URL,
+                agents_dir=AGENTS_SOURCE_DIR,
             )
         except Exception as e:
             logger.error(f"Error running flow: {e}")
