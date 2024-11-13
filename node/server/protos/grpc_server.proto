@@ -54,6 +54,7 @@ message RunAgentRequest {
   google.protobuf.Struct agent_run_params = 3;
   optional string agent_type = 4;
   repeated string worker_nodes = 5;
+  repeated string personas_urls = 6;
 }
 
 message RunAgentResponse {
@@ -76,4 +77,5 @@ message RunAgentResponse {
   optional string input_schema_ipfs_hash = 17;
   optional string agent_source_url = 18;
   optional string agent_version = 19;
+  repeated string personas_urls = 20;
 }
