@@ -199,7 +199,13 @@ class HTTPServer:
                 agent_run_input.agent_run_type = agent["type"]
                 agent_run_input.agent_version = agent["version"]
                 agent_run_input.agent_source_url = agent["url"]
-                agent_run_input.personas_urls = agent["personas_urls"]
+
+                if agent_run_input.personas_urls is None:
+                    if 'personas_urls' in agent:
+                        agent_run_input.personas_urls = agent["personas_urls"]
+                else:
+                    if 'personas_urls' in agent:
+                        agent_run_input.personas_urls.extend(agent["personas_urls"])
 
                 if agent["type"] == "docker":
                     agent_run_input.agent_run_params = DockerParams(
