@@ -25,7 +25,7 @@ from node.config import (
     SERVER_TYPE,
     LOCAL_DB_URL,
 )
-from node.module_manager import install_agent_if_not_present
+from node.module_manager import install_agent_if_not_present, install_personas_if_needed
 from node.schemas import AgentRun
 from node.worker.main import app
 from node.worker.task_engine import TaskEngine
@@ -162,6 +162,8 @@ class FlowEngine:
         else:
             raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
 
+        self.personas_urls = self.flow_run.personas_urls
+
         self.consumer = {
             "public_key": flow_run.consumer_id.split(":")[1],
             "id": flow_run.consumer_id,
@@ -186,6 +188,12 @@ class FlowEngine:
         # Check if the user has the right to use the worker nodes if not register the user
         if self.flow_run.worker_nodes:
             await self.check_register_worker_nodes(self.flow_run.worker_nodes)
+
+        # Install the personas if needed
+        if self.personas_urls:
+            logger.info(f"Installing personas for agent {self.flow_name}: {self.personas_urls}")
+            await install_personas_if_needed(self.flow_name, self.personas_urls)
+            logger.info(f"Personas installed for agent {self.flow_name}")
 
         # Load the flow
         self.flow_func, self.validated_data, self.cfg = await self.load_flow()
