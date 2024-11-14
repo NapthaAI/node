@@ -156,40 +156,96 @@ def verify_agent_installation(agent_name: str) -> bool:
         return False
 
 
+# async def install_personas_if_needed(agent_name: str, personas_urls: List[str]):
+#     if not personas_urls:
+#         logger.info("No personas to install")
+#         return
+        
+#     personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
+#     personas_base_dir.mkdir(exist_ok=True)
+    
+#     logger.info(f"Installing personas for agent {agent_name}")
+    
+#     for persona_url in personas_urls:
+#         try:
+#             # Extract repo name from URL
+#             repo_name = persona_url.split('/')[-1]
+#             persona_dir = personas_base_dir / repo_name
+            
+#             if persona_dir.exists():
+#                 logger.info(f"Updating existing persona repository: {repo_name}")
+#                 repo = Repo(persona_dir)
+#                 repo.remotes.origin.fetch()
+#                 repo.git.pull('origin', 'main')  # Assuming main branch
+#                 logger.info(f"Successfully updated persona: {repo_name}")
+#             else:
+#                 # Clone new repository
+#                 logger.info(f"Cloning new persona repository: {repo_name}")
+#                 Repo.clone_from(persona_url, persona_dir)
+#                 logger.info(f"Successfully cloned persona: {repo_name}")
+
+#         except Exception as e:
+#             error_msg = f"Error installing persona from {persona_url}: {str(e)}"
+#             logger.error(error_msg)
+#             logger.error(f"Traceback: {traceback.format_exc()}")
+#             # Continue with other personas even if one fails
+#             continue
+
 async def install_personas_if_needed(agent_name: str, personas_urls: List[str]):
     if not personas_urls:
         logger.info("No personas to install")
         return
-        
+
+    logger.info(f"Installing personas for agent {agent_name}")
+
     personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
     personas_base_dir.mkdir(exist_ok=True)
-    
-    logger.info(f"Installing personas for agent {agent_name}")
-    
-    for persona_url in personas_urls:
-        try:
-            # Extract repo name from URL
-            repo_name = persona_url.split('/')[-1]
-            persona_dir = personas_base_dir / repo_name
-            
-            if persona_dir.exists():
-                logger.info(f"Updating existing persona repository: {repo_name}")
-                repo = Repo(persona_dir)
-                repo.remotes.origin.fetch()
-                repo.git.pull('origin', 'main')  # Assuming main branch
-                logger.info(f"Successfully updated persona: {repo_name}")
-            else:
-                # Clone new repository
-                logger.info(f"Cloning new persona repository: {repo_name}")
-                Repo.clone_from(persona_url, persona_dir)
-                logger.info(f"Successfully cloned persona: {repo_name}")
 
-        except Exception as e:
-            error_msg = f"Error installing persona from {persona_url}: {str(e)}"
-            logger.error(error_msg)
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            # Continue with other personas even if one fails
+    for persona_url in personas_urls:
+        if persona_url in ["", None, " "]:
+            logger.warning(f"Skipping empty persona URL")
             continue
+        # identify if the persona is a git repo or an ipfs hash
+        if "ipfs://" in persona_url:
+            await install_persona_from_ipfs(persona_url, personas_base_dir)
+        else:
+            await install_persona_from_git(persona_url, personas_base_dir)
+
+async def install_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
+    try:
+        persona_folder_name = persona_url.split("::")[1]
+        persona_ipfs_hash = persona_url.split("::")[0].split("ipfs://")[1]
+        persona_dir = personas_base_dir / persona_folder_name
+
+        persona_temp_zip_path = download_from_ipfs(persona_ipfs_hash, personas_base_dir)
+        unzip_file(persona_temp_zip_path, persona_dir)
+        os.remove(persona_temp_zip_path)
+        logger.info(f"Successfully installed persona: {persona_folder_name}")
+    
+    except Exception as e:
+        error_msg = f"Error installing persona from {persona_url}: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise RuntimeError(error_msg) from e
+
+async def install_persona_from_git(repo_url: str, personas_base_dir: Path):
+    try:
+        repo_name = repo_url.split('/')[-1]
+        persona_dir = personas_base_dir / repo_name
+
+        if persona_dir.exists():
+            logger.info(f"Updating existing persona repository: {repo_name}")
+            repo = Repo(persona_dir) 
+        else:
+            logger.info(f"Cloning new persona repository: {repo_name}")
+            Repo.clone_from(repo_url, persona_dir)
+            logger.info(f"Successfully cloned persona: {repo_name}")
+
+    except Exception as e:
+        error_msg = f"Error installing persona from {repo_url}: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise RuntimeError(error_msg) from e
 
 
 def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_url: str):
