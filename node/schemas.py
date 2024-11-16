@@ -25,11 +25,56 @@ class NodeConfig(BaseModel):
     class Config:
         allow_mutation = True
 
+class LLMClientType(str, Enum):
+    OPENAI = "openai"
+    AZURE_OPENAI = "azure_openai"
+    ANTHROPIC = "anthropic"
+    VLLM = "vllm"
+    LITELLM = "litellm"
+    OLLAMA = "ollama"
 
-class AgentRunType(str, Enum):
+class LLMConfig(BaseModel):
+    config_name: str
+    client: LLMClientType
+    model: Optional[str] = None
+    max_tokens: int = 400
+    temperature: float = 0
+    api_base: Optional[str] = None
+
+class AgentModuleType(str, Enum):
     package = "package"
     docker = "docker"
 
+class AgentConfig(BaseModel):
+    config_name: Optional[str] = "agent_config"
+    llm_config: Optional[LLMConfig] = None
+    persona_module: Optional[Union[BaseModel, Dict]] = None
+    system_prompt: Optional[Union[BaseModel, Dict]] = None
+
+class OrchestratorConfig(BaseModel):
+    config_name: str
+    max_rounds: str
+
+class EnvironmentConfig(BaseModel):
+    config_name: str
+    environment_type: str
+
+class AgentDeployment(BaseModel):
+    name: str
+    module: Dict
+    worker_node_url: Optional[str] = None
+    agent_config: Optional[AgentConfig] = None
+
+class OrchestratorDeployment(BaseModel):
+    name: str
+    module: str
+    orchestrator_node_url: str
+    orchestrator_config: Optional[OrchestratorConfig] = None
+
+class EnvironmentDeployment(BaseModel):
+    name: str
+    environment_node_url: str
+    environment_config: Optional[EnvironmentConfig] = None
 
 class DockerParams(BaseModel):
     docker_image: str
@@ -57,26 +102,20 @@ class DockerParams(BaseModel):
 
 
 class AgentRun(BaseModel):
-    agent_name: str
-    agent_run_type: AgentRunType
     consumer_id: str
+    inputs: Optional[Union[Dict, DockerParams]] = None
+    agent_deployment: AgentDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
     error: bool = False
     id: Optional[str] = None
     results: list[str] = []
-    worker_nodes: Optional[list[str]] = None
     error_message: Optional[str] = None
     created_time: Optional[str] = None
     start_processing_time: Optional[str] = None
     completed_time: Optional[str] = None
     duration: Optional[float] = None
-    agent_run_params: Optional[Union[Dict, DockerParams]] = None
-    child_runs: List["AgentRun"] = []
-    parent_runs: List["AgentRun"] = []
     input_schema_ipfs_hash: Optional[str] = None
-    agent_source_url: Optional[str] = None
-    agent_version: Optional[str] = None
-    personas_urls: Optional[List[str]] = None
 
     class Config:
         allow_mutation = True
@@ -85,38 +124,65 @@ class AgentRun(BaseModel):
         }
 
     def model_dict(self):
-        def convert_value(v):
-            if isinstance(v, datetime):
-                return v.isoformat()
-            elif isinstance(v, AgentRunType):
-                return v.value
-            elif isinstance(v, BaseModel):
-                return v.model_dict() if hasattr(v, "model_dict") else v.dict()
-            elif isinstance(v, list):
-                return [convert_value(item) for item in v]
-            elif isinstance(v, dict):
-                return {k: convert_value(val) for k, val in v.items()}
-            else:
-                return v
-
-        return {k: convert_value(v) for k, v in self.dict(exclude_none=True).items()}
+        model_dict = self.dict()
+        for key, value in model_dict.items():
+            if isinstance(value, datetime):
+                model_dict[key] = value.isoformat()
+            elif isinstance(value, AgentModuleType):
+                model_dict[key] = value.value
+        for i, orchestrator_run in enumerate(model_dict['orchestrator_runs']):
+            for key, value in orchestrator_run.items():
+                if isinstance(value, datetime):
+                    model_dict['orchestrator_runs'][i][key] = value.isoformat()
+        return model_dict
 
 
 class AgentRunInput(BaseModel):
-    agent_name: str
     consumer_id: str
-    worker_nodes: Optional[list[str]] = None
-    agent_run_params: Optional[Union[Dict, DockerParams]] = None
-    agent_run_type: Optional[AgentRunType] = None
-    parent_runs: List["AgentRun"] = []
-    agent_source_url: Optional[str] = None
-    agent_version: Optional[str] = None
-    personas_urls: Optional[List[str]] = None
+    inputs: Optional[Union[BaseModel, Dict, DockerParams]] = None
+    agent_deployment: AgentDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
 
     def model_dict(self):
         model_dict = self.dict()
-        for i, parent_run in enumerate(model_dict["parent_runs"]):
-            for key, value in parent_run.items():
+        for i, orchestrator_run in enumerate(model_dict['orchestrator_runs']):
+            for key, value in orchestrator_run.items():
                 if isinstance(value, datetime):
-                    model_dict["parent_runs"][i][key] = value.isoformat()
+                    model_dict['orchestrator_runs'][i][key] = value.isoformat()
         return model_dict
+
+class OrchestratorRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Dict] = None
+    orchestrator_deployment: OrchestratorDeployment
+    agent_deployments: List[AgentDeployment]
+    environment_deployment: Optional[EnvironmentDeployment] = None
+
+class OrchestratorRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Dict] = None
+    orchestrator_deployment: OrchestratorDeployment
+    agent_deployments: List[AgentDeployment]
+    environment_deployment: Optional[EnvironmentDeployment] = None
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[str] = []
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
+    agent_runs: List['AgentRun'] = []
+    input_schema_ipfs_hash: Optional[str] = None
+
+class AgentModule(BaseModel):
+    id: str
+    name: str
+    description: str
+    author: str
+    url: str
+    type: AgentModuleType
+    version: str
+    url: str
+    personas_urls: Optional[List[str]] = None
