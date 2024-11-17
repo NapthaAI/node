@@ -48,8 +48,8 @@ class AgentModuleType(str, Enum):
 class AgentConfig(BaseModel):
     config_name: Optional[str] = "agent_config"
     llm_config: Optional[LLMConfig] = None
-    persona_module: Optional[Union[BaseModel, Dict]] = None
-    system_prompt: Optional[Union[BaseModel, Dict]] = None
+    persona_module: Optional[Union[Dict, BaseModel]] = None
+    system_prompt: Optional[Union[Dict, BaseModel]] = None
 
 class OrchestratorConfig(BaseModel):
     config_name: str
@@ -62,13 +62,13 @@ class EnvironmentConfig(BaseModel):
 class AgentDeployment(BaseModel):
     name: str
     module: Dict
-    worker_node_url: Optional[str] = None
+    worker_node_url: Optional[str] = "http://localhost:7001"
     agent_config: Optional[AgentConfig] = None
 
 class OrchestratorDeployment(BaseModel):
     name: str
     module: str
-    orchestrator_node_url: str
+    orchestrator_node_url: Optional[str] = "http://localhost:7001"
     orchestrator_config: Optional[OrchestratorConfig] = None
 
 class EnvironmentDeployment(BaseModel):

@@ -122,14 +122,14 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
-    async def create_agent_run(self, agent_run_input: AgentRunInput) -> Dict:
+    async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRunSchema:
         try:
             with self.session() as db:
                 agent_run = AgentRun(**agent_run_input.model_dict())
                 db.add(agent_run)
                 db.flush()
                 db.refresh(agent_run)
-                return agent_run.__dict__
+                return AgentRunSchema(**agent_run.__dict__)
         except SQLAlchemyError as e:
             logger.error(f"Failed to create agent run: {str(e)}")
             raise

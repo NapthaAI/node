@@ -3,7 +3,7 @@ import jwt
 import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
-from node.schemas import NodeConfig
+from node.schemas import AgentModule, NodeConfig
 from surrealdb import Surreal
 import traceback
 from typing import Dict, List, Optional, Tuple
@@ -141,13 +141,13 @@ class Hub(AsyncMixin):
     async def list_agents(self, agent_name=None) -> List:
         if not agent_name:
             agents = await self.surrealdb.query("SELECT * FROM agent;")
-            return agents[0]["result"]
+            return [AgentModule(**agent) for agent in agents[0]["result"]]
         else:
             agent = await self.surrealdb.query(
                 "SELECT * FROM agent WHERE id=$agent_name;", {"agent_name": agent_name}
             )
             try:
-                return agent[0]["result"][0]
+                return AgentModule(**agent[0]["result"][0])
             except Exception as e:
                 logger.error(f"Failed to get agent: {e}")
                 return None
