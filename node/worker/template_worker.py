@@ -48,77 +48,123 @@ if AGENTS_SOURCE_DIR not in sys.path:
     sys.path.append(AGENTS_SOURCE_DIR)
 
 @app.task(bind=True, acks_late=True)
-def run_flow(self, flow_run):
+def run_flow(self, agent_run):
     try:
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_run_flow_async(flow_run))
+        return loop.run_until_complete(_run_flow_async(agent_run))
     finally:
         # Force cleanup of channels
         app.backend.cleanup()
-        
 
-async def _run_flow_async(flow_run: Dict) -> None:
+@app.task(bind=True, acks_late=True)
+def run_agent(self, agent_run):
     try:
-        flow_run_obj = AgentRun(**flow_run)
-        agent_version = f"v{flow_run_obj.agent_version}"
+        agent_run = AgentRun(**agent_run)
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(_run_agent_async(agent_run))
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
 
-        logger.info(f"Received flow run: {flow_run_obj}")
+async def _run_flow_async(agent_run: Dict) -> None:
+    try:
+        agent_run = AgentRun(**agent_run)
+        agent_version = f"v{agent_run.agent_deployment.module['version']}"
+
+        logger.info(f"Received flow run: {agent_run}")
         logger.info(
-            f"Checking if agent {flow_run_obj.agent_name} version {agent_version} is installed"
+            f"Checking if agent {agent_run.agent_deployment.module["name"]} version {agent_version} is installed"
         )
 
         try:
-            await install_agent_if_not_present(flow_run_obj, agent_version)
+            await install_agent_if_not_present(agent_run, agent_version)
         except Exception as e:
             error_msg = (
-                f"Failed to install or verify agent {flow_run_obj.agent_name}: {str(e)}"
+                f"Failed to install or verify agent {agent_run.agent_deployment.module['name']}: {str(e)}"
             )
             logger.error(error_msg)
             if "Dependency conflict detected" in str(e):
                 logger.error(
                     "This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project."
                 )
-            await handle_failure(flow_run, error_msg)
+            await handle_failure(agent_run, error_msg)
             return
 
         logger.info(
-            f"Agent {flow_run_obj.agent_name} version {agent_version} is installed and verified. Initializing workflow engine..."
+            f"Agent {agent_run.agent_deployment.module['name']} version {agent_version} is installed and verified. Initializing workflow engine..."
         )
-        workflow_engine = FlowEngine(flow_run_obj)
+        workflow_engine = FlowEngine(agent_run)
 
         await workflow_engine.init_run()
         await workflow_engine.start_run()
 
-        if workflow_engine.flow_run.status == "completed":
+        if workflow_engine.agent_run.status == "completed":
             await workflow_engine.complete()
-        elif workflow_engine.flow_run.status == "error":
+        elif workflow_engine.agent_run.status == "error":
             await workflow_engine.fail()
     except Exception as e:
         error_msg = f"Error in _run_flow_async: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
-        await handle_failure(flow_run, error_msg)
+        await handle_failure(agent_run, error_msg)
+        return
 
+async def _run_agent_async(agent_run: AgentRun) -> None:
+    try:
+        agent_version = f"v{agent_run.agent_deployment.module['version']}"
 
-async def handle_failure(flow_run: Dict, error_msg: str) -> None:
-    flow_run_obj = AgentRun(**flow_run)
-    flow_run_obj.status = "error"
-    flow_run_obj.error = True
-    flow_run_obj.error_message = error_msg
-    flow_run_obj.completed_time = datetime.now(pytz.utc).isoformat()
+        logger.info(f"Received agent run: {agent_run}")
+        logger.info(
+            f"Checking if agent {agent_run.agent_deployment.module["name"]} version {agent_version} is installed"
+        )
+
+        try:
+            await install_agent_if_not_present(agent_run, agent_version)
+        except Exception as e:
+            error_msg = (
+                f"Failed to install or verify agent {agent_run.agent_deployment.module['name']}: {str(e)}"
+            )
+            logger.error(error_msg)
+            if "Dependency conflict detected" in str(e):
+                logger.error(
+                    "This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project."
+                )
+            await handle_failure(agent_run, error_msg)
+            return
+
+        logger.info(
+            f"Agent {agent_run.agent_deployment.module['name']} version {agent_version} is installed and verified."
+        )
+
+        logger.info(f"Starting agent run")
+        async with Node(agent_run.agent_deployment.worker_node_url, "http") as worker_node:
+            agent_run = await worker_node.run_agent(agent_run_input=agent_run)
+
+    except Exception as e:
+        error_msg = f"Error in _run_agent_async: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        await handle_failure(agent_run, error_msg)
+        return
+
+async def handle_failure(agent_run: AgentRun, error_msg: str) -> None:
+    agent_run.status = "error"
+    agent_run.error = True
+    agent_run.error_message = error_msg
+    agent_run.completed_time = datetime.now(pytz.utc).isoformat()
     if (
-        hasattr(flow_run_obj, "start_processing_time")
-        and flow_run_obj.start_processing_time
+        hasattr(agent_run, "start_processing_time")
+        and agent_run.start_processing_time
     ):
-        flow_run_obj.duration = (
-            datetime.fromisoformat(flow_run_obj.completed_time)
-            - datetime.fromisoformat(flow_run_obj.start_processing_time)
+        agent_run.duration = (
+            datetime.fromisoformat(agent_run.completed_time)
+            - datetime.fromisoformat(agent_run.start_processing_time)
         ).total_seconds()
     else:
-        flow_run_obj.duration = 0
+        agent_run.duration = 0
 
     try:
-        await update_db_with_status_sync(flow_run_obj)
+        await update_db_with_status_sync(agent_run)
     except Exception as db_error:
         logger.error(f"Failed to update database after error: {str(db_error)}")
 
@@ -136,11 +182,11 @@ async def maybe_async_call(func, *args, **kwargs):
 
 
 class FlowEngine:
-    def __init__(self, flow_run: AgentRun):
-        self.flow_run = flow_run
+    def __init__(self, agent_run: AgentRun):
+        self.agent_run = agent_run
         self.flow = None
-        self.flow_name = flow_run.agent_name
-        self.parameters = flow_run.agent_run_params
+        self.flow_name = agent_run.agent_deployment.module["id"].split(":")[-1]
+        self.parameters = agent_run.inputs
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
         if self.node_type == "direct" and self.server_type in ["http", "grpc"]:
@@ -162,21 +208,22 @@ class FlowEngine:
         else:
             raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
 
-        self.personas_urls = self.flow_run.personas_urls
+        if self.agent_run.agent_deployment.agent_config.persona_module:
+            self.personas_urls = self.agent_run.agent_deployment.agent_config.persona_module["url"]
 
         self.consumer = {
-            "public_key": flow_run.consumer_id.split(":")[1],
-            "id": flow_run.consumer_id,
+            "public_key": agent_run.consumer_id.split(":")[1],
+            "id": agent_run.consumer_id,
         }
 
     async def init_run(self):
         logger.info("Initializing flow run")
-        self.flow_run.status = "processing"
-        self.flow_run.start_processing_time = datetime.now(
+        self.agent_run.status = "processing"
+        self.agent_run.start_processing_time = datetime.now(
             pytz.timezone("UTC")
         ).isoformat()
 
-        await update_db_with_status_sync(agent_run=self.flow_run)
+        await update_db_with_status_sync(agent_run=self.agent_run)
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -186,8 +233,8 @@ class FlowEngine:
             )
 
         # Check if the user has the right to use the worker nodes if not register the user
-        if self.flow_run.worker_nodes:
-            await self.check_register_worker_nodes(self.flow_run.worker_nodes)
+        if self.agent_run.agent_deployment.worker_node_url:
+            await self.check_register_worker_nodes(self.agent_run.agent_deployment.worker_node_url)
 
         # Install the personas if needed
         if self.personas_urls:
@@ -265,21 +312,21 @@ class FlowEngine:
                 out_msg = upload_to_ipfs(self.parameters["output_path"])
                 out_msg = f"IPFS Hash: {out_msg}"
                 logger.info(f"Output uploaded to IPFS: {out_msg}")
-                self.flow_run.results = [out_msg]
+                self.agent_run.results = [out_msg]
 
     async def start_run(self):
         logger.info("Starting flow run")
-        self.flow_run.status = "running"
-        await update_db_with_status_sync(agent_run=self.flow_run)
+        self.agent_run.status = "running"
+        await update_db_with_status_sync(agent_run=self.agent_run)
 
         try:
             response = await maybe_async_call(
                 self.flow_func,
                 inputs=self.validated_data,
-                worker_node_urls=self.flow_run.worker_nodes,
+                worker_node_urls=self.agent_run.agent_deployment.worker_node_urls,
                 orchestrator_node=self.orchestrator_node,
                 cfg=self.cfg,
-                flow_run=self.flow_run,
+                agent_run=self.agent_run,
                 task_engine_cls=TaskEngine,
                 node_cls=Node,
                 db_url=LOCAL_DB_URL,
@@ -302,35 +349,35 @@ class FlowEngine:
                 f"Agent/flow response is not a string: {response}. Current response type: {type(response)}"
             )
 
-        self.flow_run.results = [response]
+        self.agent_run.results = [response]
         await self.handle_ipfs_output(self.cfg, response)
-        self.flow_run.status = "completed"
+        self.agent_run.status = "completed"
 
     async def complete(self):
-        self.flow_run.status = "completed"
-        self.flow_run.error = False
-        self.flow_run.error_message = ""
-        self.flow_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.flow_run.duration = (
-            datetime.fromisoformat(self.flow_run.completed_time)
-            - datetime.fromisoformat(self.flow_run.start_processing_time)
+        self.agent_run.status = "completed"
+        self.agent_run.error = False
+        self.agent_run.error_message = ""
+        self.agent_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.agent_run.duration = (
+            datetime.fromisoformat(self.agent_run.completed_time)
+            - datetime.fromisoformat(self.agent_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(agent_run=self.flow_run)
+        await update_db_with_status_sync(agent_run=self.agent_run)
         logger.info("Agent run completed")
 
     async def fail(self):
         logger.error("Error running flow")
         error_details = traceback.format_exc()
         logger.error(f"Traceback: {error_details}")
-        self.flow_run.status = "error"
-        self.flow_run.error = True
-        self.flow_run.error_message = error_details
-        self.flow_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.flow_run.duration = (
-            datetime.fromisoformat(self.flow_run.completed_time)
-            - datetime.fromisoformat(self.flow_run.start_processing_time)
+        self.agent_run.status = "error"
+        self.agent_run.error = True
+        self.agent_run.error_message = error_details
+        self.agent_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.agent_run.duration = (
+            datetime.fromisoformat(self.agent_run.completed_time)
+            - datetime.fromisoformat(self.agent_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(agent_run=self.flow_run)
+        await update_db_with_status_sync(agent_run=self.agent_run)
 
     def load_and_validate_input_schema(self):
         tn = self.flow_name.replace("-", "_")
@@ -357,10 +404,10 @@ class FlowEngine:
 
         # If the output is set to save, save the output to the outputs folder
         if cfg["outputs"]["save"]:
-            if ':' in self.flow_run.id:
-                output_path = f"{BASE_OUTPUT_DIR}/{self.flow_run.id.split(':')[1]}"
+            if ':' in self.agent_run.id:
+                output_path = f"{BASE_OUTPUT_DIR}/{self.agent_run.id.split(':')[1]}"
             else:
-                output_path = f"{BASE_OUTPUT_DIR}/{self.flow_run.id}"
+                output_path = f"{BASE_OUTPUT_DIR}/{self.agent_run.id}"
             self.parameters["output_path"] = output_path
             if not os.path.exists(output_path):
                 os.makedirs(output_path)

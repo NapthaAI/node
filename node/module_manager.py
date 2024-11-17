@@ -93,8 +93,8 @@ def is_agent_installed(agent_name: str, required_version: str) -> bool:
         logger.warning(f"Agent {agent_name} not found")
         return False
 
-async def install_agent_if_not_present(flow_run_obj, agent_version):
-    agent_name = flow_run_obj.agent_name
+async def install_agent_if_not_present(agent_run, agent_version):
+    agent_name = agent_run.agent_deployment.module["id"].split(":")[-1]
     if agent_name in INSTALLED_MODULES:
         installed_version = INSTALLED_MODULES[agent_name]
         if installed_version == agent_version:
@@ -113,12 +113,12 @@ async def install_agent_if_not_present(flow_run_obj, agent_version):
                 logger.info(
                     f"Agent {agent_name} version {agent_version} is not installed. Attempting to install..."
                 )
-                if not flow_run_obj.agent_source_url:
+                if not agent_run.agent_deployment.module["url"]:
                     raise ValueError(
                         f"Agent URL is required for installation of {agent_name}"
                     )
                 install_agent_if_needed(
-                    agent_name, agent_version, flow_run_obj.agent_source_url
+                    agent_name, agent_version, agent_run.agent_deployment.module["url"]
                 )
 
             # Verify agent installation
@@ -127,10 +127,10 @@ async def install_agent_if_not_present(flow_run_obj, agent_version):
                     f"Agent {agent_name} failed verification after installation"
                 )
 
-            # Install personas if they exist in flow_run_obj
-            if hasattr(flow_run_obj, 'personas_urls') and flow_run_obj.personas_urls:
+            # Install personas if they exist in agent_run
+            if hasattr(agent_run, 'personas_urls') and agent_run.agent_deployment.module["personas_urls"]:
                 logger.info(f"Installing personas for agent {agent_name}")
-                await install_personas_if_needed(agent_name, flow_run_obj.personas_urls)
+                await install_personas_if_needed(agent_name, agent_run.agent_deployment.module["personas_urls"])
 
             logger.info(
                 f"Agent {agent_name} version {agent_version} is installed and verified"

@@ -8,7 +8,7 @@ import logging
 import traceback
 from datetime import datetime
 from typing import Optional
-from node.schemas import AgentRun, AgentRunInput, DockerParams
+from node.schemas import AgentRun, AgentRunInput, DockerParams, OrchestratorRun, OrchestratorRunInput
 
 from node.storage.storage import (
     write_to_ipfs,
@@ -20,7 +20,7 @@ from node.user import check_user, register_user
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_flow
+from node.worker.template_worker import run_agent, run_flow
 from dotenv import load_dotenv
 from tenacity import (
     retry,
@@ -64,6 +64,15 @@ class HTTPServer:
             :return: Status
             """
             return await self.agent_check(agent_run)
+
+        @router.post("/orchestrator/run")
+        async def orchestrator_run_endpoint(orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRun:
+            """
+            Run an agent orchestrator
+            :param orchestrator_run_input: Orchestrator run specifications
+            :return: Status
+            """
+            return await self.orchestrator_run(orchestrator_run_input)
 
         # Storage endpoints
         @router.post("/storage/write")
@@ -187,44 +196,28 @@ class HTTPServer:
             logger.info(f"Received request to run an agent: {agent_run_input}")
 
             async with Hub() as hub:
-                success, user, user_id = await hub.signin(
+                _, _, _ = await hub.signin(
                     os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                 )
-                agent = await hub.list_agents(f"agent:{agent_run_input.agent_name}")
-                logger.info(f"Found Agent: {agent}")
+                agent_module = await hub.list_agents(f"agent:{agent_run_input.agent_deployment.module['name']}")
+                logger.info(f"Found Agent: {agent_module}")
 
-                if not agent:
+                if not agent_module:
                     raise HTTPException(status_code=404, detail="Agent not found")
 
-                agent_run_input.agent_run_type = agent["type"]
-                agent_run_input.agent_version = agent["version"]
-                agent_run_input.agent_source_url = agent["url"]
-
-                if agent_run_input.personas_urls is None:
-                    if 'personas_urls' in agent:
-                        agent_run_input.personas_urls = agent["personas_urls"]
-                else:
-                    if 'personas_urls' in agent:
-                        agent_run_input.personas_urls.extend(agent["personas_urls"])
-
-                if agent["type"] == "docker":
-                    agent_run_input.agent_run_params = DockerParams(
-                        **agent_run_input.agent_run_params
-                    )
+                agent_run_input.agent_deployment.module = agent_module
 
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
-                logger.info("Created agent run")
-
-            if agent_run:
-                agent_run_data = agent_run.copy()
-                agent_run_data.pop("_sa_instance_state", None)
+                if not agent_run:
+                    raise HTTPException(status_code=500, detail="Failed to create agent run")
+                agent_run_data = agent_run.model_dump()
 
             # Execute the task
-            if agent_run['agent_run_type'] == "package":
-                task = run_flow.delay(agent_run_data)
-            elif agent_run['agent_run_type'] == "docker":
-                task = execute_docker_agent.delay(agent_run_data)
+            if agent_run.agent_deployment.module["type"] == "package":
+                _ = run_agent.delay(agent_run_data)
+            elif agent_run.agent_deployment.module["type"] == "docker":
+                _ = execute_docker_agent.delay(agent_run_data)
             else:
                 raise HTTPException(status_code=400, detail="Invalid agent run type")
 
@@ -236,6 +229,55 @@ class HTTPServer:
             logger.error(f"Full traceback: {error_details}")
             raise HTTPException(
                 status_code=500, detail=f"Failed to run agent: {agent_run_input}"
+            )
+
+    async def orchestrator_run(self, orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRun:
+        """
+        Run an orchestrator
+        :param orchestrator_run_input: Orchestrator run specifications
+        :return: Status
+        """
+        try:
+            logger.info(f"Received request to run an orchestrator: {orchestrator_run_input}")
+
+            async with Hub() as hub:
+                success, user, user_id = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
+                orchestrator_module = await hub.list_orchestrators(
+                    f"orchestrator:{orchestrator_run_input.orchestrator_deployment.module['name']}"
+                )
+                logger.info(f"Found Orchestrator: {orchestrator_module}")
+
+                if not orchestrator_module:
+                    raise HTTPException(status_code=404, detail="Orchestrator not found")
+
+                orchestrator_run_input.orchestrator_deployment.module = orchestrator_module
+
+            async with DB() as db:
+                orchestrator_run = await db.create_orchestrator_run(orchestrator_run_input)
+                logger.info("Created orchestrator run")
+
+            if orchestrator_run:
+                orchestrator_run_data = orchestrator_run.copy()
+                orchestrator_run_data.pop("_sa_instance_state", None)
+
+            # Execute the orchestrator task
+            if orchestrator_run["orchestrator_deployment"]["module"]["type"] == "package":
+                task = run_flow.delay(orchestrator_run_data)
+            elif orchestrator_run["orchestrator_deployment"]["module"]["type"] == "docker":
+                task = execute_docker_agent.delay(orchestrator_run_data)
+            else:
+                raise HTTPException(status_code=400, detail="Invalid orchestrator run type")
+
+            return orchestrator_run_data
+
+        except Exception as e:
+            logger.error(f"Failed to run orchestrator: {str(e)}")
+            error_details = traceback.format_exc()
+            logger.error(f"Full traceback: {error_details}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to run orchestrator: {orchestrator_run_input}"
             )
 
     async def agent_check(self, agent_run: AgentRun) -> AgentRun:
