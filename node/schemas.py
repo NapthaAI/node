@@ -45,6 +45,18 @@ class AgentModuleType(str, Enum):
     package = "package"
     docker = "docker"
 
+class AgentModule(BaseModel):
+    id: str
+    name: str
+    description: str
+    author: str
+    url: str
+    type: AgentModuleType
+    version: str
+    url: str
+    entrypoint: Optional[str] = "run.py"
+    personas_urls: Optional[List[str]] = None
+
 class AgentConfig(BaseModel):
     config_name: Optional[str] = "agent_config"
     llm_config: Optional[LLMConfig] = None
@@ -59,11 +71,19 @@ class EnvironmentConfig(BaseModel):
     config_name: str
     environment_type: str
 
+class DataGenerationConfig(BaseModel):
+    save_outputs: bool = False
+    save_outputs_location: str = "node"
+    save_outputs_path: Optional[str] = None
+    save_inputs: bool = False
+    save_inputs_location: str = "node"
+
 class AgentDeployment(BaseModel):
     name: str
-    module: Dict
+    module: Union[Dict, AgentModule]
     worker_node_url: Optional[str] = "http://localhost:7001"
     agent_config: Optional[AgentConfig] = None
+    data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
 
 class OrchestratorDeployment(BaseModel):
     name: str
@@ -103,7 +123,7 @@ class DockerParams(BaseModel):
 
 class AgentRun(BaseModel):
     consumer_id: str
-    inputs: Optional[Union[Dict, DockerParams]] = None
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     agent_deployment: AgentDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
@@ -139,7 +159,7 @@ class AgentRun(BaseModel):
 
 class AgentRunInput(BaseModel):
     consumer_id: str
-    inputs: Optional[Union[Dict, DockerParams]] = None
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     agent_deployment: AgentDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
 
@@ -175,14 +195,3 @@ class OrchestratorRun(BaseModel):
     duration: Optional[float] = None
     agent_runs: List['AgentRun'] = []
     input_schema_ipfs_hash: Optional[str] = None
-
-class AgentModule(BaseModel):
-    id: str
-    name: str
-    description: str
-    author: str
-    url: str
-    type: AgentModuleType
-    version: str
-    url: str
-    personas_urls: Optional[List[str]] = None
