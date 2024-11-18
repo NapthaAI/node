@@ -224,7 +224,7 @@ class AgentEngine:
 
         if self.personas_urls:
             logger.info(f"Installing personas for agent {self.agent_name}: {self.personas_urls}")
-            await install_personas_if_needed(self.agent_name, self.personas_urls)
+            await install_personas_if_needed([self.personas_urls])
             logger.info(f"Personas installed for agent {self.agent_name}")
 
         # Load the agent

@@ -132,7 +132,7 @@ async def install_agent_if_not_present(agent_run, agent_version):
             # Install personas if they exist in agent_run
             if hasattr(agent_run, 'personas_urls') and agent_run.agent_deployment.module["personas_urls"]:
                 logger.info(f"Installing personas for agent {agent_name}")
-                await install_personas_if_needed(agent_name, agent_run.agent_deployment.module["personas_urls"])
+                await install_personas_if_needed(agent_run.agent_deployment.module["personas_urls"])
 
             logger.info(
                 f"Agent {agent_name} version {agent_version} is installed and verified"
