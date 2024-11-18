@@ -47,6 +47,7 @@ os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 if AGENTS_SOURCE_DIR not in sys.path:
     sys.path.append(AGENTS_SOURCE_DIR)
 
+
 @app.task(bind=True, acks_late=True)
 def run_flow(self, agent_run):
     try:
@@ -137,8 +138,17 @@ async def _run_agent_async(agent_run: AgentRun) -> None:
         )
 
         logger.info(f"Starting agent run")
-        async with Node(agent_run.agent_deployment.worker_node_url, "http") as worker_node:
-            agent_run = await worker_node.run_agent(agent_run_input=agent_run)
+        # async with Node(agent_run.agent_deployment.worker_node_url, "http") as worker_node:
+            # agent_run = await worker_node.run_agent(agent_run_input=agent_run)
+
+        workflow_engine = AgentEngine(agent_run)
+        await workflow_engine.init_run()
+        await workflow_engine.start_run()
+
+        if workflow_engine.agent_run.status == "completed":
+            await workflow_engine.complete()
+        elif workflow_engine.agent_run.status == "error":
+            await workflow_engine.fail()
 
     except Exception as e:
         error_msg = f"Error in _run_agent_async: {str(e)}"
@@ -179,6 +189,162 @@ async def maybe_async_call(func, *args, **kwargs):
         return await loop.run_in_executor(
             None, functools.partial(func, *args, **kwargs)
         )
+
+
+class AgentEngine:
+    def __init__(self, agent_run: AgentRun):
+        self.agent_run = agent_run
+        self.agent_name = agent_run.agent_deployment.module["name"]
+        self.agent_version = f"v{agent_run.agent_deployment.module['version']}"
+        self.parameters = agent_run.inputs
+
+        if self.agent_run.agent_deployment.agent_config.persona_module:
+            self.personas_urls = self.agent_run.agent_deployment.agent_config.persona_module["url"]
+
+        self.consumer = {
+            "public_key": agent_run.consumer_id.split(":")[1],
+            "id": agent_run.consumer_id,
+        }
+
+    async def init_run(self):
+        logger.info("Initializing agent run")
+        self.agent_run.status = "processing"
+        self.agent_run.start_processing_time = datetime.now(
+            pytz.timezone("UTC")
+        ).isoformat()
+
+        await update_db_with_status_sync(agent_run=self.agent_run)
+
+        if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
+            self.parameters = prepare_input_dir(
+                parameters=self.parameters,
+                input_dir=self.parameters.get("input_dir", None),
+                input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
+            )
+
+        if self.personas_urls:
+            logger.info(f"Installing personas for agent {self.agent_name}: {self.personas_urls}")
+            await install_personas_if_needed(self.agent_name, self.personas_urls)
+            logger.info(f"Personas installed for agent {self.agent_name}")
+
+        # Load the agent
+        self.agent_func, self.validated_data, self.cfg = await self.load_agent()
+
+    def load_and_validate_input_schema(self):
+        """Loads and validates the input schema for the agent"""
+        agent_name = self.agent_name.replace("-", "_")
+        schemas_module = importlib.import_module(f"{agent_name}.schemas")
+        InputSchema = getattr(schemas_module, "InputSchema")
+        return InputSchema(**self.parameters)
+
+    async def load_agent(self):
+        """Loads the agent and returns the agent function, validated data and config"""
+        # Load the agent from the agents directory
+        agent_path = f"{AGENTS_SOURCE_DIR}/{self.agent_name}"
+
+        # Load the component.yaml file
+        cfg = load_yaml_config(f"{agent_path}/{self.agent_name}/component.yaml")
+
+        # Handle output configuration
+        if cfg["outputs"]["save"]:
+            if ':' in self.agent_run.id:
+                output_path = f"{BASE_OUTPUT_DIR}/{self.agent_run.id.split(':')[1]}"
+            else:
+                output_path = f"{BASE_OUTPUT_DIR}/{self.agent_run.id}"
+            self.parameters["output_path"] = output_path
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+
+        validated_data = self.load_and_validate_input_schema()
+        
+        # Load the agent function
+        agent_name = self.agent_name.replace("-", "_")
+        entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
+        main_module = importlib.import_module(f"{agent_name}.run")
+        main_module = importlib.reload(main_module)
+        agent_func = getattr(main_module, entrypoint)
+        
+        return agent_func, validated_data, cfg
+
+    async def start_run(self):
+        """Executes the agent run"""
+        logger.info("Starting agent run")
+        self.agent_run.status = "running"
+        await update_db_with_status_sync(agent_run=self.agent_run)
+
+        logger.info(f"Agent deployment: {self.agent_run.agent_deployment}")
+
+        try:
+            response = await maybe_async_call(
+                self.agent_func,
+                agent_deployment=self.agent_run.agent_deployment,
+                inputs=self.validated_data,
+                cfg=self.cfg,
+                agent_run=self.agent_run,
+                db_url=LOCAL_DB_URL,
+                agents_dir=AGENTS_SOURCE_DIR,
+            )
+        except Exception as e:
+            logger.error(f"Error running agent: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+
+        logger.info(f"Agent run response: {response}")
+
+        if isinstance(response, (dict, list, tuple)):
+            response = json.dumps(response)
+        elif isinstance(response, BaseModel):
+            response = response.model_dump_json()
+
+        if not isinstance(response, str):
+            raise ValueError(
+                f"Agent response is not a string: {response}. Current response type: {type(response)}"
+            )
+
+        self.agent_run.results = [response]
+        await self.handle_output(self.cfg, response)
+        self.agent_run.status = "completed"
+
+    async def handle_output(self, cfg, results):
+        """Handles the output of the agent run"""
+        save_location = self.parameters.get("save_location", None)
+        if save_location:
+            self.cfg["outputs"]["location"] = save_location
+
+        if self.cfg["outputs"]["save"]:
+            if self.cfg["outputs"]["location"] == "ipfs":
+                out_msg = upload_to_ipfs(self.parameters["output_path"])
+                out_msg = f"IPFS Hash: {out_msg}"
+                logger.info(f"Output uploaded to IPFS: {out_msg}")
+                self.agent_run.results = [out_msg]
+
+    async def complete(self):
+        """Marks the agent run as completed"""
+        self.agent_run.status = "completed"
+        self.agent_run.error = False
+        self.agent_run.error_message = ""
+        self.agent_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.agent_run.duration = (
+            datetime.fromisoformat(self.agent_run.completed_time)
+            - datetime.fromisoformat(self.agent_run.start_processing_time)
+        ).total_seconds()
+        await update_db_with_status_sync(agent_run=self.agent_run)
+        logger.info("Agent run completed")
+
+    async def fail(self):
+        """Marks the agent run as failed"""
+        logger.error("Error running agent")
+        error_details = traceback.format_exc()
+        logger.error(f"Traceback: {error_details}")
+        self.agent_run.status = "error"
+        self.agent_run.error = True
+        self.agent_run.error_message = error_details
+        self.agent_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.agent_run.duration = (
+            datetime.fromisoformat(self.agent_run.completed_time)
+            - datetime.fromisoformat(self.agent_run.start_processing_time)
+        ).total_seconds()
+        await update_db_with_status_sync(agent_run=self.agent_run)
 
 
 class FlowEngine:
