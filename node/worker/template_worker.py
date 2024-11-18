@@ -10,6 +10,7 @@ import importlib
 import traceback
 import logging
 from typing import Dict, List
+from pathlib import Path
 from pydantic import BaseModel
 from datetime import datetime
 from dotenv import load_dotenv
@@ -25,7 +26,7 @@ from node.config import (
     SERVER_TYPE,
     LOCAL_DB_URL,
 )
-from node.module_manager import install_agent_if_not_present, install_personas_if_needed
+from node.module_manager import load_agent, install_agent_if_not_present, install_personas_if_needed
 from node.schemas import AgentRun
 from node.worker.main import app
 from node.worker.task_engine import TaskEngine
@@ -138,8 +139,6 @@ async def _run_agent_async(agent_run: AgentRun) -> None:
         )
 
         logger.info(f"Starting agent run")
-        # async with Node(agent_run.agent_deployment.worker_node_url, "http") as worker_node:
-            # agent_run = await worker_node.run_agent(agent_run_input=agent_run)
 
         workflow_engine = AgentEngine(agent_run)
         await workflow_engine.init_run()
@@ -194,8 +193,9 @@ async def maybe_async_call(func, *args, **kwargs):
 class AgentEngine:
     def __init__(self, agent_run: AgentRun):
         self.agent_run = agent_run
-        self.agent_name = agent_run.agent_deployment.module["name"]
-        self.agent_version = f"v{agent_run.agent_deployment.module['version']}"
+        self.module = agent_run.agent_deployment.module
+        self.agent_name = self.module["name"]
+        self.agent_version = f"v{self.module['version']}"
         self.parameters = agent_run.inputs
 
         if self.agent_run.agent_deployment.agent_config.persona_module:
@@ -228,43 +228,7 @@ class AgentEngine:
             logger.info(f"Personas installed for agent {self.agent_name}")
 
         # Load the agent
-        self.agent_func, self.validated_data, self.cfg = await self.load_agent()
-
-    def load_and_validate_input_schema(self):
-        """Loads and validates the input schema for the agent"""
-        agent_name = self.agent_name.replace("-", "_")
-        schemas_module = importlib.import_module(f"{agent_name}.schemas")
-        InputSchema = getattr(schemas_module, "InputSchema")
-        return InputSchema(**self.parameters)
-
-    async def load_agent(self):
-        """Loads the agent and returns the agent function, validated data and config"""
-        # Load the agent from the agents directory
-        agent_path = f"{AGENTS_SOURCE_DIR}/{self.agent_name}"
-
-        # Load the component.yaml file
-        cfg = load_yaml_config(f"{agent_path}/{self.agent_name}/component.yaml")
-
-        # Handle output configuration
-        if cfg["outputs"]["save"]:
-            if ':' in self.agent_run.id:
-                output_path = f"{BASE_OUTPUT_DIR}/{self.agent_run.id.split(':')[1]}"
-            else:
-                output_path = f"{BASE_OUTPUT_DIR}/{self.agent_run.id}"
-            self.parameters["output_path"] = output_path
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
-
-        validated_data = self.load_and_validate_input_schema()
-        
-        # Load the agent function
-        agent_name = self.agent_name.replace("-", "_")
-        entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
-        main_module = importlib.import_module(f"{agent_name}.run")
-        main_module = importlib.reload(main_module)
-        agent_func = getattr(main_module, entrypoint)
-        
-        return agent_func, validated_data, cfg
+        self.agent_func, self.agent_run = await load_agent(self.agent_run)
 
     async def start_run(self):
         """Executes the agent run"""
@@ -277,12 +241,7 @@ class AgentEngine:
         try:
             response = await maybe_async_call(
                 self.agent_func,
-                agent_deployment=self.agent_run.agent_deployment,
-                inputs=self.validated_data,
-                cfg=self.cfg,
                 agent_run=self.agent_run,
-                db_url=LOCAL_DB_URL,
-                agents_dir=AGENTS_SOURCE_DIR,
             )
         except Exception as e:
             logger.error(f"Error running agent: {e}")
@@ -302,18 +261,18 @@ class AgentEngine:
             )
 
         self.agent_run.results = [response]
-        await self.handle_output(self.cfg, response)
+        await self.handle_output(self.agent_run.agent_deployment, response)
         self.agent_run.status = "completed"
 
-    async def handle_output(self, cfg, results):
+    async def handle_output(self, agent_deployment, results):
         """Handles the output of the agent run"""
-        save_location = self.parameters.get("save_location", None)
+        save_location = agent_deployment.data_generation_config.save_outputs_location
         if save_location:
-            self.cfg["outputs"]["location"] = save_location
+            agent_deployment.data_generation_config.save_outputs_location = save_location
 
-        if self.cfg["outputs"]["save"]:
-            if self.cfg["outputs"]["location"] == "ipfs":
-                out_msg = upload_to_ipfs(self.parameters["output_path"])
+        if agent_deployment.data_generation_config.save_outputs:
+            if save_location == "ipfs":
+                out_msg = upload_to_ipfs(self.agent_run.agent_deployment.data_generation_config.save_outputs_path)
                 out_msg = f"IPFS Hash: {out_msg}"
                 logger.info(f"Output uploaded to IPFS: {out_msg}")
                 self.agent_run.results = [out_msg]

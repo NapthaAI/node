@@ -4,8 +4,10 @@ import shutil
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
 import importlib
+import json
+from node.schemas import AgentDeployment, LLMConfig
 from node.worker.utils import download_from_ipfs, unzip_file
-from node.config import AGENTS_SOURCE_DIR
+from node.config import AGENTS_SOURCE_DIR, BASE_OUTPUT_DIR
 import logging
 import os
 from pathlib import Path
@@ -157,17 +159,17 @@ def verify_agent_installation(agent_name: str) -> bool:
         return False
     
 
-async def install_personas_if_needed(agent_name: str, personas_urls: List[str]):
+async def install_personas_if_needed(personas_urls: List[str]):
     if not personas_urls:
         logger.info("No personas to install")
         return
 
-    logger.info(f"Installing personas for agent {agent_name}")
 
     personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
     personas_base_dir.mkdir(exist_ok=True)
 
     for persona_url in personas_urls:
+        logger.info(f"Installing persona {persona_url}")
         if persona_url in ["", None, " "]:
             logger.warning(f"Skipping empty persona URL")
             continue
@@ -175,8 +177,9 @@ async def install_personas_if_needed(agent_name: str, personas_urls: List[str]):
         if "ipfs://" in persona_url:
             await install_persona_from_ipfs(persona_url, personas_base_dir)
         else:
-            await install_persona_from_git(persona_url, personas_base_dir)
-
+            persona_dir = await install_persona_from_git(persona_url, personas_base_dir)
+        return persona_dir
+        
 async def install_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
     try:
         if "::" not in persona_url:
@@ -197,7 +200,7 @@ async def install_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
         unzip_file(persona_temp_zip_path, persona_dir)
         os.remove(persona_temp_zip_path)
         logger.info(f"Successfully installed persona: {persona_folder_name}")
-    
+        return persona_dir
     except Exception as e:
         error_msg = f"Error installing persona from {persona_url}: {str(e)}"
         logger.error(error_msg)
@@ -220,7 +223,7 @@ async def install_persona_from_git(repo_url: str, personas_base_dir: Path):
             logger.info(f"Cloning new persona repository: {repo_name}")
             Repo.clone_from(repo_url, persona_dir)
             logger.info(f"Successfully cloned persona: {repo_name}")
-
+        return persona_dir
     except Exception as e:
         error_msg = f"Error installing persona from {repo_url}: {str(e)}"
         logger.error(error_msg)
@@ -317,3 +320,89 @@ def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_ur
         if "Dependency conflict detected" in str(e):
             error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
         raise RuntimeError(error_msg) from e
+
+def load_persona(persona_dir):
+    """Load persona from a JSON file in a git repository."""
+    try:
+        persona_dir = Path(persona_dir)
+        # Get list of JSON files in repo using pathlib
+        json_files = list(persona_dir.rglob("*.json"))
+                
+        if not json_files:
+            logger.error(f"No JSON files found in repository {persona_dir}")
+            return None
+            
+        # Load the first JSON file found
+        persona_file = json_files[0]
+        with persona_file.open('r') as f:
+            persona_data = json.load(f)
+            
+        return persona_data
+        
+    except Exception as e:
+        logger.error(f"Error loading persona from {persona_dir}: {e}")
+        return None
+
+def load_llm_configs(llm_configs_path):
+    with open(llm_configs_path, "r") as file:
+        llm_configs = json.loads(file.read())
+    return [LLMConfig(**config) for config in llm_configs]
+
+def load_agent_deployments(agent_deployments_path, module):
+    with open(agent_deployments_path, "r") as file:
+        agent_deployments = json.loads(file.read())
+
+    for deployment in agent_deployments:
+        deployment["module"] = module
+        # Load LLM config
+        config_name = deployment["agent_config"]["llm_config"]["config_name"]
+        config_path = agent_deployments_path.parent / "llm_configs.json"
+        llm_configs = load_llm_configs(config_path)
+        llm_config = next(config for config in llm_configs if config.config_name == config_name)
+        deployment["agent_config"]["llm_config"] = llm_config   
+
+        # Load persona
+        persona_dir = install_personas_if_needed([deployment["agent_config"]["persona_module"]["url"]])
+        persona_data = load_persona(persona_dir)
+        deployment["agent_config"]["persona_module"]["data"] = persona_data
+
+    return [AgentDeployment(**deployment) for deployment in agent_deployments]
+
+def load_and_validate_input_schema(agent_run):
+    """Loads and validates the input schema for the agent"""
+    agent_name = agent_run.agent_deployment.module['name'].replace("-", "_")
+    schemas_module = importlib.import_module(f"{agent_name}.schemas")
+    InputSchema = getattr(schemas_module, "InputSchema")
+    agent_run.inputs = InputSchema(**agent_run.inputs)
+    return agent_run
+
+async def load_agent(agent_run):
+    """Loads the agent and returns the agent function, validated data and config"""
+    # Load the agent from the agents directory
+    agent_name = agent_run.agent_deployment.module['name']
+    agent_path = Path(f"{AGENTS_SOURCE_DIR}/{agent_name}")
+
+    # Load configs
+    agent_deployment = load_agent_deployments(agent_path / agent_name / "configs/agent_deployments.json", agent_run.agent_deployment.module)[0]
+    agent_run.agent_deployment = agent_deployment
+
+    # Handle output configuration
+    if agent_deployment.data_generation_config.save_outputs:
+        if ':' in agent_run.id:
+            output_path = f"{BASE_OUTPUT_DIR}/{agent_run.id.split(':')[1]}"
+        else:
+            output_path = f"{BASE_OUTPUT_DIR}/{agent_run.id}"
+        agent_run.agent_deployment.data_generation_config.save_outputs_path = output_path
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+    agent_run = load_and_validate_input_schema(agent_run)
+    
+    # Load the agent function
+    agent_name = agent_name.replace("-", "_")
+    entrypoint = agent_deployment.module["entrypoint"].split(".")[0]
+    main_module = importlib.import_module(f"{agent_name}.run")
+    main_module = importlib.reload(main_module)
+    agent_func = getattr(main_module, entrypoint)
+    
+    return agent_func, agent_run
