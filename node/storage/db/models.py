@@ -30,4 +30,26 @@ class AgentRun(Base):
 
     consumer = relationship("User", back_populates="agent_runs")
 
+class OrchestratorRun(Base):
+    __tablename__ = 'orchestrator_runs'
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
+    inputs = Column(JSON)
+    orchestrator_deployment = Column(JSON, nullable=False)
+    agent_deployments = Column(ARRAY(JSON), nullable=False)
+    environment_deployments = Column(ARRAY(JSON))
+    status = Column(String, default="pending")
+    error = Column(Boolean, default=False)
+    results = Column(ARRAY(String), default=[])
+    error_message = Column(String)
+    created_time = Column(DateTime)
+    start_processing_time = Column(DateTime)
+    completed_time = Column(DateTime)
+    duration = Column(Integer)  # Changed from float to integer for consistency with AgentRun
+    input_schema_ipfs_hash = Column(String)
+
+    consumer = relationship("User", back_populates="orchestrator_runs")
+
 User.agent_runs = relationship("AgentRun", order_by=AgentRun.id, back_populates="consumer")
+User.orchestrator_runs = relationship("OrchestratorRun", back_populates="consumer")

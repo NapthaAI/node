@@ -10,9 +10,10 @@ import asyncio
 import threading
 
 from node.schemas import AgentRunInput
-from node.storage.db.models import User, AgentRun
+from node.storage.db.models import User, AgentRun, OrchestratorRun
 from node.config import LOCAL_DB_URL
 from node.schemas import AgentRun as AgentRunSchema
+from node.schemas import OrchestratorRunInput, OrchestratorRun as OrchestratorRunSchema
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class DB:
     async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRunSchema:
         try:
             with self.session() as db:
-                agent_run = AgentRun(**agent_run_input.model_dict())
+                agent_run = AgentRun(**agent_run_input.model_dump())
                 db.add(agent_run)
                 db.flush()
                 db.refresh(agent_run)
@@ -138,7 +139,7 @@ class DB:
         try:
             with self.session() as db:
                 if isinstance(agent_run, AgentRunSchema):
-                    agent_run = agent_run.model_dict()
+                    agent_run = agent_run.model_dump()
                 db_agent_run = db.query(AgentRun).filter(
                     AgentRun.id == agent_run_id
                 ).first()
@@ -188,6 +189,74 @@ class DB:
                 return False
         except SQLAlchemyError as e:
             logger.error(f"Failed to delete agent run: {str(e)}")
+            raise
+
+    async def create_orchestrator_run(self, orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRunSchema:
+        try:
+            with self.session() as db:
+                orchestrator_run = OrchestratorRun(**orchestrator_run_input.model_dump())
+                db.add(orchestrator_run)
+                db.flush()
+                db.refresh(orchestrator_run)
+                return OrchestratorRunSchema(**orchestrator_run.__dict__)
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to create orchestrator run: {str(e)}")
+            raise
+
+    async def update_orchestrator_run(self, orchestrator_run_id: int, orchestrator_run: OrchestratorRunSchema) -> bool:
+        try:
+            with self.session() as db:
+                if isinstance(orchestrator_run, OrchestratorRunSchema):
+                    orchestrator_run = orchestrator_run.model_dump()
+                db_orchestrator_run = db.query(OrchestratorRun).filter(
+                    OrchestratorRun.id == orchestrator_run_id
+                ).first()
+                if db_orchestrator_run:
+                    for key, value in orchestrator_run.items():
+                        setattr(db_orchestrator_run, key, value)
+                    db.flush()
+                    return True
+                return False
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to update orchestrator run: {str(e)}")
+            raise
+
+    async def list_orchestrator_runs(self, orchestrator_run_id=None) -> List[Dict]:
+        max_retries = 3
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                with self.session() as db:
+                    if orchestrator_run_id:
+                        result = db.query(OrchestratorRun).filter(
+                            OrchestratorRun.id == orchestrator_run_id
+                        ).first()
+                        if not result:
+                            logger.warning(f"Orchestrator run {orchestrator_run_id} not found on attempt {attempt + 1}")
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        return result.__dict__ if result else None
+                    return [run.__dict__ for run in db.query(OrchestratorRun).all()]
+            except SQLAlchemyError as e:
+                logger.error(f"Database error on attempt {attempt + 1}: {str(e)}")
+                if attempt == max_retries - 1:
+                    raise
+                await asyncio.sleep(retry_delay)
+
+    async def delete_orchestrator_run(self, orchestrator_run_id: int) -> bool:
+        try:
+            with self.session() as db:
+                orchestrator_run = db.query(OrchestratorRun).filter(
+                    OrchestratorRun.id == orchestrator_run_id
+                ).first()
+                if orchestrator_run:
+                    db.delete(orchestrator_run)
+                    db.flush()
+                    return True
+                return False
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to delete orchestrator run: {str(e)}")
             raise
 
     async def query(self, query_str: str) -> List:
