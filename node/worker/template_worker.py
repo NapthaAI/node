@@ -27,7 +27,7 @@ from node.config import (
     LOCAL_DB_URL,
 )
 from node.module_manager import load_agent, install_agent_if_not_present, install_personas_if_needed
-from node.schemas import AgentRun
+from node.schemas import AgentRun, OrchestratorRun
 from node.worker.main import app
 from node.worker.task_engine import TaskEngine
 from node.worker.utils import (
@@ -64,6 +64,16 @@ def run_agent(self, agent_run):
         agent_run = AgentRun(**agent_run)
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(_run_agent_async(agent_run))
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
+
+@app.task(bind=True, acks_late=True)
+def run_orchestrator(self, orchestrator_run):
+    try:
+        orchestrator_run = OrchestratorRun(**orchestrator_run)
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(_run_orchestrator_async(orchestrator_run))
     finally:
         # Force cleanup of channels
         app.backend.cleanup()
