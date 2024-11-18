@@ -133,11 +133,6 @@ class Hub(AsyncMixin):
     async def delete_node(self, node_id: str) -> bool:
         return await self.surrealdb.delete(node_id)
 
-    async def list_purchases(self, purchases: Dict) -> List:
-        return await self.surrealdb.query(
-            "SELECT * FROM wins WHERE in=$user;", {"user": purchases["me"]}
-        )
-
     async def list_agents(self, agent_name=None) -> List:
         if not agent_name:
             agents = await self.surrealdb.query("SELECT * FROM agent;")
@@ -152,30 +147,23 @@ class Hub(AsyncMixin):
                 logger.error(f"Failed to get agent: {e}")
                 return None
 
-    async def create_plan(self, plan_config: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.create("auction", plan_config)
-
-    async def list_plans(self) -> List:
-        return await self.surrealdb.query("SELECT * FROM auction;")
-
-    async def create_service(self, service_config: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.create("lot", service_config)
-
-    async def list_services(self) -> List:
-        return await self.surrealdb.query("SELECT * FROM lot;")
+    async def list_orchestrators(self, orchestrator_name=None) -> List:
+        if not orchestrator_name:
+            orchestrators = await self.surrealdb.query("SELECT * FROM orchestrator;")
+            return [AgentModule(**orchestrator) for orchestrator in orchestrators[0]["result"]]
+        else:
+            orchestrator = await self.surrealdb.query(
+                "SELECT * FROM orchestrator WHERE id=$orchestrator_name;", 
+                {"orchestrator_name": orchestrator_name}
+            )
+            try:
+                return AgentModule(**orchestrator[0]["result"][0])
+            except Exception as e:
+                logger.error(f"Failed to get orchestrator: {e}")
+                return None
 
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
-
-    async def purchase(self, purchase: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.query(
-            "RELATE $me->requests_to_bid_on->$auction SET amount=10.0;", purchase
-        )
-
-    async def requests_to_publish(self, publish) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.query(
-            "RELATE $me->requests_to_publish->$auction", publish
-        )
 
     async def close(self):
         """Close the database connection"""

@@ -112,14 +112,14 @@ CREATE agent:module_test SET name="module_test", description="A simple test agen
 CREATE agent:random_number_agent SET name="random_number_agent", description="A simple agent for taking part in Keynesian beauty contests", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.3", entrypoint="run.py";
 CREATE agent:test_personas SET name="test_personas", description="A simple test agent for testing personas", author=user:naptha, url="https://github.com/moarshy/test_personas", type="package", version="0.1", personas_urls=["https://huggingface.co/datasets/NapthaAI/market_agents_personas"], entrypoint="run.py";
 
--- AGENT NETWORKS
-CREATE agent:multiagent_chat SET name="multiagent_chat", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.12", entrypoint="run.py";
-CREATE agent:babyagi SET name="babyagi", description="Multi-agent network for running task-solving", author=user:naptha, url="https://github.com/NapthaAI/babyagi", type="package", version="0.2", entrypoint="run.py";
-CREATE agent:multiagent_debate SET name="multiagent_debate", description="A network of debating agents", author=user:naptha, url="https://github.com/NapthaAI/multiagent_debate", type="package", version="0.6", entrypoint="run.py";
-CREATE agent:keynesian_beauty_contest SET name="keynesian_beauty_contest", description="A network of agents that guess random numbers", author=user:naptha, url="https://github.com/NapthaAI/keynesian_beauty_contest", type="package", version="0.11", entrypoint="run.py";
-CREATE agent:napthaville_chat SET name="napthaville_chat", description="Multi-agent network for chat between characters in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="package", version="0.4", entrypoint="run.py";
-CREATE agent:napthaville_move SET name="napthaville_move", description="Multi-agent network for social simulations in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26", entrypoint="run.py";
-CREATE agent:multiagent_prediction SET name="multiagent_prediction", description="Multi-agent network for forecasting future events", author=user:naptha, url="https://github.com/NapthaAI/multiagent_prediction", type="package", version="0.2", entrypoint="run.py";
+-- ORCHESTRATORS
+CREATE orchestrator:multiagent_chat SET name="multiagent_chat", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.12", entrypoint="run.py";
+CREATE orchestrator:babyagi SET name="babyagi", description="Multi-agent network for running task-solving", author=user:naptha, url="https://github.com/NapthaAI/babyagi", type="package", version="0.2", entrypoint="run.py";
+CREATE orchestrator:multiagent_debate SET name="multiagent_debate", description="A network of debating agents", author=user:naptha, url="https://github.com/NapthaAI/multiagent_debate", type="package", version="0.6", entrypoint="run.py";
+CREATE orchestrator:keynesian_beauty_contest SET name="keynesian_beauty_contest", description="A network of agents that guess random numbers", author=user:naptha, url="https://github.com/NapthaAI/keynesian_beauty_contest", type="package", version="0.11", entrypoint="run.py";
+CREATE orchestrator:napthaville_chat SET name="napthaville_chat", description="Multi-agent network for chat between characters in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_chat", type="package", version="0.4", entrypoint="run.py";
+CREATE orchestrator:napthaville_move SET name="napthaville_move", description="Multi-agent network for social simulations in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26", entrypoint="run.py";
+CREATE orchestrator:multiagent_prediction SET name="multiagent_prediction", description="Multi-agent network for forecasting future events", author=user:naptha, url="https://github.com/NapthaAI/multiagent_prediction", type="package", version="0.2", entrypoint="run.py";
 
 -- PERSONAS
 CREATE persona:market_agents_personas SET name="market_agents_personas", description="Personas for market agents", author=user:naptha, url="https://huggingface.co/datasets/NapthaAI/market_agents_personas", version="0.1";
@@ -127,7 +127,6 @@ CREATE persona:twitter_personas SET name="twitter_personas", description="Person
 CREATE persona:one_million_personas SET name="one_million_personas", description="Personas generated from the paper Scaling Synthetic Data Creation with 1M Personas", author=user:naptha, url="https://huggingface.co/datasets/proj-persona/PersonaHub", version="0.1";
 
 -- NODES
-
 CREATE node:naptha0 SET
     public_key="18837f9faec9a02744d308f935f1b05e8ff2fc355172e875c24366491625d932f36b34a4fa80bac58db635d5eddc87659c2b3fa700a1775eb4c43da6b0ec270d",
     ip="http://node.naptha.ai",
