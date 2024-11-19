@@ -4,7 +4,7 @@ import tempfile
 import ipfshttpclient
 from dotenv import load_dotenv
 from pathlib import Path
-from node.schemas import AgentRun
+from node.schemas import AgentRun, OrchestratorRun
 from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
 from node.storage.db.db import DB
 from typing import Dict, Optional
@@ -102,7 +102,10 @@ def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
 
 
 @with_retry()
-async def update_db_with_status_sync(agent_run: AgentRun) -> None:
+async def update_db_with_status_sync(
+    agent_run: AgentRun = None, 
+    orchestrator_run: OrchestratorRun = None
+) -> None:
     """
     Update the DB with the agent run status synchronously
     param agent_run: AgentRun data to update
@@ -110,9 +113,17 @@ async def update_db_with_status_sync(agent_run: AgentRun) -> None:
     logger.info("Updating DB with agent run")
 
     try:
-        async with DB() as db:
-            updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
-        logger.info(f"Updated agent run: {updated_agent_run}")
+        if agent_run:
+            async with DB() as db:
+                updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
+                logger.info(f"Updated agent run: {updated_agent_run}")
+        elif orchestrator_run:
+            async with DB() as db:
+                updated_orchestrator_run = await db.update_orchestrator_run(orchestrator_run.id, orchestrator_run)
+                logger.info(f"Updated orchestrator run: {updated_orchestrator_run}")
+        else:
+            logger.error("Either agent_run or orchestrator_run must be provided")
+            raise ValueError("Either agent_run or orchestrator_run must be provided")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
         raise
