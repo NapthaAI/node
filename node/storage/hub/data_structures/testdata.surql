@@ -121,6 +121,9 @@ CREATE orchestrator:napthaville_chat SET name="napthaville_chat", description="M
 CREATE orchestrator:napthaville_move SET name="napthaville_move", description="Multi-agent network for social simulations in Napthaville", author=user:naptha, url="https://github.com/moarshy/napthaville_move", type="package", version="0.26", entrypoint="run.py";
 CREATE orchestrator:multiagent_prediction SET name="multiagent_prediction", description="Multi-agent network for forecasting future events", author=user:naptha, url="https://github.com/NapthaAI/multiagent_prediction", type="package", version="0.2", entrypoint="run.py";
 
+-- ENVIRONMENTS
+CREATE environment:groupchat SET name="groupchat", description="Environment mechanism for group chat between agents.", author=user:naptha, url="https://github.com/NapthaAI/groupchat_environment", type="package", version="0.1", entrypoint="run.py";
+
 -- PERSONAS
 CREATE persona:market_agents_personas SET name="market_agents_personas", description="Personas for market agents", author=user:naptha, url="https://huggingface.co/datasets/NapthaAI/market_agents_personas", version="0.1";
 CREATE persona:twitter_personas SET name="twitter_personas", description="Personas generated from twitter exports", author=user:naptha, url="https://huggingface.co/datasets/NapthaAI/twitter_personas", version="0.1";

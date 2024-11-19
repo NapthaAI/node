@@ -27,6 +27,7 @@ def import_surql():
         f"{surql_path}/user.surql",
         f"{surql_path}/agent.surql",
         f"{surql_path}/orchestrator.surql",
+        f"{surql_path}/environment.surql",
         f"{surql_path}/persona.surql",
         f"{surql_path}/auth.surql",
         f"{surql_path}/node.surql",
