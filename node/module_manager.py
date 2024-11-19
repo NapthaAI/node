@@ -5,16 +5,22 @@ from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
 import importlib
 import json
-from node.schemas import AgentDeployment, LLMConfig
-from node.worker.utils import download_from_ipfs, unzip_file
-from node.config import AGENTS_SOURCE_DIR, BASE_OUTPUT_DIR
 import logging
 import os
 from pathlib import Path
 import subprocess
 import time
 import traceback
-from typing import List
+from typing import List, Union
+from node.schemas import (
+    AgentDeployment, 
+    AgentRun, 
+    OrchestratorRun, 
+    LLMConfig, 
+    AgentConfig
+)
+from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
+from node.config import AGENTS_SOURCE_DIR, BASE_OUTPUT_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +101,19 @@ def is_agent_installed(agent_name: str, required_version: str) -> bool:
         logger.warning(f"Agent {agent_name} not found")
         return False
 
-async def install_agent_if_not_present(agent_run, agent_version):
-    agent_name = agent_run.agent_deployment.module["id"].split(":")[-1]
+async def install_agent_if_not_present(run: Union[AgentRun, OrchestratorRun], run_version: str):
+    if isinstance(run, AgentRun):
+        agent_name = run.agent_deployment.module["id"].split(":")[-1]
+        url = run.agent_deployment.module["url"]    
+    else:
+        agent_name = run.orchestrator_deployment.module["id"].split(":")[-1]
+        url = run.orchestrator_deployment.module["url"]
+
     if agent_name in INSTALLED_MODULES:
         installed_version = INSTALLED_MODULES[agent_name]
-        if installed_version == agent_version:
+        if installed_version == run_version:
             logger.info(
-                f"Agent {agent_name} version {agent_version} is already installed"
+                f"Agent {agent_name} version {run_version} is already installed"
             )
             return True
 
@@ -111,16 +123,18 @@ async def install_agent_if_not_present(agent_run, agent_version):
         with file_lock(lock_file):
             logger.info(f"Acquired lock for {agent_name}")
 
-            if not is_agent_installed(agent_name, agent_version):
+            if not is_agent_installed(agent_name, run_version):
                 logger.info(
-                    f"Agent {agent_name} version {agent_version} is not installed. Attempting to install..."
+                    f"Agent {agent_name} version {run_version} is not installed. Attempting to install..."
                 )
-                if not agent_run.agent_deployment.module["url"]:
+                if not url:
                     raise ValueError(
                         f"Agent URL is required for installation of {agent_name}"
                     )
                 install_agent_if_needed(
-                    agent_name, agent_version, agent_run.agent_deployment.module["url"]
+                    agent_name, 
+                    run_version, 
+                    url
                 )
 
             # Verify agent installation
@@ -130,14 +144,15 @@ async def install_agent_if_not_present(agent_run, agent_version):
                 )
 
             # Install personas if they exist in agent_run
-            if hasattr(agent_run, 'personas_urls') and agent_run.agent_deployment.module["personas_urls"]:
-                logger.info(f"Installing personas for agent {agent_name}")
-                await install_personas_if_needed(agent_run.agent_deployment.module["personas_urls"])
+            if isinstance(run, AgentRun):
+                if hasattr(run, 'personas_urls') and run.agent_deployment.module["personas_urls"]:
+                    logger.info(f"Installing personas for agent {agent_name}")
+                    await install_personas_if_needed(run.agent_deployment.module["personas_urls"])
 
             logger.info(
-                f"Agent {agent_name} version {agent_version} is installed and verified"
+                f"Agent {agent_name} version {run_version} is installed and verified"
             )
-            INSTALLED_MODULES[agent_name] = agent_version
+            INSTALLED_MODULES[agent_name] = run_version
     except LockAcquisitionError as e:
         error_msg = f"Failed to acquire lock for agent {agent_name}: {str(e)}"
         logger.error(error_msg)
@@ -159,8 +174,8 @@ def verify_agent_installation(agent_name: str) -> bool:
         return False
     
 
-async def install_personas_if_needed(personas_urls: List[str]):
-    if not personas_urls:
+async def install_personas_if_needed(personas_url: str):
+    if not personas_url:
         logger.info("No personas to install")
         return
 
@@ -168,17 +183,15 @@ async def install_personas_if_needed(personas_urls: List[str]):
     personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
     personas_base_dir.mkdir(exist_ok=True)
 
-    for persona_url in personas_urls:
-        logger.info(f"Installing persona {persona_url}")
-        if persona_url in ["", None, " "]:
-            logger.warning(f"Skipping empty persona URL")
-            continue
-        # identify if the persona is a git repo or an ipfs hash
-        if "ipfs://" in persona_url:
-            await install_persona_from_ipfs(persona_url, personas_base_dir)
-        else:
-            persona_dir = await install_persona_from_git(persona_url, personas_base_dir)
-        return persona_dir
+    logger.info(f"Installing persona {personas_url}")
+    if personas_url in ["", None, " "]:
+        logger.warning(f"Skipping empty persona URL")
+        return None
+    # identify if the persona is a git repo or an ipfs hash
+    if "ipfs://" in personas_url:
+        return await install_persona_from_ipfs(personas_url, personas_base_dir)
+    else:
+        return await install_persona_from_git(personas_url, personas_base_dir)
         
 async def install_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
     try:
@@ -348,7 +361,7 @@ def load_llm_configs(llm_configs_path):
         llm_configs = json.loads(file.read())
     return [LLMConfig(**config) for config in llm_configs]
 
-def load_agent_deployments(agent_deployments_path, module):
+async def load_agent_deployments(agent_deployments_path, module):
     with open(agent_deployments_path, "r") as file:
         agent_deployments = json.loads(file.read())
 
@@ -362,19 +375,33 @@ def load_agent_deployments(agent_deployments_path, module):
         deployment["agent_config"]["llm_config"] = llm_config   
 
         # Load persona
-        persona_dir = install_personas_if_needed([deployment["agent_config"]["persona_module"]["url"]])
+        persona_dir = await install_personas_if_needed(deployment["agent_config"]["persona_module"]["url"])
+        logger.info(f"Persona directory: {persona_dir}")
         persona_data = load_persona(persona_dir)
         deployment["agent_config"]["persona_module"]["data"] = persona_data
 
     return [AgentDeployment(**deployment) for deployment in agent_deployments]
 
-def load_and_validate_input_schema(agent_run):
+async def load_and_validate_input_schema(
+    agent_run: AgentRun = None, 
+    orchestrator_run: OrchestratorRun = None
+) -> Union[AgentRun, OrchestratorRun]:
     """Loads and validates the input schema for the agent"""
-    agent_name = agent_run.agent_deployment.module['name'].replace("-", "_")
-    schemas_module = importlib.import_module(f"{agent_name}.schemas")
-    InputSchema = getattr(schemas_module, "InputSchema")
-    agent_run.inputs = InputSchema(**agent_run.inputs)
-    return agent_run
+    if agent_run:
+        agent_name = agent_run.agent_deployment.module['name'].replace("-", "_")
+        schemas_module = importlib.import_module(f"{agent_name}.schemas")
+        InputSchema = getattr(schemas_module, "InputSchema")
+        agent_run.inputs = InputSchema(**agent_run.inputs)
+        return agent_run
+    elif orchestrator_run:
+        orchestrator_name = orchestrator_run.orchestrator_deployment.module['name']
+        tn = orchestrator_name.replace("-", "_")
+        schemas_module = importlib.import_module(f"{tn}.schemas")
+        InputSchema = getattr(schemas_module, "InputSchema")
+        orchestrator_run.inputs = InputSchema(**orchestrator_run.inputs)
+        return orchestrator_run
+    else:
+        raise ValueError("Either agent_run or orchestrator_run must be provided")
 
 async def load_agent(agent_run):
     """Loads the agent and returns the agent function, validated data and config"""
@@ -382,8 +409,12 @@ async def load_agent(agent_run):
     agent_name = agent_run.agent_deployment.module['name']
     agent_path = Path(f"{AGENTS_SOURCE_DIR}/{agent_name}")
 
-    # Load configs
-    agent_deployment = load_agent_deployments(agent_path / agent_name / "configs/agent_deployments.json", agent_run.agent_deployment.module)[0]
+    # Load configs - Fix: properly await the result
+    agent_deployments = await load_agent_deployments(
+        agent_path / agent_name / "configs/agent_deployments.json", 
+        agent_run.agent_deployment.module
+    )
+    agent_deployment = agent_deployments[0]
     agent_run.agent_deployment = agent_deployment
 
     # Handle output configuration
@@ -396,7 +427,7 @@ async def load_agent(agent_run):
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
-    agent_run = load_and_validate_input_schema(agent_run)
+    agent_run = await load_and_validate_input_schema(agent_run)
     
     # Load the agent function
     agent_name = agent_name.replace("-", "_")
@@ -406,3 +437,60 @@ async def load_agent(agent_run):
     agent_func = getattr(main_module, entrypoint)
     
     return agent_func, agent_run
+
+async def load_orchestrator(orchestrator_run, agent_source_dir):
+    """Loads the orchestrator and returns the orchestrator function"""
+    workflow_name = orchestrator_run.orchestrator_deployment.module['name']
+    workflow_path = f"{agent_source_dir}/{workflow_name}"
+
+    # Load the component.yaml file
+    cfg = load_yaml_config(f"{workflow_path}/{workflow_name}/component.yaml")
+
+    # Load configuration JSONs
+    config_path = f"{workflow_path}/{workflow_name}/configs"
+    with open(f"{config_path}/agent_deployments.json") as f:
+        default_agent_deployments = json.load(f)
+    with open(f"{config_path}/llm_configs.json") as f:
+        llm_configs = {conf["config_name"]: conf for conf in json.load(f)}
+
+    for i, agent_deployment in enumerate(orchestrator_run.agent_deployments):
+        if i < len(default_agent_deployments):
+            default_config = default_agent_deployments[i]
+            
+            # Update agent deployment name
+            agent_deployment.name = default_config["name"]
+
+            # Update missing module info
+            if agent_deployment.module is None:
+                agent_deployment.module = default_config["module"]
+            
+            # Update missing worker_node_url
+            if agent_deployment.worker_node_url is None:
+                agent_deployment.worker_node_url = default_config["worker_node_url"]
+            
+            # Update agent config
+            if agent_deployment.agent_config is None:
+                agent_deployment.agent_config = AgentConfig(**default_config["agent_config"])
+            
+            # Get LLM config from default config and llm_configs
+            if default_config["agent_config"]["llm_config"]["config_name"] in llm_configs:
+                llm_config_name = default_config["agent_config"]["llm_config"]["config_name"]
+                llm_config = LLMConfig(**llm_configs[llm_config_name])
+                agent_deployment.agent_config.llm_config = llm_config
+            
+            # Update other agent config fields if None
+            if agent_deployment.agent_config.persona_module is None:
+                agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
+            
+            if agent_deployment.agent_config.system_prompt is None:
+                agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
+
+    validated_data = load_and_validate_input_schema(orchestrator_run)
+
+    tn = workflow_name.replace("-", "_")
+    entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
+    main_module = importlib.import_module(f"{tn}.run")
+    main_module = importlib.reload(main_module)
+    orchestrator_func = getattr(main_module, entrypoint)
+
+    return orchestrator_func, orchestrator_run, validated_data, cfg
