@@ -134,18 +134,24 @@ class Hub(AsyncMixin):
         return await self.surrealdb.delete(node_id)
 
     async def list_agents(self, agent_name=None) -> List:
-        if not agent_name:
-            agents = await self.surrealdb.query("SELECT * FROM agent;")
-            return [AgentModule(**agent) for agent in agents[0]["result"]]
-        else:
-            agent = await self.surrealdb.query(
-                "SELECT * FROM agent WHERE id=$agent_name;", {"agent_name": agent_name}
-            )
-            try:
-                return AgentModule(**agent[0]["result"][0])
-            except Exception as e:
-                logger.error(f"Failed to get agent: {e}")
-                return None
+        try:
+            if not agent_name:
+                result = await self.surrealdb.query("SELECT * FROM agent;")
+                if not result or not result[0].get("result"):
+                    return []
+                return [AgentModule(**agent) for agent in result[0]["result"]]
+            else:
+                # Use parameterized query to prevent injection
+                result = await self.surrealdb.query(
+                    "SELECT * FROM agent WHERE name = $agent_name;",
+                    {"agent_name": agent_name}
+                )
+                if not result or not result[0].get("result") or not result[0]["result"]:
+                    return None
+                return AgentModule(**result[0]["result"][0])
+        except Exception as e:
+            logger.error(f"Error querying agents from database: {e}")
+            return [] if not agent_name else None
 
     async def list_orchestrators(self, orchestrator_name=None) -> List:
         if not orchestrator_name:
