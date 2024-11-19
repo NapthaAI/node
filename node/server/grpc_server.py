@@ -12,7 +12,7 @@ from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_flow
+from node.worker.template_worker import run_agent, run_orchestrator
 from node.server import grpc_server_pb2, grpc_server_pb2_grpc
 
 logger = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             # Execute the task
             if agent_run['agent_run_type'] == "package":
                 logger.info(f"Running package agent: {agent_run_data}")
-                task = run_flow.delay(agent_run_data)
+                task = run_agent.delay(agent_run_data)
             elif agent_run['agent_run_type'] == "docker":
                 task = execute_docker_agent.delay(agent_run_data)
             else:

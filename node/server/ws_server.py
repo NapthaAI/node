@@ -25,7 +25,7 @@ from node.storage.storage import (
 )
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_flow
+from node.worker.template_worker import run_orchestrator, run_agent
 
 
 logger = logging.getLogger(__name__)
@@ -304,7 +304,7 @@ class WebSocketServer:
 
             # Execute the task
             if agent_run['agent_run_type'] == "package":
-                task = run_flow.delay(agent_run_data)
+                task = run_agent.delay(agent_run_data)
             elif agent_run['agent_run_type'] == "docker":
                 task = execute_docker_agent.delay(agent_run_data)
             else:

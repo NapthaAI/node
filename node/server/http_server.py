@@ -8,7 +8,13 @@ import logging
 import traceback
 from datetime import datetime
 from typing import Optional
-from node.schemas import AgentRun, AgentRunInput, DockerParams, OrchestratorRun, OrchestratorRunInput
+from node.schemas import (
+    AgentRun,
+    AgentRunInput,
+    DockerParams,
+    OrchestratorRun,
+    OrchestratorRunInput,
+)
 
 from node.storage.storage import (
     write_to_ipfs,
