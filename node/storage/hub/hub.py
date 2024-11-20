@@ -3,7 +3,7 @@ import jwt
 import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
-from node.schemas import NodeConfig
+from node.schemas import AgentModule, NodeConfig
 from surrealdb import Surreal
 import traceback
 from typing import Dict, List, Optional, Tuple
@@ -133,49 +133,46 @@ class Hub(AsyncMixin):
     async def delete_node(self, node_id: str) -> bool:
         return await self.surrealdb.delete(node_id)
 
-    async def list_purchases(self, purchases: Dict) -> List:
-        return await self.surrealdb.query(
-            "SELECT * FROM wins WHERE in=$user;", {"user": purchases["me"]}
-        )
-
     async def list_agents(self, agent_name=None) -> List:
-        if not agent_name:
-            agents = await self.surrealdb.query("SELECT * FROM agent;")
-            return agents[0]["result"]
+        try:
+            if not agent_name:
+                result = await self.surrealdb.query("SELECT * FROM agent;")
+                if not result or not result[0].get("result"):
+                    return []
+                return [AgentModule(**agent) for agent in result[0]["result"]]
+            else:
+                if ':' in agent_name:
+                    agent_name = agent_name.split(':')[1]
+                result = await self.surrealdb.query(
+                    "SELECT * FROM agent WHERE name = $agent_name;",
+                    {"agent_name": agent_name}
+                )
+                if not result or not result[0].get("result") or not result[0]["result"]:
+                    return None
+                return AgentModule(**result[0]["result"][0])
+        except Exception as e:
+            logger.error(f"Error querying agents from database: {e}")
+            return [] if not agent_name else None
+
+    async def list_orchestrators(self, orchestrator_name=None) -> List:
+        if not orchestrator_name:
+            orchestrators = await self.surrealdb.query("SELECT * FROM orchestrator;")
+            return [AgentModule(**orchestrator) for orchestrator in orchestrators[0]["result"]]
         else:
-            agent = await self.surrealdb.query(
-                "SELECT * FROM agent WHERE id=$agent_name;", {"agent_name": agent_name}
+            if ':' in orchestrator_name:
+                orchestrator_name = orchestrator_name.split(':')[1]
+            orchestrator = await self.surrealdb.query(
+                "SELECT * FROM orchestrator WHERE name=$orchestrator_name;", 
+                {"orchestrator_name": orchestrator_name}
             )
             try:
-                return agent[0]["result"][0]
+                return AgentModule(**orchestrator[0]["result"][0])
             except Exception as e:
-                logger.error(f"Failed to get agent: {e}")
+                logger.error(f"Failed to get orchestrator: {e}")
                 return None
-
-    async def create_plan(self, plan_config: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.create("auction", plan_config)
-
-    async def list_plans(self) -> List:
-        return await self.surrealdb.query("SELECT * FROM auction;")
-
-    async def create_service(self, service_config: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.create("lot", service_config)
-
-    async def list_services(self) -> List:
-        return await self.surrealdb.query("SELECT * FROM lot;")
 
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
-
-    async def purchase(self, purchase: Dict) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.query(
-            "RELATE $me->requests_to_bid_on->$auction SET amount=10.0;", purchase
-        )
-
-    async def requests_to_publish(self, publish) -> Tuple[bool, Optional[Dict]]:
-        return await self.surrealdb.query(
-            "RELATE $me->requests_to_publish->$auction", publish
-        )
 
     async def close(self):
         """Close the database connection"""

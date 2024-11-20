@@ -16,24 +16,40 @@ class AgentRun(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
-    agent_name = Column(String)
-    agent_run_params = Column(JSON)
-    results = Column(ARRAY(JSON), default=[])
+    inputs = Column(JSON)
+    agent_deployment = Column(JSON)
+    orchestrator_runs = Column(JSONB, default=[])
     status = Column(String, default="created")
-    agent_run_type = Column(String, default="docker")
+    results = Column(ARRAY(JSON), default=[])
     error = Column(Boolean, default=False)
     error_message = Column(String)
-    worker_nodes = Column(ARRAY(String))
-    child_runs = Column(JSONB, default=[])
-    parent_runs = Column(JSONB, default=[])
     created_time = Column(DateTime)
     start_processing_time = Column(DateTime)
     completed_time = Column(DateTime)
     duration = Column(Integer)
-    agent_version = Column(String, default="0.1")
-    agent_source_url = Column(String, default="")
-    personas_urls = Column(ARRAY(String))
 
     consumer = relationship("User", back_populates="agent_runs")
 
+class OrchestratorRun(Base):
+    __tablename__ = 'orchestrator_runs'
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
+    inputs = Column(JSON)
+    orchestrator_deployment = Column(JSON, nullable=False)
+    agent_deployments = Column(ARRAY(JSON), nullable=False)
+    environment_deployments = Column(ARRAY(JSON))
+    status = Column(String, default="pending")
+    error = Column(Boolean, default=False)
+    results = Column(ARRAY(String), default=[])
+    error_message = Column(String)
+    created_time = Column(DateTime)
+    start_processing_time = Column(DateTime)
+    completed_time = Column(DateTime)
+    duration = Column(Integer)  # Changed from float to integer for consistency with AgentRun
+    input_schema_ipfs_hash = Column(String)
+
+    consumer = relationship("User", back_populates="orchestrator_runs")
+
 User.agent_runs = relationship("AgentRun", order_by=AgentRun.id, back_populates="consumer")
+User.orchestrator_runs = relationship("OrchestratorRun", back_populates="consumer")

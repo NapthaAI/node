@@ -4,6 +4,7 @@ from node.utils import get_logger
 from celery.signals import worker_init, worker_shutdown, celeryd_after_setup
 import os
 import asyncio
+import traceback
 import resource
 from node.grpc_pool_manager import get_grpc_pool_instance, close_grpc_pool
 import psutil
@@ -95,20 +96,36 @@ def shutdown_grpc_pool_signal(**kwargs):
     logger.info("Starting GlobalGrpcPool shutdown...")
     
     try:
-        loop = asyncio.get_event_loop()
-        if not loop.is_closed():
-            logger.info("Closing gRPC pool connections...")
-            loop.run_until_complete(close_grpc_pool())
-            logger.info("✓ gRPC pool connections closed")
-        else:
-            logger.warning("Event loop was already closed")
-            
+        # Get or create event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_closed():
+            logger.warning("Event loop was closed, creating new one for shutdown")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        logger.info("Closing gRPC pool connections...")
+        # Create a new task for cleanup
+        cleanup_task = loop.create_task(close_grpc_pool())
+        loop.run_until_complete(cleanup_task)
+        
         log_system_limits()
         logger.info("✓ GlobalGrpcPool shutdown complete")
         
     except Exception as e:
         logger.error(f"✗ Error during gRPC pool shutdown: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise
+    finally:
+        try:
+            if not loop.is_closed():
+                loop.close()
+        except Exception as e:
+            logger.error(f"Error closing event loop: {e}")
 
 # Celery app
 app = Celery(

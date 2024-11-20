@@ -82,18 +82,48 @@ class GlobalGrpcPool:
             self.semaphore.release()
 
     async def close_all(self):
+        """Safely close all gRPC channels in the pool."""
         logger.info("Closing all channels in the pool.")
-        # Close channels in the buffer
-        while not self.available_queues.empty():
-            channel = await self.available_queues.get()
+        try:
+            # Create list of cleanup tasks
+            cleanup_tasks = []
+            
+            # Iterate through all queues in the defaultdict
+            for target, queue in self.available_queues.items():
+                while not queue.empty():
+                    try:
+                        channel = await asyncio.wait_for(queue.get(), timeout=5.0)
+                        if channel:
+                            # Create task for closing channel
+                            cleanup_tasks.append(
+                                asyncio.create_task(self._close_channel(target, channel))
+                            )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Timeout while getting channel from queue for {target}")
+                    except Exception as e:
+                        logger.error(f"Error getting channel from queue for {target}: {e}")
+
+            # Wait for all cleanup tasks to complete
+            if cleanup_tasks:
+                await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+                
+            # Clear the queues
+            self.available_queues.clear()
+            
+            logger.info("All buffered channels have been closed.")
+        except Exception as e:
+            logger.error(f"Error during pool cleanup: {e}")
+            raise
+
+    async def _close_channel(self, target: str, channel):
+        """Helper method to safely close a single channel."""
+        try:
             await channel.close()
-            # Update statistics
-            for target, stats in self.channel_stats.items():
-                if stats["total_channels"] > 0:
-                    stats["total_channels"] -= 1
-                    stats["released"] += 1
-                    break  # Assuming channel belongs to one target
-        logger.info("All buffered channels have been closed.")
+            self.channel_stats[target]["total_channels"] -= 1
+            self.channel_stats[target]["released"] += 1
+            logger.debug(f"Successfully closed channel for {target}")
+        except Exception as e:
+            logger.error(f"Error closing channel for {target}: {e}")
 
     def print_stats(self):
         for target, stats in self.channel_stats.items():

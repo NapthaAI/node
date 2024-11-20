@@ -11,7 +11,12 @@ from typing import Dict
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
-from node.schemas import AgentRun, AgentRunInput, DockerParams
+from node.schemas import (
+    AgentRun, 
+    AgentRunInput, 
+    OrchestratorRun, 
+    OrchestratorRunInput
+)
 from node.config import BASE_OUTPUT_DIR
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -25,7 +30,7 @@ from node.storage.storage import (
 )
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_flow
+from node.worker.template_worker import run_orchestrator, run_agent
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +107,14 @@ class WebSocketServer:
             "/ws/check_agent_run/{client_id}", self.check_agent_run_endpoint
         )
         self.app.add_api_websocket_route(
+            "/ws/run_orchestrator/{client_id}", 
+            self.run_orchestrator_endpoint
+        )
+        # self.app.add_api_websocket_route(
+        #     "/ws/check_orchestrator_run/{client_id}", 
+        #     self.check_orchestrator_run_endpoint
+        # )
+        self.app.add_api_websocket_route(
             "/ws/check_user/{client_id}", self.check_user_endpoint
         )
         self.app.add_api_websocket_route(
@@ -158,6 +171,26 @@ class WebSocketServer:
         except WebSocketDisconnect:
             logger.warning(f"Client {client_id} disconnected (outer).")
             self.manager.disconnect(client_id, "run_agent")
+
+    async def run_orchestrator_endpoint(self, websocket: WebSocket, client_id: str):
+        await self.manager.connect(websocket, client_id, "run_orchestrator")
+
+        try:
+            while True:
+                data = await websocket.receive_json()
+                logger.info(f"Endpoint: run_orchestrator :: Received data: {data}")
+
+                result = await self.run_orchestrator_direct(data, client_id)
+                logger.info(f"Endpoint: run_orchestrator :: Sending result: {result}")
+                await self.manager.send_message(result, client_id, "run_orchestrator")
+
+        except WebSocketDisconnect:
+            logger.warning(f"Client {client_id} disconnected (outer).")
+            self.manager.disconnect(client_id, "run_orchestrator")
+
+        except Exception as e:
+            logger.error(f"Error in WebSocket connection for client {client_id} in run_orchestrator: {str(e)}")
+            self.manager.disconnect(client_id, "run_orchestrator")
 
     async def establish_connection(self):
         while True:
@@ -248,6 +281,21 @@ class WebSocketServer:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return json.dumps({"status": "error", "message": str(e)})
 
+    async def run_orchestrator_direct(self, data: dict, client_id: str) -> str:
+        try:
+            logger.info(f"run_orchestrator_direct: Received data: {data}")
+            orchestrator_run_input = OrchestratorRunInput(**data)
+            logger.info(f"run_orchestrator_direct: Created OrchestratorRunInput: {orchestrator_run_input}")
+            result = await self.run_orchestrator(orchestrator_run_input)
+            logger.info(f"run_orchestrator_direct: Got result: {result}")
+            return json.dumps(
+                {"status": "success", "data": result}, cls=DateTimeEncoder
+            )
+        except Exception as e:
+            logger.error(f"Error processing job: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return json.dumps({"status": "error", "message": str(e)})
+
     async def run_agent_indirect(self, message: dict, client_id: str) -> dict:
         target_node_id = message["source_node"]
         source_node_id = message["target_node"]
@@ -271,37 +319,90 @@ class WebSocketServer:
 
             async with Hub() as hub:
                 success, user, user_id = await hub.signin(
-                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    os.getenv("HUB_USERNAME"), 
+                    os.getenv("HUB_PASSWORD")
                 )
-                agent = await hub.list_agents(f"agent:{agent_run_input.agent_name}")
-                logger.info(f"Found agent: {agent}")
+                agent_module = await hub.list_agents(f"{agent_run_input.agent_deployment.module['name']}")
+                logger.info(f"Found agent: {agent_module}")
 
-                if not agent:
+                if not agent_module:
                     raise ValueError("Agent not found")
 
-                agent_run_input.agent_run_type = agent["type"]
-                agent_run_input.agent_version = agent["version"]
-                agent_run_input.agent_source_url = agent["url"]
-                agent_run_input.personas_urls = agent["personas_urls"]
-
-                if agent["type"] == "docker":
-                    agent_run_input.agent_run_params = DockerParams(
-                        **agent_run_input.agent_run_params
-                    )
+                agent_run_input.agent_deployment.module = agent_module
 
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
-                logger.info("Created agent run")
-
-            if agent_run:
-                agent_run_data = agent_run.copy()
-                agent_run_data.pop("_sa_instance_state", None)
+                if not agent_run:
+                    raise ValueError("Failed to create agent run")
+                agent_run_data = agent_run.model_dump()
 
             # Execute the task
-            if agent_run['agent_run_type'] == "package":
-                task = run_flow.delay(agent_run_data)
-            elif agent_run['agent_run_type'] == "docker":
+            if agent_run.agent_deployment.module["type"] == "package":
+                task = run_agent.delay(agent_run_data)
+            elif agent_run.agent_deployment.module["type"] == "docker":
                 task = execute_docker_agent.delay(agent_run_data)
+            else:
+                raise HTTPException(status_code=400, detail="Invalid agent run type")
+
+            # Wait for the task to complete
+            while not task.ready():
+                await asyncio.sleep(1)
+
+            # Retrieve the updated run from the database
+            async with DB() as db:
+                updated_run = await db.list_agent_runs(agent_run_data['id'])
+                if isinstance(updated_run, list):
+                    updated_run = updated_run[0]
+                    
+            if isinstance(updated_run, dict):
+                updated_run.pop("_sa_instance_state", None)
+            else:
+                updated_run = updated_run.__dict__
+                updated_run.pop("_sa_instance_state", None)
+
+            # Convert timestamps to strings if they exist
+            if 'created_time' in updated_run and isinstance(updated_run['created_time'], datetime):
+                updated_run['created_time'] = updated_run['created_time'].isoformat()
+            if 'start_processing_time' in updated_run and isinstance(updated_run['start_processing_time'], datetime):
+                updated_run['start_processing_time'] = updated_run['start_processing_time'].isoformat()
+            if 'completed_time' in updated_run and isinstance(updated_run['completed_time'], datetime):
+                updated_run['completed_time'] = updated_run['completed_time'].isoformat()
+
+            
+            return updated_run
+
+        except Exception as e:
+            logger.error(f"Failed to run module: {str(e)}")
+            raise
+
+    async def run_orchestrator(self, agent_run_input: AgentRunInput) -> AgentRun:
+        try:
+            logger.info(f"Received task: {agent_run_input}")
+
+            async with Hub() as hub:
+                success, user, user_id = await hub.signin(
+                    os.getenv("HUB_USERNAME"), 
+                    os.getenv("HUB_PASSWORD")
+                )
+
+                orchestrator_module = await hub.list_orchestrators(f"{agent_run_input.orchestrator_deployment.module['name']}")
+                logger.info(f"Found orchestrator: {orchestrator_module}")
+
+                if not orchestrator_module:
+                    raise ValueError("Orchestrator not found")
+
+                agent_run_input.orchestrator_deployment.module = orchestrator_module
+
+            async with DB() as db:
+                orchestrator_run = await db.create_orchestrator_run(agent_run_input)
+                if not orchestrator_run:
+                    raise ValueError("Failed to create orchestrator run")
+                orchestrator_run_data = orchestrator_run.model_dump()
+
+            if orchestrator_run.orchestrator_deployment.module["type"] == "package":
+                task = run_orchestrator.delay(orchestrator_run_data)
+            elif orchestrator_run.orchestrator_deployment.module["type"] == "docker":
+                raise ValueError("Docker orchestrators are not supported")
             else:
                 raise ValueError("Invalid module type")
 
@@ -309,23 +410,20 @@ class WebSocketServer:
             while not task.ready():
                 await asyncio.sleep(1)
 
-            # Retrieve the updated module run from the database
             async with DB() as db:
-                updated_agent_run = await db.list_agent_runs(agent_run['id'])
-                if isinstance(updated_agent_run, list):
-                    updated_agent_run = updated_agent_run[0]
-                updated_agent_run.pop("_sa_instance_state", None)
-                logger.info(f"Updated agent run: {updated_agent_run}")
+                updated_run = await db.list_orchestrator_runs(orchestrator_run_data['id'])
+                if isinstance(updated_run, list):
+                    updated_run = updated_run[0]
+                if not isinstance(updated_run, dict):
+                    updated_run = updated_run.__dict__
+                updated_run.pop("_sa_instance_state", None)
 
-            if 'created_time' in updated_agent_run and isinstance(updated_agent_run['created_time'], datetime):
-                updated_agent_run['created_time'] = updated_agent_run['created_time'].isoformat()
-            if 'start_processing_time' in updated_agent_run and isinstance(updated_agent_run['start_processing_time'], datetime):
-                updated_agent_run['start_processing_time'] = updated_agent_run['start_processing_time'].isoformat()
-            if 'completed_time' in updated_agent_run and isinstance(updated_agent_run['completed_time'], datetime):
-                updated_agent_run['completed_time'] = updated_agent_run['completed_time'].isoformat()
-            logger.info(f"Yielding updated agent run: {updated_agent_run}")
-            
-            return updated_agent_run
+            # Convert timestamps to strings if they exist
+            for time_field in ['created_time', 'start_processing_time', 'completed_time']:
+                if time_field in updated_run and isinstance(updated_run[time_field], datetime):
+                    updated_run[time_field] = updated_run[time_field].isoformat()
+
+            return updated_run
 
         except Exception as e:
             logger.error(f"Failed to run module: {str(e)}")
