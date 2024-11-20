@@ -96,7 +96,10 @@ async def _run_orchestrator_async(orchestrator_run: Dict) -> None:
                 logger.error(
                     "This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project."
                 )
-            await handle_failure(orchestrator_run, error_msg)
+            await handle_failure(
+                error_msg=error_msg, 
+                orchestrator_run=orchestrator_run
+            )
             return
 
         logger.info(
@@ -115,7 +118,10 @@ async def _run_orchestrator_async(orchestrator_run: Dict) -> None:
         error_msg = f"Error in _run_orchestrator_async: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
-        await handle_failure(error_msg, orchestrator_run=orchestrator_run)
+        await handle_failure(
+            error_msg=error_msg, 
+            orchestrator_run=orchestrator_run
+        )
         return
 
 async def _run_agent_async(agent_run: AgentRun) -> None:
@@ -138,7 +144,10 @@ async def _run_agent_async(agent_run: AgentRun) -> None:
                 logger.error(
                     "This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project."
                 )
-            await handle_failure(error_msg, agent_run=agent_run)
+            await handle_failure(
+                error_msg=error_msg, 
+                agent_run=agent_run
+            )
             return
 
         logger.info(
@@ -160,10 +169,17 @@ async def _run_agent_async(agent_run: AgentRun) -> None:
         error_msg = f"Error in _run_agent_async: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
-        await handle_failure(agent_run, error_msg)
+        await handle_failure(
+            error_msg=error_msg, 
+            agent_run=agent_run
+        )
         return
 
-async def handle_failure(error_msg: str, agent_run: AgentRun = None, orchestrator_run: OrchestratorRun = None) -> None:
+async def handle_failure(
+        error_msg: str, 
+        agent_run: AgentRun = None, 
+        orchestrator_run: OrchestratorRun = None
+    ) -> None:
     if agent_run:
         agent_run.status = "error"
         agent_run.error = True
@@ -538,76 +554,3 @@ class OrchestratorEngine:
         """
         ipfs_hash = upload_json_string_to_ipfs(validated_data.model_dump_json())
         return ipfs_hash
-
-    # async def load_orchestrator(self):
-    #     """
-    #     Loads the orchestrator and merges configurations from JSON files
-    #     """
-    #     workflow_path = f"{AGENTS_SOURCE_DIR}/{self.orchestrator_name}"
-        
-    #     # Load the component.yaml file
-    #     cfg = load_yaml_config(f"{workflow_path}/{self.orchestrator_name}/component.yaml")
-
-    #     # Load configuration JSONs
-    #     config_path = f"{workflow_path}/{self.orchestrator_name}/configs"
-    #     with open(f"{config_path}/agent_deployments.json") as f:
-    #         default_agent_deployments = json.load(f)
-    #     with open(f"{config_path}/llm_configs.json") as f:
-    #         llm_configs = {conf["config_name"]: conf for conf in json.load(f)}
-        
-    #     logger.info(f"Orchestrator run: {self.orchestrator_run}")
-
-    #     # Update agent deployments with defaults in order
-    #     for i, agent_deployment in enumerate(self.orchestrator_run.agent_deployments):
-    #         if i < len(default_agent_deployments):
-    #             default_config = default_agent_deployments[i]
-                
-    #             # Update agent deployment name
-    #             agent_deployment.name = default_config["name"]
-
-    #             # Update missing module info
-    #             if agent_deployment.module is None:
-    #                 agent_deployment.module = default_config["module"]
-                
-    #             # Update missing worker_node_url
-    #             if agent_deployment.worker_node_url is None:
-    #                 agent_deployment.worker_node_url = default_config["worker_node_url"]
-                
-    #             # Update agent config
-    #             if agent_deployment.agent_config is None:
-    #                 agent_deployment.agent_config = AgentConfig(**default_config["agent_config"])
-                
-    #             # Get LLM config from default config and llm_configs
-    #             if default_config["agent_config"]["llm_config"]["config_name"] in llm_configs:
-    #                 llm_config_name = default_config["agent_config"]["llm_config"]["config_name"]
-    #                 llm_config = LLMConfig(**llm_configs[llm_config_name])
-    #                 agent_deployment.agent_config.llm_config = llm_config
-                
-    #             # Update other agent config fields if None
-    #             if agent_deployment.agent_config.persona_module is None:
-    #                 agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
-                
-    #             if agent_deployment.agent_config.system_prompt is None:
-    #                 agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
-
-    #     logger.info(f"Orchestrator run: {self.orchestrator_run}")
-
-    #     # Rest of the function remains the same
-    #     if cfg["outputs"]["save"]:
-    #         if ':' in self.orchestrator_run.id:
-    #             output_path = f"{BASE_OUTPUT_DIR}/{self.orchestrator_run.id.split(':')[1]}"
-    #         else:
-    #             output_path = f"{BASE_OUTPUT_DIR}/{self.orchestrator_run.id}"
-    #         self.parameters["output_path"] = output_path
-    #         if not os.path.exists(output_path):
-    #             os.makedirs(output_path)
-
-    #     validated_data = self.load_and_validate_input_schema()
-        
-    #     tn = self.orchestrator_name.replace("-", "_")
-    #     entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
-    #     main_module = importlib.import_module(f"{tn}.run")
-    #     main_module = importlib.reload(main_module)
-    #     orchestrator_func = getattr(main_module, entrypoint)
-
-    #     return orchestrator_func, validated_data, cfg

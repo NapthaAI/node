@@ -57,8 +57,23 @@ class GrpcServerStub(object):
                 _registered_method=True)
         self.RunAgent = channel.unary_stream(
                 '/agent.GrpcServer/RunAgent',
-                request_serializer=grpc__server__pb2.RunAgentRequest.SerializeToString,
-                response_deserializer=grpc__server__pb2.RunAgentResponse.FromString,
+                request_serializer=grpc__server__pb2.AgentRunInput.SerializeToString,
+                response_deserializer=grpc__server__pb2.AgentRun.FromString,
+                _registered_method=True)
+        self.CheckAgentRun = channel.unary_unary(
+                '/agent.GrpcServer/CheckAgentRun',
+                request_serializer=grpc__server__pb2.AgentRunCheck.SerializeToString,
+                response_deserializer=grpc__server__pb2.AgentRun.FromString,
+                _registered_method=True)
+        self.RunOrchestrator = channel.unary_stream(
+                '/agent.GrpcServer/RunOrchestrator',
+                request_serializer=grpc__server__pb2.OrchestratorRunInput.SerializeToString,
+                response_deserializer=grpc__server__pb2.OrchestratorRun.FromString,
+                _registered_method=True)
+        self.CheckOrchestratorRun = channel.unary_unary(
+                '/agent.GrpcServer/CheckOrchestratorRun',
+                request_serializer=grpc__server__pb2.OrchestratorRunCheck.SerializeToString,
+                response_deserializer=grpc__server__pb2.OrchestratorRun.FromString,
                 _registered_method=True)
 
 
@@ -66,36 +81,53 @@ class GrpcServerServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def is_alive(self, request, context):
-        """check server is alive
+        """Health checks
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def stop(self, request, context):
-        """stop the server
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def CheckUser(self, request, context):
-        """check user
+        """User management
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RegisterUser(self, request, context):
-        """register user
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def RunAgent(self, request, context):
-        """run agent
+        """Agent operations
         """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CheckAgentRun(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RunOrchestrator(self, request, context):
+        """Orchestrator operations
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CheckOrchestratorRun(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -125,8 +157,23 @@ def add_GrpcServerServicer_to_server(servicer, server):
             ),
             'RunAgent': grpc.unary_stream_rpc_method_handler(
                     servicer.RunAgent,
-                    request_deserializer=grpc__server__pb2.RunAgentRequest.FromString,
-                    response_serializer=grpc__server__pb2.RunAgentResponse.SerializeToString,
+                    request_deserializer=grpc__server__pb2.AgentRunInput.FromString,
+                    response_serializer=grpc__server__pb2.AgentRun.SerializeToString,
+            ),
+            'CheckAgentRun': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckAgentRun,
+                    request_deserializer=grpc__server__pb2.AgentRunCheck.FromString,
+                    response_serializer=grpc__server__pb2.AgentRun.SerializeToString,
+            ),
+            'RunOrchestrator': grpc.unary_stream_rpc_method_handler(
+                    servicer.RunOrchestrator,
+                    request_deserializer=grpc__server__pb2.OrchestratorRunInput.FromString,
+                    response_serializer=grpc__server__pb2.OrchestratorRun.SerializeToString,
+            ),
+            'CheckOrchestratorRun': grpc.unary_unary_rpc_method_handler(
+                    servicer.CheckOrchestratorRun,
+                    request_deserializer=grpc__server__pb2.OrchestratorRunCheck.FromString,
+                    response_serializer=grpc__server__pb2.OrchestratorRun.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -262,8 +309,89 @@ class GrpcServer(object):
             request,
             target,
             '/agent.GrpcServer/RunAgent',
-            grpc__server__pb2.RunAgentRequest.SerializeToString,
-            grpc__server__pb2.RunAgentResponse.FromString,
+            grpc__server__pb2.AgentRunInput.SerializeToString,
+            grpc__server__pb2.AgentRun.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CheckAgentRun(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent.GrpcServer/CheckAgentRun',
+            grpc__server__pb2.AgentRunCheck.SerializeToString,
+            grpc__server__pb2.AgentRun.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RunOrchestrator(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/agent.GrpcServer/RunOrchestrator',
+            grpc__server__pb2.OrchestratorRunInput.SerializeToString,
+            grpc__server__pb2.OrchestratorRun.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CheckOrchestratorRun(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/agent.GrpcServer/CheckOrchestratorRun',
+            grpc__server__pb2.OrchestratorRunCheck.SerializeToString,
+            grpc__server__pb2.OrchestratorRun.FromString,
             options,
             channel_credentials,
             insecure,

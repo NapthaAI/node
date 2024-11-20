@@ -6,76 +6,193 @@ import "google/protobuf/struct.proto";
 import "google/protobuf/empty.proto";
 
 service GrpcServer {
-    // check server is alive
+    // Health checks
     rpc is_alive (google.protobuf.Empty) returns (GeneralResponse) {}
-
-    // stop the server
     rpc stop (google.protobuf.Empty) returns (GeneralResponse) {}
 
-    // check user
+    // User management
     rpc CheckUser (CheckUserRequest) returns (CheckUserResponse) {}
-
-    // register user
     rpc RegisterUser (RegisterUserRequest) returns (RegisterUserResponse) {}
 
-    // run agent
-    rpc RunAgent (RunAgentRequest) returns (stream RunAgentResponse) {}
+    // Agent operations
+    rpc RunAgent (AgentRunInput) returns (stream AgentRun) {}
+    rpc CheckAgentRun (AgentRunCheck) returns (AgentRun) {}
+
+    // Orchestrator operations
+    rpc RunOrchestrator (OrchestratorRunInput) returns (stream OrchestratorRun) {}
+    rpc CheckOrchestratorRun (OrchestratorRunCheck) returns (OrchestratorRun) {}
 }
 
-// Message classes for agent server management
+// Common responses
 message GeneralResponse {
     bool ok = 1;
     string message = 2;
 }
 
+// User messages
 message CheckUserRequest {
-  optional string user_id = 1;
-  string public_key = 2;
+    optional string user_id = 1;
+    string public_key = 2;
 }
 
 message CheckUserResponse {
-  bool is_registered = 1;
-  string id = 2;
-  string public_key = 3;
+    bool is_registered = 1;
+    string id = 2;
+    string public_key = 3;
 }
 
 message RegisterUserRequest {
-  string public_key = 1;
+    string public_key = 1;
 }
 
 message RegisterUserResponse {
-  string id = 1;
-  string public_key = 2;
+    string id = 1;
+    string public_key = 2;
+}
+// Configuration messages
+message LLMConfig {
+    string config_name = 1;
+    string client = 2;
+    string model = 3;
+    int32 max_tokens = 4;
+    float temperature = 5;
+    optional string api_base = 6;
 }
 
-message RunAgentRequest {
-  string agent_name = 1;
-  string consumer_id = 2;
-  google.protobuf.Struct agent_run_params = 3;
-  optional string agent_type = 4;
-  repeated string worker_nodes = 5;
-  repeated string personas_urls = 6;
+message AgentConfig {
+    string config_name = 1;
+    optional LLMConfig llm_config = 2;
+    optional google.protobuf.Struct persona_module = 3;
+    optional google.protobuf.Struct system_prompt = 4;
 }
 
-message RunAgentResponse {
-  string agent_name = 1;
-  string agent_run_type = 2;
-  string consumer_id = 3;
-  string status = 4;
-  bool error = 5;
-  optional string id = 6;
-  repeated string results = 7;
-  repeated string worker_nodes = 8;
-  optional string error_message = 9;
-  optional string created_time = 10;
-  optional string start_processing_time = 11;
-  optional string completed_time = 12;
-  optional float duration = 13;
-  google.protobuf.Struct agent_run_params = 14;
-  repeated RunAgentResponse child_runs = 15;
-  repeated RunAgentResponse parent_runs = 16;
-  optional string input_schema_ipfs_hash = 17;
-  optional string agent_source_url = 18;
-  optional string agent_version = 19;
-  repeated string personas_urls = 20;
+message OrchestratorConfig {
+    string config_name = 1;
+    int32 max_rounds = 2;
+}
+
+message EnvironmentConfig {
+    string config_name = 1;
+    optional string environment_type = 2;
+}
+
+message DataGenerationConfig {
+    bool save_outputs = 1;
+    string save_outputs_location = 2;
+    optional string save_outputs_path = 3;
+    bool save_inputs = 4;
+    string save_inputs_location = 5;
+}
+
+message AgentModule {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    string author = 4;
+    string url = 5;
+    string type = 6;
+    string version = 7;
+    optional string entrypoint = 8;
+    repeated string personas_urls = 9;
+}
+
+message AgentDeployment {
+    string name = 1;
+    optional AgentModule module = 2;
+    string worker_node_url = 3;
+    optional AgentConfig agent_config = 4;
+    optional DataGenerationConfig data_generation_config = 5;
+}
+
+message OrchestratorDeployment {
+    string name = 1;
+    AgentModule module = 2;
+    string orchestrator_node_url = 3;
+    optional OrchestratorConfig orchestrator_config = 4;
+}
+
+message EnvironmentDeployment {
+    string name = 1;
+    string environment_node_url = 2;
+    optional EnvironmentConfig environment_config = 3;
+}
+
+message DockerParams {
+    string docker_image = 1;
+    optional string docker_command = 2;
+    optional int32 docker_num_gpus = 3;
+    map<string, string> docker_env_vars = 4;
+    optional string input_dir = 5;
+    optional string input_ipfs_hash = 6;
+    optional string docker_input_dir = 7;
+    optional string docker_output_dir = 8;
+    string save_location = 9;
+}
+
+// Run messages
+message AgentRunInput {
+    string consumer_id = 1;
+    oneof inputs {
+        google.protobuf.Struct input_struct = 2;
+        DockerParams docker_params = 3;
+    }
+    AgentDeployment agent_deployment = 4;
+    repeated OrchestratorRun orchestrator_runs = 5;
+}
+
+message AgentRunCheck {
+    string id = 1;
+}
+
+message AgentRun {
+    string consumer_id = 1;
+    google.protobuf.Struct inputs = 2;
+    google.protobuf.Struct agent_deployment = 3;
+    string status = 4;
+    bool error = 5;
+    optional string id = 6;
+    repeated string results = 7;
+    optional string error_message = 8;
+    optional string created_time = 9;
+    optional string start_processing_time = 10;
+    optional string completed_time = 11;
+    optional float duration = 12;
+    optional string input_schema_ipfs_hash = 13;
+}
+
+message OrchestratorRunInput {
+    string consumer_id = 1;
+    oneof inputs {
+        google.protobuf.Struct input_struct = 2;
+        DockerParams docker_params = 3;
+    }
+    OrchestratorDeployment orchestrator_deployment = 4;
+    repeated AgentDeployment agent_deployments = 5;
+    repeated EnvironmentDeployment environment_deployments = 6;
+}
+
+message OrchestratorRunCheck {
+    string id = 1;
+}
+
+message OrchestratorRun {
+    string consumer_id = 1;
+    oneof inputs {
+        google.protobuf.Struct input_struct = 2;
+        DockerParams docker_params = 3;
+    }
+    OrchestratorDeployment orchestrator_deployment = 4;
+    repeated AgentDeployment agent_deployments = 5;
+    repeated EnvironmentDeployment environment_deployments = 6;
+    string status = 7;
+    bool error = 8;
+    optional string id = 9;
+    repeated string results = 10;
+    optional string error_message = 11;
+    optional string created_time = 12;
+    optional string start_processing_time = 13;
+    optional string completed_time = 14;
+    optional float duration = 15;
+    repeated AgentRun agent_runs = 16;
+    optional string input_schema_ipfs_hash = 17;
 }

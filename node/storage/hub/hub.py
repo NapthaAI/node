@@ -158,8 +158,10 @@ class Hub(AsyncMixin):
             orchestrators = await self.surrealdb.query("SELECT * FROM orchestrator;")
             return [AgentModule(**orchestrator) for orchestrator in orchestrators[0]["result"]]
         else:
+            if ':' in orchestrator_name:
+                orchestrator_name = orchestrator_name.split(':')[1]
             orchestrator = await self.surrealdb.query(
-                "SELECT * FROM orchestrator WHERE id=$orchestrator_name;", 
+                "SELECT * FROM orchestrator WHERE name=$orchestrator_name;", 
                 {"orchestrator_name": orchestrator_name}
             )
             try:

@@ -1,6 +1,6 @@
 import logging
 from contextlib import contextmanager
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import QueuePool
@@ -123,10 +123,13 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
-    async def create_agent_run(self, agent_run_input: AgentRunInput) -> AgentRunSchema:
+    async def create_agent_run(self, agent_run_input: Union[AgentRunInput, Dict]) -> AgentRunSchema:
         try:
             with self.session() as db:
-                agent_run = AgentRun(**agent_run_input.model_dump())
+                if isinstance(agent_run_input, AgentRunInput):
+                    agent_run = AgentRun(**agent_run_input.model_dump())
+                else:
+                    agent_run = AgentRun(**agent_run_input)
                 db.add(agent_run)
                 db.flush()
                 db.refresh(agent_run)
@@ -191,13 +194,17 @@ class DB:
             logger.error(f"Failed to delete agent run: {str(e)}")
             raise
 
-    async def create_orchestrator_run(self, orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRunSchema:
+    async def create_orchestrator_run(self, orchestrator_run_input: Union[OrchestratorRunInput, Dict]) -> OrchestratorRunSchema:
         try:
             with self.session() as db:
-                orchestrator_run = OrchestratorRun(**orchestrator_run_input.model_dump())
+                if isinstance(orchestrator_run_input, OrchestratorRunInput):
+                    orchestrator_run = OrchestratorRun(**orchestrator_run_input.model_dump())
+                else:
+                    orchestrator_run = OrchestratorRun(**orchestrator_run_input)
                 db.add(orchestrator_run)
                 db.flush()
                 db.refresh(orchestrator_run)
+                logger.info(f"Created orchestrator run: {orchestrator_run.__dict__}")
                 return OrchestratorRunSchema(**orchestrator_run.__dict__)
         except SQLAlchemyError as e:
             logger.error(f"Failed to create orchestrator run: {str(e)}")
