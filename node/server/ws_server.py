@@ -288,7 +288,9 @@ class WebSocketServer:
             logger.info(f"run_orchestrator_direct: Created OrchestratorRunInput: {orchestrator_run_input}")
             result = await self.run_orchestrator(orchestrator_run_input)
             logger.info(f"run_orchestrator_direct: Got result: {result}")
-            return json.dumps(result, cls=DateTimeEncoder)
+            return json.dumps(
+                {"status": "success", "data": result}, cls=DateTimeEncoder
+            )
         except Exception as e:
             logger.error(f"Error processing job: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
