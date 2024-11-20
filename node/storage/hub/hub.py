@@ -141,7 +141,8 @@ class Hub(AsyncMixin):
                     return []
                 return [AgentModule(**agent) for agent in result[0]["result"]]
             else:
-                # Use parameterized query to prevent injection
+                if ':' in agent_name:
+                    agent_name = agent_name.split(':')[1]
                 result = await self.surrealdb.query(
                     "SELECT * FROM agent WHERE name = $agent_name;",
                     {"agent_name": agent_name}
