@@ -27,7 +27,7 @@ from node.user import check_user, register_user
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_orchestrator
+from node.worker.template_worker import run_agent, run_environment, run_orchestrator
 from dotenv import load_dotenv
 from tenacity import (
     retry,
@@ -265,14 +265,14 @@ class HTTPServer:
                 run_data = run.model_dump()
 
             # Execute the task based on module type
-            if deployment.module["type"] == "package":
+            if deployment.module.type == "package":
                 if module_type == "agent":
                     _ = run_agent.delay(run_data)
                 elif module_type == "orchestrator":
                     _ = run_orchestrator.delay(run_data)
                 elif module_type == "environment":
-                    _ = run_agent.delay(run_data)
-            elif deployment.module["type"] == "docker" and module_type == "agent":
+                    _ = run_environment.delay(run_data)
+            elif deployment.module.type == "docker" and module_type == "agent":
                 _ = execute_docker_agent.delay(run_data)
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid {module_type} run type")

@@ -1,49 +1,25 @@
-import os
-import sys
-import pytz
-import json
+import asyncio
 import functools
 import inspect
-import asyncio
-import requests
-import importlib
-import traceback
+import json
 import logging
-from typing import Dict, List
-from pathlib import Path
-from pydantic import BaseModel, create_model
+import os
+import pytz
+import requests
+import sys
+import traceback
 from datetime import datetime
 from dotenv import load_dotenv
+from pydantic import BaseModel, create_model
+from typing import List, Union
 
 from node.client import Node
-from node.config import (
-    BASE_OUTPUT_DIR,
-    AGENTS_SOURCE_DIR,
-    NODE_TYPE,
-    NODE_IP,
-    NODE_PORT,
-    NODE_ROUTING,
-    SERVER_TYPE,
-    LOCAL_DB_URL,
-)
-from node.module_manager import (
-    load_agent, 
-    load_orchestrator,
-    install_agent_if_not_present, 
-)
-from node.schemas import (
-    AgentRun,
-    OrchestratorRun,
-)
+from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
+from node.module_manager import load_module, load_orchestrator, install_agent_if_not_present
+from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun
 from node.worker.main import app
 from node.worker.task_engine import TaskEngine
-from node.worker.utils import (
-    load_yaml_config,
-    prepare_input_dir,
-    update_db_with_status_sync,
-    upload_to_ipfs,
-    upload_json_string_to_ipfs,
-)
+from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs, upload_json_string_to_ipfs
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +37,7 @@ def run_agent(self, agent_run):
     try:
         agent_run = AgentRun(**agent_run)
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_run_agent_async(agent_run))
+        return loop.run_until_complete(_run_module_async(agent_run))
     finally:
         # Force cleanup of channels
         app.backend.cleanup()
@@ -71,149 +47,109 @@ def run_orchestrator(self, orchestrator_run):
     try:
         orchestrator_run = OrchestratorRun(**orchestrator_run)
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(_run_orchestrator_async(orchestrator_run))
+        return loop.run_until_complete(_run_module_async(orchestrator_run))
     finally:
         # Force cleanup of channels
         app.backend.cleanup()
 
-async def _run_orchestrator_async(orchestrator_run: Dict) -> None:
+@app.task(bind=True, acks_late=True)
+def run_environment(self, environment_run):
     try:
-        orchestrator_version = f"v{orchestrator_run.orchestrator_deployment.module['version']}"
+        environment_run = EnvironmentRun(**environment_run)
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(_run_module_async(environment_run))
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
 
-        logger.info(f"Received orchestrator run: {orchestrator_run}")
-        logger.info(
-            f"Checking if orchestrator {orchestrator_run.orchestrator_deployment.module["name"]} version {orchestrator_version} is installed"
-        )
+async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> None:
+    """Handles execution of agent, orchestrator, and environment runs.
+    
+    Args:
+        module_run: Either an AgentRun, OrchestratorRun, or EnvironmentRun object
+    """
+    try:
+        # Determine module type
+        if isinstance(module_run, AgentRun):
+            module_type = "agent"
+            module_deployment = module_run.agent_deployment
+            engine_class = AgentEngine
+        elif isinstance(module_run, OrchestratorRun):
+            module_type = "orchestrator"
+            module_deployment = module_run.orchestrator_deployment
+            engine_class = OrchestratorEngine
+        else:  # EnvironmentRun
+            module_type = "environment"
+            module_deployment = module_run.environment_deployment
+            engine_class = EnvironmentEngine
+        
+        module_version = f"v{module_deployment.module['version']}"
+        module_name = module_deployment.module["name"]
+
+        logger.info(f"Received {module_type} run: {module_run}")
+        logger.info(f"Checking if {module_type} {module_name} version {module_version} is installed")
 
         try:
-            await install_agent_if_not_present(orchestrator_run, orchestrator_version)
+            await install_agent_if_not_present(module_run, module_version)
         except Exception as e:
-            error_msg = (
-                f"Failed to install or verify orchestrator {orchestrator_run.orchestrator_deployment.module['name']}: {str(e)}"
-            )
+            error_msg = (f"Failed to install or verify {module_type} {module_name}: {str(e)}")
             logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
             if "Dependency conflict detected" in str(e):
-                logger.error(
-                    "This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project."
-                )
-            await handle_failure(
-                error_msg=error_msg, 
-                orchestrator_run=orchestrator_run
-            )
+                logger.error("This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project.")
+            await handle_failure(error_msg=error_msg, module_run=module_run)
             return
 
-        logger.info(
-            f"Orchestrator {orchestrator_run.orchestrator_deployment.module['name']} version {orchestrator_version} is installed and verified. Initializing workflow engine..."
-        )
-        workflow_engine = OrchestratorEngine(orchestrator_run)
+        logger.info(f"{module_type.title()} {module_name} version {module_version} is installed and verified.")
 
+        logger.info(f"Starting {module_type} run")
+        workflow_engine = engine_class(module_run)
         await workflow_engine.init_run()
         await workflow_engine.start_run()
 
-        if workflow_engine.orchestrator_run.status == "completed":
+        # Get the status attribute based on module type
+        status = getattr(workflow_engine, f"{module_type}_run").status
+
+        if status == "completed":
             await workflow_engine.complete()
-        elif workflow_engine.orchestrator_run.status == "error":
-            await workflow_engine.fail()
-    except Exception as e:
-        error_msg = f"Error in _run_orchestrator_async: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        await handle_failure(
-            error_msg=error_msg, 
-            orchestrator_run=orchestrator_run
-        )
-        return
-
-async def _run_agent_async(agent_run: AgentRun) -> None:
-    try:
-        agent_version = f"v{agent_run.agent_deployment.module['version']}"
-
-        logger.info(f"Received agent run: {agent_run}")
-        logger.info(
-            f"Checking if agent {agent_run.agent_deployment.module["name"]} version {agent_version} is installed"
-        )
-
-        try:
-            await install_agent_if_not_present(agent_run, agent_version)
-        except Exception as e:
-            error_msg = (
-                f"Failed to install or verify agent {agent_run.agent_deployment.module['name']}: {str(e)}"
-            )
-            logger.error(error_msg)
-            if "Dependency conflict detected" in str(e):
-                logger.error(
-                    "This error is likely due to a mismatch in naptha-sdk versions. Please check and align the versions in both the agent and the main project."
-                )
-            await handle_failure(
-                error_msg=error_msg, 
-                agent_run=agent_run
-            )
-            return
-
-        logger.info(
-            f"Agent {agent_run.agent_deployment.module['name']} version {agent_version} is installed and verified."
-        )
-
-        logger.info(f"Starting agent run")
-
-        workflow_engine = AgentEngine(agent_run)
-        await workflow_engine.init_run()
-        await workflow_engine.start_run()
-
-        if workflow_engine.agent_run.status == "completed":
-            await workflow_engine.complete()
-        elif workflow_engine.agent_run.status == "error":
+        elif status == "error":
             await workflow_engine.fail()
 
     except Exception as e:
-        error_msg = f"Error in _run_agent_async: {str(e)}"
+        error_msg = f"Error in _run_{module_type}_async: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
-        await handle_failure(
-            error_msg=error_msg, 
-            agent_run=agent_run
-        )
+        await handle_failure(error_msg=error_msg, module_run=module_run)
         return
 
 async def handle_failure(
-        error_msg: str, 
-        agent_run: AgentRun = None, 
-        orchestrator_run: OrchestratorRun = None
-    ) -> None:
-    if agent_run:
-        agent_run.status = "error"
-        agent_run.error = True
-        agent_run.error_message = error_msg
-        agent_run.completed_time = datetime.now(pytz.utc).isoformat()
-        if hasattr(agent_run, "start_processing_time") and agent_run.start_processing_time:
-            agent_run.duration = (
-                datetime.fromisoformat(agent_run.completed_time)
-                - datetime.fromisoformat(agent_run.start_processing_time)
-            ).total_seconds()
-        else:
-            agent_run.duration = 0
+    error_msg: str, 
+    module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]
+) -> None:
+    """Handle failure for any type of module run.
+    
+    Args:
+        error_msg: Error message to store
+        module_run: Module run object (AgentRun, OrchestratorRun, or EnvironmentRun)
+    """
+    module_run.status = "error"
+    module_run.error = True 
+    module_run.error_message = error_msg
+    module_run.completed_time = datetime.now(pytz.utc).isoformat()
 
-        try:
-            await update_db_with_status_sync(agent_run=agent_run)
-        except Exception as db_error:
-            logger.error(f"Failed to update database after error: {str(db_error)}")
+    # Calculate duration if possible
+    if hasattr(module_run, "start_processing_time") and module_run.start_processing_time:
+        module_run.duration = (
+            datetime.fromisoformat(module_run.completed_time)
+            - datetime.fromisoformat(module_run.start_processing_time)
+        ).total_seconds()
+    else:
+        module_run.duration = 0
 
-    if orchestrator_run:
-        orchestrator_run.status = "error"
-        orchestrator_run.error = True
-        orchestrator_run.error_message = error_msg
-        orchestrator_run.completed_time = datetime.now(pytz.utc).isoformat()
-        if hasattr(orchestrator_run, "start_processing_time") and orchestrator_run.start_processing_time:
-            orchestrator_run.duration = (
-                datetime.fromisoformat(orchestrator_run.completed_time)
-                - datetime.fromisoformat(orchestrator_run.start_processing_time)
-            ).total_seconds()
-        else:
-            orchestrator_run.duration = 0
-        try:
-            await update_db_with_status_sync(orchestrator_run=orchestrator_run)
-        except Exception as db_error:
-            logger.error(f"Failed to update database after error: {str(db_error)}")
+    try:
+        await update_db_with_status_sync(module_run=module_run)
+    except Exception as db_error:
+        logger.error(f"Failed to update database after error: {str(db_error)}")
 
 async def maybe_async_call(func, *args, **kwargs):
     if inspect.iscoroutinefunction(func):
@@ -248,7 +184,7 @@ class AgentEngine:
         self.agent_run.status = "processing"
         self.agent_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
 
-        await update_db_with_status_sync(agent_run=self.agent_run)
+        await update_db_with_status_sync(module_run=self.agent_run)
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -258,13 +194,13 @@ class AgentEngine:
             )
 
         # Load the agent
-        self.agent_func, self.agent_run = await load_agent(self.agent_run)
+        self.agent_func, self.agent_run = await load_module(self.agent_run)
 
     async def start_run(self):
         """Executes the agent run"""
         logger.info("Starting agent run")
         self.agent_run.status = "running"
-        await update_db_with_status_sync(agent_run=self.agent_run)
+        await update_db_with_status_sync(module_run=self.agent_run)
 
         logger.info(f"Agent deployment: {self.agent_run.agent_deployment}")
 
@@ -286,9 +222,7 @@ class AgentEngine:
             response = response.model_dump_json()
 
         if not isinstance(response, str):
-            raise ValueError(
-                f"Agent response is not a string: {response}. Current response type: {type(response)}"
-            )
+            raise ValueError(f"Agent response is not a string: {response}. Current response type: {type(response)}")
 
         self.agent_run.results = [response]
         await self.handle_output(self.agent_run.agent_deployment, response)
@@ -317,7 +251,7 @@ class AgentEngine:
             datetime.fromisoformat(self.agent_run.completed_time)
             - datetime.fromisoformat(self.agent_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(agent_run=self.agent_run)
+        await update_db_with_status_sync(module_run=self.agent_run)
         logger.info("Agent run completed")
 
     async def fail(self):
@@ -333,7 +267,110 @@ class AgentEngine:
             datetime.fromisoformat(self.agent_run.completed_time)
             - datetime.fromisoformat(self.agent_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(agent_run=self.agent_run)
+        await update_db_with_status_sync(module_run=self.agent_run)
+
+
+class EnvironmentEngine:
+    def __init__(self, environment_run: EnvironmentRun):
+        self.environment_run = environment_run
+        self.module = environment_run.environment_deployment.module
+        self.environment_name = self.module["name"]
+        self.environment_version = f"v{self.module['version']}"
+        self.parameters = environment_run.inputs
+
+        self.consumer = {
+            "public_key": environment_run.consumer_id.split(":")[1],
+            "id": environment_run.consumer_id,
+        }
+
+    async def init_run(self):
+        logger.info("Initializing environment run")
+        self.environment_run.status = "processing"
+        self.environment_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
+
+        await update_db_with_status_sync(module_run=self.environment_run)
+
+        if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
+            self.parameters = prepare_input_dir(
+                parameters=self.parameters,
+                input_dir=self.parameters.get("input_dir", None),
+                input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
+            )
+
+        self.environment_func, self.environment_run = await load_module(self.environment_run)
+
+    async def start_run(self):
+        """Executes the environment run"""
+        logger.info("Starting environment run")
+        self.environment_run.status = "running"
+        await update_db_with_status_sync(module_run=self.environment_run)
+
+        logger.info(f"Environment deployment: {self.environment_run.environment_deployment}")
+
+        try:
+            response = await maybe_async_call(
+                self.environment_func,
+                environment_run=self.environment_run,
+            )
+        except Exception as e:
+            logger.error(f"Error running environment: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+
+        logger.info(f"Environment run response: {response}")
+
+        if isinstance(response, (dict, list, tuple)):
+            response = json.dumps(response)
+        elif isinstance(response, BaseModel):
+            response = response.model_dump_json()
+
+        if not isinstance(response, str):
+            raise ValueError(f"Environment response is not a string: {response}. Current response type: {type(response)}")
+
+        self.environment_run.results = [response]
+        await self.handle_output(self.environment_run.environment_deployment, response)
+        self.environment_run.status = "completed"
+
+    async def handle_output(self, environment_deployment, results):
+        """Handles the output of the environment run"""
+        save_location = environment_deployment.data_generation_config.save_outputs_location
+        if save_location:
+            environment_deployment.data_generation_config.save_outputs_location = save_location
+
+        if environment_deployment.data_generation_config.save_outputs:
+            if save_location == "ipfs":
+                out_msg = upload_to_ipfs(self.environment_run.environment_deployment.data_generation_config.save_outputs_path)
+                out_msg = f"IPFS Hash: {out_msg}"
+                logger.info(f"Output uploaded to IPFS: {out_msg}")
+                self.environment_run.results = [out_msg]
+
+    async def complete(self):
+        """Marks the environment run as completed"""
+        self.environment_run.status = "completed"
+        self.environment_run.error = False
+        self.environment_run.error_message = ""
+        self.environment_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.environment_run.duration = (
+            datetime.fromisoformat(self.environment_run.completed_time)
+            - datetime.fromisoformat(self.environment_run.start_processing_time)
+        ).total_seconds()
+        await update_db_with_status_sync(module_run=self.environment_run)
+        logger.info("Environment run completed")
+
+    async def fail(self):
+        """Marks the environment run as failed"""
+        logger.error("Error running environment")
+        error_details = traceback.format_exc()
+        logger.error(f"Traceback: {error_details}")
+        self.environment_run.status = "error"
+        self.environment_run.error = True
+        self.environment_run.error_message = error_details
+        self.environment_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.environment_run.duration = (
+            datetime.fromisoformat(self.environment_run.completed_time)
+            - datetime.fromisoformat(self.environment_run.start_processing_time)
+        ).total_seconds()
+        await update_db_with_status_sync(module_run=self.environment_run)
 
 
 class OrchestratorEngine:
@@ -375,11 +412,9 @@ class OrchestratorEngine:
     async def init_run(self):
         logger.info("Initializing orchestrator run")
         self.orchestrator_run.status = "processing"
-        self.orchestrator_run.start_processing_time = datetime.now(
-            pytz.timezone("UTC")
-        ).isoformat()
+        self.orchestrator_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
 
-        await update_db_with_status_sync(orchestrator_run=self.orchestrator_run)
+        await update_db_with_status_sync(module_run=self.orchestrator_run)
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -489,7 +524,7 @@ class OrchestratorEngine:
     async def start_run(self):
         logger.info("Starting orchestrator run")
         self.orchestrator_run.status = "running"
-        await update_db_with_status_sync(orchestrator_run=self.orchestrator_run)
+        await update_db_with_status_sync(module_run=self.orchestrator_run)
 
         try:
             response = await maybe_async_call(
@@ -513,9 +548,7 @@ class OrchestratorEngine:
             response = response.model_dump_json()
 
         if not isinstance(response, str):
-            raise ValueError(
-                f"Agent/orchestrator response is not a string: {response}. Current response type: {type(response)}"
-            )
+            raise ValueError(f"Agent/orchestrator response is not a string: {response}. Current response type: {type(response)}")
 
         self.orchestrator_run.results = [response]
 
@@ -531,7 +564,7 @@ class OrchestratorEngine:
             datetime.fromisoformat(self.orchestrator_run.completed_time)
             - datetime.fromisoformat(self.orchestrator_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(orchestrator_run=self.orchestrator_run)
+        await update_db_with_status_sync(module_run=self.orchestrator_run)
         logger.info("Orchestrator run completed")
 
     async def fail(self):
@@ -546,7 +579,7 @@ class OrchestratorEngine:
             datetime.fromisoformat(self.orchestrator_run.completed_time)
             - datetime.fromisoformat(self.orchestrator_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(orchestrator_run=self.orchestrator_run)
+        await update_db_with_status_sync(module_run=self.orchestrator_run)
 
     async def upload_input_params_to_ipfs(self, validated_data):
         """
