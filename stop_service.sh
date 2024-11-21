@@ -32,24 +32,33 @@ else
 fi
 
 load_config_constants
+server_type=${SERVER_TYPE:-"ws"}
+start_port=${NODE_PORT:-7002} 
 
 os=$(uname)
 if [ "$os" = "Darwin" ]; then
+    # Define LaunchAgents path
+    LAUNCH_AGENTS_PATH=~/Library/LaunchAgents
+
     # Stop the services
-    launchctl unload ~/Library/LaunchAgents/com.example.celeryworker.plist
+    launchctl unload $LAUNCH_AGENTS_PATH/com.example.celeryworker.plist
+    launchctl unload $LAUNCH_AGENTS_PATH/com.example.nodeapp.http.plist
     for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
-        echo "Unloading nodeapp_$i.plist"
-        launchctl unload ~/Library/LaunchAgents/com.example.nodeapp_$i.plist
+        current_port=$((start_port + i))
+        echo "Unloading com.example.nodeapp.${server_type}_${current_port}.plist"
+        launchctl unload $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
     done
-    launchctl unload ~/Library/LaunchAgents/com.example.ollama.plist
+    launchctl unload $LAUNCH_AGENTS_PATH/com.example.ollama.plist
     brew services stop rabbitmq
 
     # Remove the service files
-    rm ~/Library/LaunchAgents/com.example.celeryworker.plist
+    rm $LAUNCH_AGENTS_PATH/com.example.celeryworker.plist
+    rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.http.plist
     for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
-        rm ~/Library/LaunchAgents/com.example.nodeapp_$i.plist
+        current_port=$((start_port + i))
+        rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
     done
-    rm ~/Library/LaunchAgents/com.example.ollama.plist
+    rm $LAUNCH_AGENTS_PATH/com.example.ollama.plist
 
     # Stop SurrealDB
     stop_surrealdb

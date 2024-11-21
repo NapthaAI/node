@@ -19,9 +19,9 @@ DEV_MODE=True
 
 # Servers
 NODE_TYPE="direct"
-SERVER_TYPE="http" # http or ws
+SERVER_TYPE="ws" # grpc or ws
 NODE_IP="http://localhost"
-NODE_PORT=7001
+NODE_PORT=7002
 NODE_ROUTING="ws://node.naptha.ai:8765"
 NUM_SERVERS=1
 

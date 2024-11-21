@@ -406,7 +406,6 @@ class OrchestratorEngine:
             self.orchestrator_func, 
             self.orchestrator_run, 
             self.validated_data, 
-            self.cfg
         ) = await load_orchestrator(
             orchestrator_run=self.orchestrator_run,
             agent_source_dir=AGENTS_SOURCE_DIR
@@ -471,20 +470,21 @@ class OrchestratorEngine:
                         consumer = await node.register_user(user_input=consumer)
                         logger.info(f"User registered: {consumer} on worker node: {worker_node_url}")
 
-    async def handle_ipfs_output(self, cfg, results):
-        """
-        Handles the outputs of the orchestrator
-        """
-        save_location = self.parameters.get("save_location", None)
-        if save_location:
-            self.cfg["outputs"]["location"] = save_location
+    # TODO: do we need to handle output at the orchestrator level?
+    # async def handle_ipfs_output(self, cfg, results):
+    #     """
+    #     Handles the outputs of the orchestrator
+    #     """
+    #     save_location = self.parameters.get("save_location", None)
+    #     if save_location:
+    #         self.cfg["outputs"]["location"] = save_location
 
-        if self.cfg["outputs"]["save"]:
-            if self.cfg["outputs"]["location"] == "ipfs":
-                out_msg = upload_to_ipfs(self.parameters["output_path"])
-                out_msg = f"IPFS Hash: {out_msg}"
-                logger.info(f"Output uploaded to IPFS: {out_msg}")
-                self.orchestrator_run.results = [out_msg]
+    #     if self.cfg["outputs"]["save"]:
+    #         if self.cfg["outputs"]["location"] == "ipfs":
+    #             out_msg = upload_to_ipfs(self.parameters["output_path"])
+    #             out_msg = f"IPFS Hash: {out_msg}"
+    #             logger.info(f"Output uploaded to IPFS: {out_msg}")
+    #             self.orchestrator_run.results = [out_msg]
 
     async def start_run(self):
         logger.info("Starting orchestrator run")
@@ -494,7 +494,6 @@ class OrchestratorEngine:
         try:
             response = await maybe_async_call(
                 self.orchestrator_func,
-                cfg=self.cfg,
                 orchestrator_run=self.orchestrator_run,
                 task_engine_cls=TaskEngine,
                 node_cls=Node,
@@ -519,7 +518,8 @@ class OrchestratorEngine:
             )
 
         self.orchestrator_run.results = [response]
-        await self.handle_ipfs_output(self.cfg, response)
+
+        # await self.handle_ipfs_output(self.cfg, response)
         self.orchestrator_run.status = "completed"
 
     async def complete(self):
