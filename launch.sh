@@ -741,11 +741,14 @@ linux_start_servers() {
     # Echo start Servers
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
-    # Get the port and number of servers from the .env file
-    port=${NODE_PORT:-7001} # Default to 7001 if not set
+    # Get the config from the .env file
+    server_type=${SERVER_TYPE:-"ws"} # Default to ws if not set
     num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
-    echo "Port: $port" | log_with_service_name "Server" $BLUE
-    echo "Number of servers: $num_servers" | log_with_service_name "Server" $BLUE
+    start_port=${NODE_PORT:-7002} # Starting port for alternate servers
+
+    echo "Server type: $server_type" | log_with_service_name "Server" $BLUE
+    echo "Number of additional servers: $num_servers" | log_with_service_name "Server" $BLUE
+    echo "Additional servers start from port: $start_port" | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -754,25 +757,18 @@ linux_start_servers() {
     WORKING_DIR="$CURRENT_DIR/node"
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
 
-    # Array to store server ports
-    server_ports=()
+    # First create HTTP server service (always port 7001)
+    HTTP_SERVICE_FILE="nodeapp_http.service"
+    echo "Starting HTTP server on port 7001..." | log_with_service_name "Server" $BLUE
 
-    for ((i=0; i<num_servers; i++))
-    do
-        server_port=$((port + i))
-        SERVICE_FILE="nodeapp_$i.service"
-        server_ports+=($server_port)
-
-        echo "Starting application server $i on port $server_port..." | log_with_service_name "Server" $BLUE
-
-        # Create the systemd service file for nodeapp
-        cat <<EOF > /tmp/$SERVICE_FILE
+    # Create the systemd service file for HTTP server
+    cat <<EOF > /tmp/$HTTP_SERVICE_FILE
 [Unit]
-Description=Node Application Server $i
+Description=Node HTTP Server
 After=network.target
 
 [Service]
-ExecStart=$PYTHON_APP_PATH run python server/server.py --port $server_port
+ExecStart=$PYTHON_APP_PATH run python server/server.py --server-type http --port 7001
 WorkingDirectory=$WORKING_DIR
 EnvironmentFile=$ENVIRONMENT_FILE_PATH
 User=$USER_NAME
@@ -782,40 +778,72 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-        # Check if the service file was created successfully
-        if [ ! -f /tmp/$SERVICE_FILE ]; then
-            echo "Failed to create service file for server $i" | log_with_service_name "Server" $RED
-            continue
-        fi
+    # Move the HTTP service file and start it
+    sudo mv /tmp/$HTTP_SERVICE_FILE /etc/systemd/system/
+    sudo systemctl daemon-reload
+    if sudo systemctl enable $HTTP_SERVICE_FILE && sudo systemctl start $HTTP_SERVICE_FILE; then
+        echo "HTTP server service started successfully on port 7001." | log_with_service_name "Server" $BLUE
+    else
+        echo "Failed to start HTTP server service." | log_with_service_name "Server" $RED
+        return 1
+    fi
 
-        # Move the service file to the systemd directory
+    # Track all ports for .env file
+    ports="7001"
+
+    # Create services for additional servers
+    for ((i=0; i<num_servers; i++)); do
+        current_port=$((start_port + i))
+        SERVICE_FILE="nodeapp_${server_type}_${current_port}.service"
+        ports="${ports},${current_port}"
+
+        echo "Starting $server_type server on port $current_port..." | log_with_service_name "Server" $BLUE
+
+        # Create the systemd service file
+        cat <<EOF > /tmp/$SERVICE_FILE
+[Unit]
+Description=Node $server_type Server on port $current_port
+After=network.target nodeapp_http.service
+
+[Service]
+ExecStart=$PYTHON_APP_PATH run python server/server.py --server-type $server_type --port $current_port
+WorkingDirectory=$WORKING_DIR
+EnvironmentFile=$ENVIRONMENT_FILE_PATH
+User=$USER_NAME
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # Move the service file and start it
         sudo mv /tmp/$SERVICE_FILE /etc/systemd/system/
-
-        # Reload systemd, enable and start the service
         sudo systemctl daemon-reload
         if sudo systemctl enable $SERVICE_FILE && sudo systemctl start $SERVICE_FILE; then
-            echo "Node application $i service started successfully on port $server_port." | log_with_service_name "Server" $BLUE
+            echo "$server_type server service started successfully on port $current_port." | log_with_service_name "Server" $BLUE
         else
-            echo "Failed to start Node application $i service on port $server_port." | log_with_service_name "Server" $RED
+            echo "Failed to start $server_type server service on port $current_port." | log_with_service_name "Server" $RED
         fi
     done
 
     # Update NODE_PORTS in .env file
-    node_ports_string=$(IFS=,; echo "${server_ports[*]}")
     sed -i '/^NODE_PORTS=/d' $ENVIRONMENT_FILE_PATH
-    echo "NODE_PORTS=$node_ports_string" >> $ENVIRONMENT_FILE_PATH
-    echo "Updated NODE_PORTS in .env: $node_ports_string" | log_with_service_name "Server" $BLUE
+    echo "NODE_PORTS=$ports" >> $ENVIRONMENT_FILE_PATH
+    echo "Updated NODE_PORTS in .env: $ports" | log_with_service_name "Server" $BLUE
 }
 
 darwin_start_servers() {
     # Echo start Node
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
-    # Get the port and number of servers from the .env file
-    port=${NODE_PORT:-7001} # Default to 7001 if not set
+    # Get the config from the .env file
+    server_type=${SERVER_TYPE:-"ws"} # Default to ws if not set
     num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
-    echo "Port: $port" | log_with_service_name "Server" $BLUE
-    echo "Number of servers: $num_servers" | log_with_service_name "Server" $BLUE
+    start_port=${NODE_PORT:-7002} # Starting port for alternate servers
+
+    echo "Server type: $server_type" | log_with_service_name "Server" $BLUE
+    echo "Number of additional servers: $num_servers" | log_with_service_name "Server" $BLUE
+    echo "Additional servers start from port: $start_port" | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -825,29 +853,28 @@ darwin_start_servers() {
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
     SURRREALDB_PATH="/usr/local/bin"
 
-    for ((i=0; i<num_servers; i++))
-    do
-        server_port=$((port + i))
-        PLIST_FILE="com.example.nodeapp_$i.plist"
+    # First create HTTP server plist (always port 7001)
+    HTTP_PLIST_FILE="com.example.nodeapp.http.plist"
+    echo "Starting HTTP server on port 7001..." | log_with_service_name "Server" $BLUE
 
-        echo "Starting application server $i on port $server_port..." | log_with_service_name "Server" $BLUE
-
-        # Create the launchd plist file for nodeapp
-        cat <<EOF > ~/Library/LaunchAgents/$PLIST_FILE
+    # Create the launchd plist file for HTTP server
+    cat <<EOF > ~/Library/LaunchAgents/$HTTP_PLIST_FILE
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.example.nodeapp_$i</string>
+    <string>com.example.nodeapp.http</string>
     <key>ProgramArguments</key>
     <array>
         <string>$PYTHON_APP_PATH</string>
         <string>run</string>
         <string>python</string>
         <string>server/server.py</string>
+        <string>--server-type</string>
+        <string>http</string>
         <string>--port</string>
-        <string>$server_port</string>
+        <string>7001</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$WORKING_DIR</string>
@@ -863,33 +890,76 @@ darwin_start_servers() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp_$i.out</string>
+    <string>/tmp/nodeapp_http.out</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp_$i.err</string>
+    <string>/tmp/nodeapp_http.err</string>
 </dict>
 </plist>
 EOF
 
-        # Check if the plist file was created successfully
-        if [ ! -f ~/Library/LaunchAgents/$PLIST_FILE ]; then
-            echo "Failed to create plist file for server $i" | log_with_service_name "Server" $RED
-            continue
-        fi
+    # Load and start HTTP server
+    launchctl load ~/Library/LaunchAgents/$HTTP_PLIST_FILE
+    echo "HTTP server service started successfully on port 7001." | log_with_service_name "Server" $BLUE
 
-        # Validate the plist file
-        if ! plutil -lint ~/Library/LaunchAgents/$PLIST_FILE > /dev/null 2>&1; then
-            echo "Invalid plist file for server $i" | log_with_service_name "Server" $RED
-            continue
-        fi
+    # Track all ports for .env file
+    ports="7001"
 
-        # Load and start the nodeapp service
-        if launchctl load ~/Library/LaunchAgents/$PLIST_FILE; then
-            echo "Node application $i service started successfully on port $server_port." | log_with_service_name "Server" $BLUE
-        else
-            echo "Failed to start Node application $i service on port $server_port." | log_with_service_name "Server" $RED
-        fi
+    # Create plists for additional servers
+    for ((i=0; i<num_servers; i++)); do
+        current_port=$((start_port + i))
+        PLIST_FILE="com.example.nodeapp.${server_type}_${current_port}.plist"
+        ports="${ports},${current_port}"
 
+        echo "Starting $server_type server on port $current_port..." | log_with_service_name "Server" $BLUE
+
+        cat <<EOF > ~/Library/LaunchAgents/$PLIST_FILE
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.example.nodeapp.${server_type}_${current_port}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PYTHON_APP_PATH</string>
+        <string>run</string>
+        <string>python</string>
+        <string>server/server.py</string>
+        <string>--server-type</string>
+        <string>$server_type</string>
+        <string>--port</string>
+        <string>$current_port</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$WORKING_DIR</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ENVIRONMENT_FILE_PATH</key>
+        <string>$ENVIRONMENT_FILE_PATH</string>
+        <key>PATH</key>
+        <string>$SURRREALDB_PATH:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/nodeapp_${server_type}_${current_port}.out</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/nodeapp_${server_type}_${current_port}.err</string>
+</dict>
+</plist>
+EOF
+
+        # Load and start the server
+        launchctl load ~/Library/LaunchAgents/$PLIST_FILE
+        echo "$server_type server service started successfully on port $current_port." | log_with_service_name "Server" $BLUE
     done
+
+    # Update NODE_PORTS in .env file (using sed compatible with macOS)
+    sed -i '' '/^NODE_PORTS=/d' $ENVIRONMENT_FILE_PATH
+    echo "NODE_PORTS=$ports" >> $ENVIRONMENT_FILE_PATH
+    echo "Updated NODE_PORTS in .env: $ports" | log_with_service_name "Server" $BLUE
 }
 
 # Function to start the Celery worker
