@@ -179,7 +179,6 @@ async def install_personas_if_needed(personas_url: str):
         logger.info("No personas to install")
         return
 
-
     personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
     personas_base_dir.mkdir(exist_ok=True)
 
@@ -403,40 +402,54 @@ async def load_and_validate_input_schema(
     else:
         raise ValueError("Either agent_run or orchestrator_run must be provided")
 
-async def load_agent(agent_run):
-    """Loads the agent and returns the agent function, validated data and config"""
-    # Load the agent from the agents directory
-    agent_name = agent_run.agent_deployment.module['name']
-    agent_path = Path(f"{AGENTS_SOURCE_DIR}/{agent_name}")
+async def load_module(run, module_type="agent"):
+    """Loads a module (agent or environment) and returns the function and validated run data
+    
+    Args:
+        run: Either AgentRun or EnvironmentRun object
+        module_type: String indicating the type ("agent" or "environment")
+    
+    Returns:
+        tuple: (module_func, validated_run)
+    """
+    # Load the module from the modules directory
+    if module_type == "agent":
+        module_name = run.agent_deployment.module['name']
+        deployment_attr = "agent_deployment"
+    else:  # environment
+        module_name = run.environment_deployment.module['name']
+        deployment_attr = "environment_deployment"
 
-    # Load configs - Fix: properly await the result
-    agent_deployments = await load_agent_deployments(
-        agent_path / agent_name / "configs/agent_deployments.json", 
-        agent_run.agent_deployment.module
+    module_path = Path(f"{AGENTS_SOURCE_DIR}/{module_name}")
+
+    # Load configs
+    deployments = await load_agent_deployments(
+        module_path / module_name / "configs/agent_deployments.json",
+        getattr(run, deployment_attr).module
     )
-    agent_deployment = agent_deployments[0]
-    agent_run.agent_deployment = agent_deployment
+    deployment = deployments[0]
+    setattr(run, deployment_attr, deployment)
 
     # Handle output configuration
-    if agent_deployment.data_generation_config.save_outputs:
-        if ':' in agent_run.id:
-            output_path = f"{BASE_OUTPUT_DIR}/{agent_run.id.split(':')[1]}"
+    if deployment.data_generation_config.save_outputs:
+        if ':' in run.id:
+            output_path = f"{BASE_OUTPUT_DIR}/{run.id.split(':')[1]}"
         else:
-            output_path = f"{BASE_OUTPUT_DIR}/{agent_run.id}"
-        agent_run.agent_deployment.data_generation_config.save_outputs_path = output_path
+            output_path = f"{BASE_OUTPUT_DIR}/{run.id}"
+        deployment.data_generation_config.save_outputs_path = output_path
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
-    agent_run = await load_and_validate_input_schema(agent_run)
+    run = await load_and_validate_input_schema(run)
     
-    # Load the agent function
-    agent_name = agent_name.replace("-", "_")
-    entrypoint = agent_deployment.module["entrypoint"].split(".")[0]
-    main_module = importlib.import_module(f"{agent_name}.run")
+    # Load the module function
+    module_name = module_name.replace("-", "_")
+    entrypoint = deployment.module["entrypoint"].split(".")[0]
+    main_module = importlib.import_module(f"{module_name}.run")
     main_module = importlib.reload(main_module)
-    agent_func = getattr(main_module, entrypoint)
+    module_func = getattr(main_module, entrypoint)
     
-    return agent_func, agent_run
+    return module_func, run
 
 async def load_orchestrator(orchestrator_run, agent_source_dir):
     """Loads the orchestrator and returns the orchestrator function"""
