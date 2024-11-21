@@ -444,7 +444,7 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
     workflow_path = f"{agent_source_dir}/{workflow_name}"
 
     # Load the component.yaml file
-    cfg = load_yaml_config(f"{workflow_path}/{workflow_name}/component.yaml")
+    # cfg = load_yaml_config(f"{workflow_path}/{workflow_name}/component.yaml")
 
     # Load configuration JSONs
     config_path = f"{workflow_path}/{workflow_name}/configs"
@@ -487,10 +487,11 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
 
     validated_data = load_and_validate_input_schema(orchestrator_run)
 
+    # TODO: check if there is dynamic entrypoint
     tn = workflow_name.replace("-", "_")
-    entrypoint = cfg["implementation"]["package"]["entrypoint"].split(".")[0]
+    entrypoint = 'run'
     main_module = importlib.import_module(f"{tn}.run")
     main_module = importlib.reload(main_module)
     orchestrator_func = getattr(main_module, entrypoint)
 
-    return orchestrator_func, orchestrator_run, validated_data, cfg
+    return orchestrator_func, orchestrator_run, validated_data
