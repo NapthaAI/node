@@ -1,19 +1,24 @@
-import logging
-from contextlib import contextmanager
-from typing import Dict, List, Optional, Union
-from sqlalchemy import create_engine, text, event
-from sqlalchemy.orm import sessionmaker, scoped_session
-from sqlalchemy.pool import QueuePool
-from sqlalchemy.exc import OperationalError, SQLAlchemyError
-from tenacity import retry, stop_after_attempt, wait_exponential
 import asyncio
+import logging
 import threading
+from contextlib import contextmanager
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import QueuePool
+from tenacity import retry, stop_after_attempt, wait_exponential
+from typing import Dict, List, Optional, Union
 
-from node.schemas import AgentRunInput
-from node.storage.db.models import User, AgentRun, OrchestratorRun
 from node.config import LOCAL_DB_URL
-from node.schemas import AgentRun as AgentRunSchema
-from node.schemas import OrchestratorRunInput, OrchestratorRun as OrchestratorRunSchema
+from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User
+from node.schemas import (
+    AgentRun as AgentRunSchema, 
+    OrchestratorRun as OrchestratorRunSchema,
+    EnvironmentRun as EnvironmentRunSchema,
+    AgentRunInput,
+    OrchestratorRunInput,
+    EnvironmentRunInput
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,38 +128,69 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
-    async def create_agent_run(self, agent_run_input: Union[AgentRunInput, Dict]) -> AgentRunSchema:
+    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema]:
+        model_map = {
+            'agent': (AgentRun, AgentRunSchema),
+            'orchestrator': (OrchestratorRun, OrchestratorRunSchema),
+            'environment': (EnvironmentRun, EnvironmentRunSchema)
+        }
+        
         try:
+            Model, Schema = model_map[run_type]
             with self.session() as db:
-                if isinstance(agent_run_input, AgentRunInput):
-                    agent_run = AgentRun(**agent_run_input.model_dump())
+                if hasattr(run_input, 'model_dump'):
+                    run = Model(**run_input.model_dump())
                 else:
-                    agent_run = AgentRun(**agent_run_input)
-                db.add(agent_run)
+                    run = Model(**run_input)
+                db.add(run)
                 db.flush()
-                db.refresh(agent_run)
-                return AgentRunSchema(**agent_run.__dict__)
+                db.refresh(run)
+                logger.info(f"Created {run_type} run: {run.__dict__}")
+                return Schema(**run.__dict__)
         except SQLAlchemyError as e:
-            logger.error(f"Failed to create agent run: {str(e)}")
+            logger.error(f"Failed to create {run_type} run: {str(e)}")
             raise
 
-    async def update_agent_run(self, agent_run_id: int, agent_run: AgentRunSchema) -> bool:
+    async def create_agent_run(self, agent_run_input: Union[AgentRunInput, Dict]) -> AgentRunSchema:
+        return await self.create_module_run(agent_run_input, 'agent')
+
+    async def create_orchestrator_run(self, orchestrator_run_input: Union[OrchestratorRunInput, Dict]) -> OrchestratorRunSchema:
+        return await self.create_module_run(orchestrator_run_input, 'orchestrator')
+
+    async def create_environment_run(self, environment_run_input: Union[EnvironmentRunInput, Dict]) -> EnvironmentRunSchema:
+        return await self.create_module_run(environment_run_input, 'environment')
+
+    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema], run_type: str) -> bool:
+        model_map = {
+            'agent': AgentRun,
+            'orchestrator': OrchestratorRun,
+            'environment': EnvironmentRun
+        }
+        
         try:
+            Model = model_map[run_type]
             with self.session() as db:
-                if isinstance(agent_run, AgentRunSchema):
-                    agent_run = agent_run.model_dump()
-                db_agent_run = db.query(AgentRun).filter(
-                    AgentRun.id == agent_run_id
-                ).first()
-                if db_agent_run:
-                    for key, value in agent_run.items():
-                        setattr(db_agent_run, key, value)
+                if hasattr(run_data, 'model_dump'):
+                    run_data = run_data.model_dump()
+                db_run = db.query(Model).filter(Model.id == run_id).first()
+                if db_run:
+                    for key, value in run_data.items():
+                        setattr(db_run, key, value)
                     db.flush()
                     return True
                 return False
         except SQLAlchemyError as e:
-            logger.error(f"Failed to update agent run: {str(e)}")
+            logger.error(f"Failed to update {run_type} run: {str(e)}")
             raise
+
+    async def update_agent_run(self, run_id: int, run_data: AgentRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'agent')
+
+    async def update_orchestrator_run(self, run_id: int, run_data: OrchestratorRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'orchestrator')
+
+    async def update_environment_run(self, run_id: int, run_data: EnvironmentRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'environment')
 
     async def list_agent_runs(self, agent_run_id=None) -> List[Dict]:
         max_retries = 3
@@ -192,40 +228,6 @@ class DB:
                 return False
         except SQLAlchemyError as e:
             logger.error(f"Failed to delete agent run: {str(e)}")
-            raise
-
-    async def create_orchestrator_run(self, orchestrator_run_input: Union[OrchestratorRunInput, Dict]) -> OrchestratorRunSchema:
-        try:
-            with self.session() as db:
-                if isinstance(orchestrator_run_input, OrchestratorRunInput):
-                    orchestrator_run = OrchestratorRun(**orchestrator_run_input.model_dump())
-                else:
-                    orchestrator_run = OrchestratorRun(**orchestrator_run_input)
-                db.add(orchestrator_run)
-                db.flush()
-                db.refresh(orchestrator_run)
-                logger.info(f"Created orchestrator run: {orchestrator_run.__dict__}")
-                return OrchestratorRunSchema(**orchestrator_run.__dict__)
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to create orchestrator run: {str(e)}")
-            raise
-
-    async def update_orchestrator_run(self, orchestrator_run_id: int, orchestrator_run: OrchestratorRunSchema) -> bool:
-        try:
-            with self.session() as db:
-                if isinstance(orchestrator_run, OrchestratorRunSchema):
-                    orchestrator_run = orchestrator_run.model_dump()
-                db_orchestrator_run = db.query(OrchestratorRun).filter(
-                    OrchestratorRun.id == orchestrator_run_id
-                ).first()
-                if db_orchestrator_run:
-                    for key, value in orchestrator_run.items():
-                        setattr(db_orchestrator_run, key, value)
-                    db.flush()
-                    return True
-                return False
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to update orchestrator run: {str(e)}")
             raise
 
     async def list_orchestrator_runs(self, orchestrator_run_id=None) -> List[Dict]:

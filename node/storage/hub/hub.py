@@ -165,11 +165,17 @@ class Hub(AsyncMixin):
                 "SELECT * FROM orchestrator WHERE name=$orchestrator_name;", 
                 {"orchestrator_name": orchestrator_name}
             )
-            try:
-                return AgentModule(**orchestrator[0]["result"][0])
-            except Exception as e:
-                logger.error(f"Failed to get orchestrator: {e}")
-                return None
+            return AgentModule(**orchestrator[0]["result"][0])
+
+    async def list_environments(self, environment_name=None) -> List:
+        if not environment_name:
+            environments = await self.surrealdb.query("SELECT * FROM environment;")
+            return [AgentModule(**environment) for environment in environments[0]["result"]]
+        else:
+            if ':' in environment_name:
+                environment_name = environment_name.split(':')[1]
+            environment = await self.surrealdb.query("SELECT * FROM environment WHERE name=$environment_name;", {"environment_name": environment_name})
+            return AgentModule(**environment[0]["result"][0])
 
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
