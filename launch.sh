@@ -857,6 +857,8 @@ darwin_start_servers() {
     HTTP_PLIST_FILE="com.example.nodeapp.http.plist"
     echo "Starting HTTP server on port 7001..." | log_with_service_name "Server" $BLUE
 
+    PLIST_PATH=~/Library/LaunchAgents/$HTTP_PLIST_FILE
+
     # Create the launchd plist file for HTTP server
     cat <<EOF > ~/Library/LaunchAgents/$HTTP_PLIST_FILE
 <?xml version="1.0" encoding="UTF-8"?>
@@ -897,9 +899,23 @@ darwin_start_servers() {
 </plist>
 EOF
 
-    # Load and start HTTP server
-    launchctl load ~/Library/LaunchAgents/$HTTP_PLIST_FILE
-    echo "HTTP server service started successfully on port 7001." | log_with_service_name "Server" $BLUE
+    # Load and start HTTP server with error checking
+    echo "Loading HTTP server service..." | log_with_service_name "Server" $BLUE
+    if ! launchctl load $PLIST_PATH; then
+        echo "Failed to load HTTP server service. Checking permissions..." | log_with_service_name "Server" $RED
+        ls -l $PLIST_PATH
+        exit 1
+    fi
+
+    # Verify service is running
+    sleep 2
+    if launchctl list | grep -q "com.example.nodeapp.http"; then
+        echo "HTTP server service loaded successfully." | log_with_service_name "Server" $GREEN
+    else
+        echo "HTTP server service failed to load. Check system logs:" | log_with_service_name "Server" $RED
+        sudo log show --predicate 'processImagePath contains "nodeapp"' --last 5m
+        exit 1
+    fi
 
     # Track all ports for .env file
     ports="7001"
@@ -908,6 +924,7 @@ EOF
     for ((i=0; i<num_servers; i++)); do
         current_port=$((start_port + i))
         PLIST_FILE="com.example.nodeapp.${server_type}_${current_port}.plist"
+        PLIST_PATH=~/Library/LaunchAgents/$PLIST_FILE
         ports="${ports},${current_port}"
 
         echo "Starting $server_type server on port $current_port..." | log_with_service_name "Server" $BLUE
@@ -951,9 +968,22 @@ EOF
 </plist>
 EOF
 
-        # Load and start the server
-        launchctl load ~/Library/LaunchAgents/$PLIST_FILE
-        echo "$server_type server service started successfully on port $current_port." | log_with_service_name "Server" $BLUE
+        # Load with error checking
+        echo "Loading $server_type server service on port $current_port..." | log_with_service_name "Server" $BLUE
+        if ! launchctl load $PLIST_PATH; then
+            echo "Failed to load $server_type server service. Checking permissions..." | log_with_service_name "Server" $RED
+            ls -l $PLIST_PATH
+            exit 1
+        fi
+
+        # Verify service is running
+        sleep 2
+        if launchctl list | grep -q "com.example.nodeapp.${server_type}_${current_port}"; then
+            echo "$server_type server service loaded successfully on port $current_port." | log_with_service_name "Server" $GREEN
+        else
+            echo "$server_type server service failed to load on port $current_port." | log_with_service_name "Server" $RED
+            exit 1
+        fi
     done
 
     # Update NODE_PORTS in .env file (using sed compatible with macOS)
