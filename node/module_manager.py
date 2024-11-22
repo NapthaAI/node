@@ -19,7 +19,8 @@ from node.schemas import (
     EnvironmentRun,
     OrchestratorRun, 
     LLMConfig, 
-    AgentConfig
+    AgentConfig,
+    DataGenerationConfig
 )
 from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -337,9 +338,22 @@ def load_llm_configs(llm_configs_path):
         llm_configs = json.loads(file.read())
     return [LLMConfig(**config) for config in llm_configs]
 
+
+async def load_data_generation_config(agent_deployment_path):
+
+    data_config_path = agent_deployment_path.parent / "data_configuration.json"
+
+    if os.path.exists(data_config_path):    
+        with open(data_config_path, "r") as file:
+            data_generation_config = json.loads(file.read())
+        return data_generation_config
+    else:
+        return None
+
 async def load_agent_deployments(agent_deployments_path, module):
     with open(agent_deployments_path, "r") as file:
         agent_deployments = json.loads(file.read())
+
 
     for deployment in agent_deployments:
         deployment["module"] = module
