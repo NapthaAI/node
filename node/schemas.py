@@ -95,7 +95,7 @@ class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     environment_node_url: str
-    environment_config: Optional[EnvironmentConfig] = EnvironmentConfig()
+    environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
 
 class DockerParams(BaseModel):
     docker_image: str

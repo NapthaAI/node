@@ -158,7 +158,7 @@ input_folder/
 
 # output_folder
 /node/outputs/
-/node/storage/hub/agents/
+/node/storage/hub/modules/
 /node/storage/fs
 
 # ignore model anywhere

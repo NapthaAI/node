@@ -192,28 +192,46 @@ class DB:
     async def update_environment_run(self, run_id: int, run_data: EnvironmentRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'environment')
 
-    async def list_agent_runs(self, agent_run_id=None) -> List[Dict]:
+    async def list_module_runs(self, run_type: str, run_id: Optional[int] = None) -> Union[Dict, List[Dict], None]:
+        model_map = {
+            'agent': AgentRun,
+            'orchestrator': OrchestratorRun,
+            'environment': EnvironmentRun
+        }
+        
         max_retries = 3
         retry_delay = 1  # seconds
+        Model = model_map[run_type]
         
         for attempt in range(max_retries):
             try:
                 with self.session() as db:
-                    if agent_run_id:
-                        result = db.query(AgentRun).filter(
-                            AgentRun.id == agent_run_id
+                    if run_id:
+                        result = db.query(Model).filter(
+                            Model.id == run_id
                         ).first()
                         if not result:
-                            logger.warning(f"Agent run {agent_run_id} not found on attempt {attempt + 1}")
+                            logger.warning(f"{run_type.capitalize()} run {run_id} not found on attempt {attempt + 1}")
                             await asyncio.sleep(retry_delay)
                             continue
                         return result.__dict__ if result else None
-                    return [run.__dict__ for run in db.query(AgentRun).all()]
+                    return [run.__dict__ for run in db.query(Model).all()]
             except SQLAlchemyError as e:
                 logger.error(f"Database error on attempt {attempt + 1}: {str(e)}")
                 if attempt == max_retries - 1:
                     raise
                 await asyncio.sleep(retry_delay)
+
+    # Replace existing list functions with these wrapper methods
+    async def list_agent_runs(self, agent_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('agent', agent_run_id)
+
+    async def list_orchestrator_runs(self, orchestrator_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('orchestrator', orchestrator_run_id)
+
+    # Optional: Add environment runs support
+    async def list_environment_runs(self, environment_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('environment', environment_run_id)
 
     async def delete_agent_run(self, agent_run_id: int) -> bool:
         try:
@@ -229,29 +247,6 @@ class DB:
         except SQLAlchemyError as e:
             logger.error(f"Failed to delete agent run: {str(e)}")
             raise
-
-    async def list_orchestrator_runs(self, orchestrator_run_id=None) -> List[Dict]:
-        max_retries = 3
-        retry_delay = 1  # seconds
-        
-        for attempt in range(max_retries):
-            try:
-                with self.session() as db:
-                    if orchestrator_run_id:
-                        result = db.query(OrchestratorRun).filter(
-                            OrchestratorRun.id == orchestrator_run_id
-                        ).first()
-                        if not result:
-                            logger.warning(f"Orchestrator run {orchestrator_run_id} not found on attempt {attempt + 1}")
-                            await asyncio.sleep(retry_delay)
-                            continue
-                        return result.__dict__ if result else None
-                    return [run.__dict__ for run in db.query(OrchestratorRun).all()]
-            except SQLAlchemyError as e:
-                logger.error(f"Database error on attempt {attempt + 1}: {str(e)}")
-                if attempt == max_retries - 1:
-                    raise
-                await asyncio.sleep(retry_delay)
 
     async def delete_orchestrator_run(self, orchestrator_run_id: int) -> bool:
         try:

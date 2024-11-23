@@ -14,8 +14,8 @@ from pydantic import BaseModel, create_model
 from typing import List, Union
 
 from node.client import Node
-from node.config import BASE_OUTPUT_DIR, AGENTS_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
-from node.module_manager import load_module, load_orchestrator, install_agent_if_not_present
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
+from node.module_manager import ensure_module_installation_with_lock, load_module, load_orchestrator
 from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun
 from node.worker.main import app
 from node.worker.task_engine import TaskEngine
@@ -28,8 +28,8 @@ load_dotenv(".env")
 os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
 
 
-if AGENTS_SOURCE_DIR not in sys.path:
-    sys.path.append(AGENTS_SOURCE_DIR)
+if MODULES_SOURCE_DIR not in sys.path:
+    sys.path.append(MODULES_SOURCE_DIR)
 
 
 @app.task(bind=True, acks_late=True)
@@ -90,7 +90,7 @@ async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, Environ
         logger.info(f"Checking if {module_type} {module_name} version {module_version} is installed")
 
         try:
-            await install_agent_if_not_present(module_run, module_version)
+            await ensure_module_installation_with_lock(module_run, module_version)
         except Exception as e:
             error_msg = (f"Failed to install or verify {module_type} {module_name}: {str(e)}")
             logger.error(error_msg)
@@ -194,7 +194,7 @@ class AgentEngine:
             )
 
         # Load the agent
-        self.agent_func, self.agent_run = await load_module(self.agent_run)
+        self.agent_func, self.agent_run = await load_module(self.agent_run, module_type="agent")
 
     async def start_run(self):
         """Executes the agent run"""
@@ -297,7 +297,7 @@ class EnvironmentEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
-        self.environment_func, self.environment_run = await load_module(self.environment_run)
+        self.environment_func, self.environment_run = await load_module(self.environment_run, module_type="environment")
 
     async def start_run(self):
         """Executes the environment run"""
@@ -328,21 +328,7 @@ class EnvironmentEngine:
             raise ValueError(f"Environment response is not a string: {response}. Current response type: {type(response)}")
 
         self.environment_run.results = [response]
-        await self.handle_output(self.environment_run.environment_deployment, response)
         self.environment_run.status = "completed"
-
-    async def handle_output(self, environment_deployment, results):
-        """Handles the output of the environment run"""
-        save_location = environment_deployment.data_generation_config.save_outputs_location
-        if save_location:
-            environment_deployment.data_generation_config.save_outputs_location = save_location
-
-        if environment_deployment.data_generation_config.save_outputs:
-            if save_location == "ipfs":
-                out_msg = upload_to_ipfs(self.environment_run.environment_deployment.data_generation_config.save_outputs_path)
-                out_msg = f"IPFS Hash: {out_msg}"
-                logger.info(f"Output uploaded to IPFS: {out_msg}")
-                self.environment_run.results = [out_msg]
 
     async def complete(self):
         """Marks the environment run as completed"""
@@ -443,7 +429,7 @@ class OrchestratorEngine:
             self.validated_data, 
         ) = await load_orchestrator(
             orchestrator_run=self.orchestrator_run,
-            agent_source_dir=AGENTS_SOURCE_DIR
+            agent_source_dir=MODULES_SOURCE_DIR
         )
         
 
@@ -533,7 +519,7 @@ class OrchestratorEngine:
                 task_engine_cls=TaskEngine,
                 node_cls=Node,
                 db_url=LOCAL_DB_URL,
-                agents_dir=AGENTS_SOURCE_DIR,
+                agents_dir=MODULES_SOURCE_DIR,
             )
         except Exception as e:
             logger.error(f"Error running orchestrator: {e}")

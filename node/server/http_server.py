@@ -99,6 +99,15 @@ class HTTPServer:
             """
             return await self.environment_run(environment_run_input)
 
+        @router.post("/environment/check")
+        async def environment_check_endpoint(environment_run: EnvironmentRun) -> EnvironmentRun:
+            """
+            Check an environment
+            :param environment_run: EnvironmentRun details
+            :return: Status
+            """
+            return await self.environment_check(environment_run)
+
         # Storage endpoints
         @router.post("/storage/write")
         async def storage_write_endpoint(file: UploadFile = File(...)):
@@ -296,121 +305,83 @@ class HTTPServer:
     async def environment_run(self, environment_run_input: EnvironmentRunInput) -> EnvironmentRun:
         return await self.run_module(environment_run_input)
 
-    async def agent_check(self, agent_run: AgentRun) -> AgentRun:
+    async def check_module(
+        self, 
+        module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]
+    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
         """
-        Check an agent
-        :param agent_run: AgentRun details
+        Check a module run (agent, orchestrator, or environment)
+        :param module_run: Run details (AgentRun, OrchestratorRun, or EnvironmentRun)
         :return: Status
         """
         try:
-            logger.info("Checking agent run")
-            id_ = agent_run.id
-            if id_ is None:
-                raise HTTPException(status_code=400, detail="Agent run ID is required")
+            # Determine module type and configuration
+            if isinstance(module_run, AgentRun):
+                module_type = "agent"
+                list_func = lambda db: db.list_agent_runs(module_run.id)
+            elif isinstance(module_run, OrchestratorRun):
+                module_type = "orchestrator"
+                list_func = lambda db: db.list_orchestrator_runs(module_run.id)
+            elif isinstance(module_run, EnvironmentRun):
+                module_type = "environment"
+                list_func = lambda db: db.list_environment_runs(module_run.id)
+            else:
+                raise HTTPException(status_code=400, detail="Invalid module run type")
+
+            logger.info(f"Checking {module_type} run")
+            if module_run.id is None:
+                raise HTTPException(status_code=400, detail=f"{module_type.capitalize()} run ID is required")
 
             async with DB() as db:
-                agent_run = await db.list_agent_runs(id_)
-                if isinstance(agent_run, list):
-                    agent_run = agent_run[0]
-                agent_run.pop("_sa_instance_state", None)
-                if 'created_time' in agent_run and isinstance(agent_run['created_time'], datetime):
-                    agent_run['created_time'] = agent_run['created_time'].isoformat()
-                if 'start_processing_time' in agent_run and isinstance(agent_run['start_processing_time'], datetime):
-                    agent_run['start_processing_time'] = agent_run['start_processing_time'].isoformat()
-                if 'completed_time' in agent_run and isinstance(agent_run['completed_time'], datetime):
-                    agent_run['completed_time'] = agent_run['completed_time'].isoformat()
-                agent_run = AgentRun(**agent_run)
+                run_data = await list_func(db)
+                if isinstance(run_data, list):
+                    run_data = run_data[0]
+                run_data.pop("_sa_instance_state", None)
+                
+                # Convert datetime fields to ISO format
+                for time_field in ['created_time', 'start_processing_time', 'completed_time']:
+                    if time_field in run_data and isinstance(run_data[time_field], datetime):
+                        run_data[time_field] = run_data[time_field].isoformat()
+                
+                # Convert back to appropriate type
+                module_run = type(module_run)(**run_data)
 
-            if not agent_run:
-                raise HTTPException(status_code=404, detail="Agent run not found")
+            if not module_run:
+                raise HTTPException(status_code=404, detail=f"{module_type.capitalize()} run not found")
 
-            status = agent_run.status
-            logger.info(f"Found agent status: {status}")
+            logger.info(f"Found {module_type} status: {module_run.status}")
 
-            if agent_run.status == "completed":
-                logger.info(
-                    f"Agent run completed. Returning output: {agent_run.results}"
-                )
-                response = agent_run.results
-            elif agent_run.status == "error":
-                logger.info(
-                    f"Agent run failed. Returning error: {agent_run.error_message}"
-                )
-                response = agent_run.error_message
+            if module_run.status == "completed":
+                logger.info(f"{module_type.capitalize()} run completed. Returning output: {module_run.results}")
+                response = module_run.results
+            elif module_run.status == "error":
+                logger.info(f"{module_type.capitalize()} run failed. Returning error: {module_run.error_message}")
+                response = module_run.error_message
             else:
                 response = None
 
             logger.info(f"Response: {response}")
-
-            return agent_run
+            return module_run
 
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Failed to check agent run: {str(e)}")
+            logger.error(f"Failed to check {module_type} run: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(
                 status_code=500,
-                detail="Internal server error occurred while checking agent run",
+                detail=f"Internal server error occurred while checking {module_type} run"
             )
+
+    # Replace existing methods with wrappers that call check_module
+    async def agent_check(self, agent_run: AgentRun) -> AgentRun:
+        return await self.check_module(agent_run)
 
     async def orchestrator_check(self, orchestrator_run: OrchestratorRun) -> OrchestratorRun:
-        """
-        Check an orchestrator
-        :param orchestrator_run: OrchestratorRun details
-        :return: Status
-        """
-        try:
-            logger.info("Checking orchestrator run")
-            id_ = orchestrator_run.id
-            if id_ is None:
-                raise HTTPException(status_code=400, detail="Orchestrator run ID is required")
+        return await self.check_module(orchestrator_run)
 
-            async with DB() as db:
-                orchestrator_run = await db.list_orchestrator_runs(id_)
-                if isinstance(orchestrator_run, list):
-                    orchestrator_run = orchestrator_run[0]
-                orchestrator_run.pop("_sa_instance_state", None)
-                if 'created_time' in orchestrator_run and isinstance(orchestrator_run['created_time'], datetime):
-                    orchestrator_run['created_time'] = orchestrator_run['created_time'].isoformat()
-                if 'start_processing_time' in orchestrator_run and isinstance(orchestrator_run['start_processing_time'], datetime):
-                    orchestrator_run['start_processing_time'] = orchestrator_run['start_processing_time'].isoformat()
-                if 'completed_time' in orchestrator_run and isinstance(orchestrator_run['completed_time'], datetime):
-                    orchestrator_run['completed_time'] = orchestrator_run['completed_time'].isoformat()
-                orchestrator_run = OrchestratorRun(**orchestrator_run)
-
-            if not orchestrator_run:
-                raise HTTPException(status_code=404, detail="Orchestrator run not found")
-
-            status = orchestrator_run.status
-            logger.info(f"Found orchestrator status: {status}")
-
-            if orchestrator_run.status == "completed":
-                logger.info(
-                    f"Orchestrator run completed. Returning output: {orchestrator_run.results}"
-                )
-                response = orchestrator_run.results
-            elif orchestrator_run.status == "error":
-                logger.info(
-                    f"Orchestrator run failed. Returning error: {orchestrator_run.error_message}"
-                )
-                response = orchestrator_run.error_message
-            else:
-                response = None
-
-            logger.info(f"Response: {response}")
-
-            return orchestrator_run
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Failed to check orchestrator run: {str(e)}")
-            logger.debug(f"Full traceback: {traceback.format_exc()}")
-            raise HTTPException(
-                status_code=500,
-                detail="Internal server error occurred while checking orchestrator run",
-            )
+    async def environment_check(self, environment_run: EnvironmentRun) -> EnvironmentRun:
+        return await self.check_module(environment_run)
 
     @retry(
         stop=stop_after_attempt(5),
