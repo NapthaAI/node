@@ -37,12 +37,12 @@ clean:
 all-clean: clean check format pyproject-clean
 	@echo "All clean operations done."
 
-# Target to remove __pycache__, .venv, and node/storage/hub/agents
+# Target to remove __pycache__, .venv, and node/storage/hub/modules
 remove:
-	@echo "Removing __pycache__, .venv, and node/storage/hub/agents..."
+	@echo "Removing __pycache__, .venv, and node/storage/hub/modules..."
 	@find . -type d -name __pycache__ -exec rm -rf {} +
 	@rm -rf .venv
-	@rm -rf node/storage/hub/agents
+	@rm -rf node/storage/hub/modules
 	@echo "Cleanup completed."
 
 # Target to remove hub.db and db.db

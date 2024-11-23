@@ -15,12 +15,14 @@ from typing import List, Union
 from node.schemas import (
     AgentDeployment, 
     AgentRun, 
+    EnvironmentDeployment,
+    EnvironmentRun,
     OrchestratorRun, 
     LLMConfig, 
     AgentConfig
 )
 from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
-from node.config import AGENTS_SOURCE_DIR, BASE_OUTPUT_DIR
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +47,7 @@ def file_lock(lock_file, timeout=30):
                 break
             except IOError:
                 if time.time() - start_time > timeout:
-                    raise LockAcquisitionError(
-                        f"Failed to acquire lock after {timeout} seconds"
-                    )
+                    raise LockAcquisitionError(f"Failed to acquire lock after {timeout} seconds")
                 time.sleep(1)
 
         yield lock_fd
@@ -57,33 +57,25 @@ def file_lock(lock_file, timeout=30):
             fcntl.flock(lock_fd, fcntl.LOCK_UN)
             lock_fd.close()
 
-def is_agent_installed(agent_name: str, required_version: str) -> bool:
+def is_module_installed(module_name: str, required_version: str) -> bool:
     try:
-        importlib.import_module(agent_name)
-        agents_source_dir = os.path.join(AGENTS_SOURCE_DIR, agent_name)
+        importlib.import_module(module_name)
+        modules_source_dir = os.path.join(MODULES_SOURCE_DIR, module_name)
 
-        if not Path(agents_source_dir).exists():
-            logger.warning(f"Agents source directory for {agent_name} does not exist")
+        if not Path(modules_source_dir).exists():
+            logger.warning(f"Modules source directory for {module_name} does not exist")
             return False
 
         try:
-            repo = Repo(agents_source_dir)
+            repo = Repo(modules_source_dir)
             if repo.head.is_detached:
-                current_tag = next(
-                    (tag.name for tag in repo.tags if tag.commit == repo.head.commit),
-                    None,
-                )
+                current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
             else:
-                current_tag = next(
-                    (tag.name for tag in repo.tags if tag.commit == repo.head.commit),
-                    None,
-                )
+                current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit),None)
 
             if current_tag:
-                logger.info(f"Agent {agent_name} is at tag: {current_tag}")
-                current_version = (
-                    current_tag[1:] if current_tag.startswith("v") else current_tag
-                )
+                logger.info(f"Module {module_name} is at tag: {current_tag}")
+                current_version = (current_tag[1:] if current_tag.startswith("v") else current_tag)
                 required_version = (
                     required_version[1:]
                     if required_version.startswith("v")
@@ -91,85 +83,74 @@ def is_agent_installed(agent_name: str, required_version: str) -> bool:
                 )
                 return current_version == required_version
             else:
-                logger.warning(f"No tag found for current commit in {agent_name}")
+                logger.warning(f"No tag found for current commit in {module_name}")
                 return False
         except (InvalidGitRepositoryError, GitCommandError) as e:
-            logger.error(f"Git error for {agent_name}: {str(e)}")
+            logger.error(f"Git error for {module_name}: {str(e)}")
             return False
 
     except ImportError:
-        logger.warning(f"Agent {agent_name} not found")
+        logger.warning(f"Module {module_name} not found")
         return False
 
-async def install_agent_if_not_present(run: Union[AgentRun, OrchestratorRun], run_version: str):
+async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun], run_version: str):
     if isinstance(run, AgentRun):
-        agent_name = run.agent_deployment.module["id"].split(":")[-1]
+        module_name = run.agent_deployment.module["name"]
         url = run.agent_deployment.module["url"]    
-    else:
-        agent_name = run.orchestrator_deployment.module["id"].split(":")[-1]
+    elif isinstance(run, OrchestratorRun):
+        module_name = run.orchestrator_deployment.module["name"]
         url = run.orchestrator_deployment.module["url"]
+    else:  # EnvironmentRun
+        module_name = run.environment_deployment.module["name"]
+        url = run.environment_deployment.module["url"]
 
-    if agent_name in INSTALLED_MODULES:
-        installed_version = INSTALLED_MODULES[agent_name]
+    if module_name in INSTALLED_MODULES:
+        installed_version = INSTALLED_MODULES[module_name]
         if installed_version == run_version:
-            logger.info(
-                f"Agent {agent_name} version {run_version} is already installed"
-            )
+            logger.info(f"Module {module_name} version {run_version} is already installed")
             return True
 
-    lock_file = Path(AGENTS_SOURCE_DIR) / f"{agent_name}.lock"
+    lock_file = Path(MODULES_SOURCE_DIR) / f"{module_name}.lock"
     logger.info(f"Lock file: {lock_file}")
     try:
         with file_lock(lock_file):
-            logger.info(f"Acquired lock for {agent_name}")
+            logger.info(f"Acquired lock for {module_name}")
 
-            if not is_agent_installed(agent_name, run_version):
-                logger.info(
-                    f"Agent {agent_name} version {run_version} is not installed. Attempting to install..."
-                )
+            if not is_module_installed(module_name, run_version):
+                logger.info(f"Module {module_name} version {run_version} is not installed. Attempting to install...")
                 if not url:
-                    raise ValueError(
-                        f"Agent URL is required for installation of {agent_name}"
-                    )
-                install_agent_if_needed(
-                    agent_name, 
-                    run_version, 
-                    url
-                )
+                    raise ValueError(f"Module URL is required for installation of {module_name}")
+                install_module(module_name, run_version, url)
 
-            # Verify agent installation
-            if not verify_agent_installation(agent_name):
-                raise RuntimeError(
-                    f"Agent {agent_name} failed verification after installation"
-                )
+            # Verify module installation
+            if not verify_module_installation(module_name):
+                raise RuntimeError(f"Module {module_name} failed verification after installation")
 
-            # Install personas if they exist in agent_run
+            # Install personas if they exist in module run
             if isinstance(run, AgentRun):
                 if hasattr(run, 'personas_urls') and run.agent_deployment.module["personas_urls"]:
-                    logger.info(f"Installing personas for agent {agent_name}")
+                    logger.info(f"Installing personas for agent {module_name}")
                     await install_personas_if_needed(run.agent_deployment.module["personas_urls"])
 
-            logger.info(
-                f"Agent {agent_name} version {run_version} is installed and verified"
-            )
-            INSTALLED_MODULES[agent_name] = run_version
+            logger.info(f"Module {module_name} version {run_version} is installed and verified")
+            INSTALLED_MODULES[module_name] = run_version
     except LockAcquisitionError as e:
-        error_msg = f"Failed to acquire lock for agent {agent_name}: {str(e)}"
+        error_msg = f"Failed to acquire lock for module {module_name}: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
     except Exception as e:
-        error_msg = f"Failed to install or verify agent {agent_name}: {str(e)}"
+        error_msg = f"Failed to install or verify module {module_name}: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
 
-def verify_agent_installation(agent_name: str) -> bool:
+def verify_module_installation(module_name: str) -> bool:
     try:
-        importlib.import_module(f"{agent_name}.run")
+        importlib.import_module(f"{module_name}.run")
         return True
     except ImportError as e:
-        logger.error(f"Error importing agent {agent_name}: {str(e)}")
+        logger.error(f"Error importing module {module_name}: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         return False
     
@@ -179,8 +160,7 @@ async def install_personas_if_needed(personas_url: str):
         logger.info("No personas to install")
         return
 
-
-    personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
+    personas_base_dir = Path(MODULES_SOURCE_DIR) / "personas"
     personas_base_dir.mkdir(exist_ok=True)
 
     logger.info(f"Installing persona {personas_url}")
@@ -244,48 +224,48 @@ async def install_persona_from_git(repo_url: str, personas_base_dir: Path):
         raise RuntimeError(error_msg) from e
 
 
-def install_agent_from_ipfs(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
+def install_module_from_ipfs(module_name: str, module_version: str, module_source_url: str):
+    logger.info(f"Installing/updating module {module_name} version {module_version}")
+    modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+    logger.info(f"Module path exists: {modules_source_dir.exists()}")
     try:
-        agent_ipfs_hash = agent_source_url.split("ipfs://")[1]
-        agent_temp_zip_path = download_from_ipfs(agent_ipfs_hash, AGENTS_SOURCE_DIR)
-        unzip_file(agent_temp_zip_path, agents_source_dir)
-        os.remove(agent_temp_zip_path)
+        module_ipfs_hash = module_source_url.split("ipfs://")[1]
+        module_temp_zip_path = download_from_ipfs(module_ipfs_hash, MODULES_SOURCE_DIR)
+        unzip_file(module_temp_zip_path, modules_source_dir)
+        os.remove(module_temp_zip_path)
 
     except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
+        error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
         logger.info(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
 
 
-def install_agent_from_git(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
+def install_module_from_git(module_name: str, module_version: str, module_source_url: str):
+    logger.info(f"Installing/updating module {module_name} version {module_version}")
+    modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+    logger.info(f"Module path exists: {modules_source_dir.exists()}")
     try:
-        if agents_source_dir.exists():
-            logger.info(f"Updating existing repository for {agent_name}")
-            repo = Repo(agents_source_dir)
+        if modules_source_dir.exists():
+            logger.info(f"Updating existing repository for {module_name}")
+            repo = Repo(modules_source_dir)
             repo.remotes.origin.fetch()
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully updated {agent_name} to version {agent_version}")
+            repo.git.checkout(module_version)
+            logger.info(f"Successfully updated {module_name} to version {module_version}")
         else:
             # Clone new repository
-            logger.info(f"Cloning new repository for {agent_name}")
-            Repo.clone_from(agent_source_url, agents_source_dir)
-            repo = Repo(agents_source_dir)
-            repo.git.checkout(agent_version)
-            logger.info(f"Successfully cloned {agent_name} version {agent_version}")
+            logger.info(f"Cloning new repository for {module_name}")
+            Repo.clone_from(module_source_url, modules_source_dir)
+            repo = Repo(modules_source_dir)
+            repo.git.checkout(module_version)
+            logger.info(f"Successfully cloned {module_name} version {module_version}")
 
     except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
+        error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
         logger.info(f"Traceback: {traceback.format_exc()}")
         if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
+            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
         raise RuntimeError(error_msg) from e
     
 def run_poetry_command(command):
@@ -301,37 +281,33 @@ def run_poetry_command(command):
         logger.error(f"Stderr: {e.stderr}")
         raise RuntimeError(error_msg)
 
-def install_agent_if_needed(agent_name: str, agent_version: str, agent_source_url: str):
-    logger.info(f"Installing/updating agent {agent_name} version {agent_version}")
+def install_module(module_name: str, module_version: str, module_source_url: str):
+    logger.info(f"Installing/updating module {module_name} version {module_version}")
     
-    agents_source_dir = Path(AGENTS_SOURCE_DIR) / agent_name
-    logger.info(f"Agent path exists: {agents_source_dir.exists()}")
+    modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+    logger.info(f"Module path exists: {modules_source_dir.exists()}")
 
     try:
-        if "ipfs://" in agent_source_url:
-            install_agent_from_ipfs(agent_name, agent_version, agent_source_url)
+        if "ipfs://" in module_source_url:
+            install_module_from_ipfs(module_name, module_version, module_source_url)
         else:
-            install_agent_from_git(agent_name, agent_version, agent_source_url)
+            install_module_from_git(module_name, module_version, module_source_url)
             
-        # Reinstall the agent
-        logger.info(f"Installing/Reinstalling {agent_name}")
-        installation_output = run_poetry_command(["add", f"{agents_source_dir}"])
+        # Reinstall the module
+        logger.info(f"Installing/Reinstalling {module_name}")
+        installation_output = run_poetry_command(["add", f"{modules_source_dir}"])
         logger.info(f"Installation output: {installation_output}")
 
-        if not verify_agent_installation(agent_name):
-            raise RuntimeError(
-                f"Agent {agent_name} failed verification after installation"
-            )
+        if not verify_module_installation(module_name):
+            raise RuntimeError(f"Module {module_name} failed verification after installation")
 
-        logger.info(
-            f"Successfully installed and verified {agent_name} version {agent_version}"
-        )
+        logger.info(f"Successfully installed and verified {module_name} version {module_version}")
     except Exception as e:
-        error_msg = f"Error installing {agent_name}: {str(e)}"
+        error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
         logger.info(f"Traceback: {traceback.format_exc()}")
         if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the agent and the main project."
+            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
         raise RuntimeError(error_msg) from e
 
 def load_persona(persona_dir):
@@ -382,69 +358,116 @@ async def load_agent_deployments(agent_deployments_path, module):
 
     return [AgentDeployment(**deployment) for deployment in agent_deployments]
 
-async def load_and_validate_input_schema(
-    agent_run: AgentRun = None, 
-    orchestrator_run: OrchestratorRun = None
-) -> Union[AgentRun, OrchestratorRun]:
-    """Loads and validates the input schema for the agent"""
-    if agent_run:
-        agent_name = agent_run.agent_deployment.module['name'].replace("-", "_")
-        schemas_module = importlib.import_module(f"{agent_name}.schemas")
-        InputSchema = getattr(schemas_module, "InputSchema")
-        agent_run.inputs = InputSchema(**agent_run.inputs)
-        return agent_run
-    elif orchestrator_run:
-        orchestrator_name = orchestrator_run.orchestrator_deployment.module['name']
-        tn = orchestrator_name.replace("-", "_")
-        schemas_module = importlib.import_module(f"{tn}.schemas")
-        InputSchema = getattr(schemas_module, "InputSchema")
-        orchestrator_run.inputs = InputSchema(**orchestrator_run.inputs)
-        return orchestrator_run
+def load_environment_deployments(environment_deployments_path, module):
+    with open(environment_deployments_path, "r") as file:
+        environment_deployments = json.loads(file.read())
+    for deployment in environment_deployments:
+        deployment["module"] = module
+        if "environment_config" in deployment and isinstance(deployment["environment_config"], dict):
+            # Get the config_schema from environment_config.config_name
+            config_schema = deployment["environment_config"].get("config_name", "EnvironmentConfig")
+            # Import the specific config class from the module's schemas
+            module_name = module["name"].replace("-", "_")
+            schemas_module = importlib.import_module(f"{module_name}.schemas")
+            ConfigClass = getattr(schemas_module, config_schema)
+            # Create instance of the specific config class
+            deployment["environment_config"] = ConfigClass(**deployment["environment_config"])
+    return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
+
+async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+    """Loads and validates the input schema for the agent, orchestrator, or environment
+
+    Args:
+        module_run: Either AgentRun, OrchestratorRun, or EnvironmentRun object
+
+    Returns:
+        The validated module run with inputs schema
+    """
+    if isinstance(module_run, AgentRun):
+        module_name = module_run.agent_deployment.module['name']
+    elif isinstance(module_run, OrchestratorRun):
+        module_name = module_run.orchestrator_deployment.module['name']
+    elif isinstance(module_run, EnvironmentRun):
+        module_name = module_run.environment_deployment.module['name']
     else:
-        raise ValueError("Either agent_run or orchestrator_run must be provided")
+        raise ValueError("module_run must be either AgentRun, OrchestratorRun, or EnvironmentRun")
 
-async def load_agent(agent_run):
-    """Loads the agent and returns the agent function, validated data and config"""
-    # Load the agent from the agents directory
-    agent_name = agent_run.agent_deployment.module['name']
-    agent_path = Path(f"{AGENTS_SOURCE_DIR}/{agent_name}")
-
-    # Load configs - Fix: properly await the result
-    agent_deployments = await load_agent_deployments(
-        agent_path / agent_name / "configs/agent_deployments.json", 
-        agent_run.agent_deployment.module
-    )
-    agent_deployment = agent_deployments[0]
-    agent_run.agent_deployment = agent_deployment
-
-    # Handle output configuration
-    if agent_deployment.data_generation_config.save_outputs:
-        if ':' in agent_run.id:
-            output_path = f"{BASE_OUTPUT_DIR}/{agent_run.id.split(':')[1]}"
-        else:
-            output_path = f"{BASE_OUTPUT_DIR}/{agent_run.id}"
-        agent_run.agent_deployment.data_generation_config.save_outputs_path = output_path
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-
-    agent_run = await load_and_validate_input_schema(agent_run)
+    # Replace hyphens with underscores in module name
+    module_name = module_name.replace("-", "_")
     
-    # Load the agent function
-    agent_name = agent_name.replace("-", "_")
-    entrypoint = agent_deployment.module["entrypoint"].split(".")[0]
-    main_module = importlib.import_module(f"{agent_name}.run")
+    # Import and validate schema
+    schemas_module = importlib.import_module(f"{module_name}.schemas")
+    InputSchema = getattr(schemas_module, "InputSchema")
+    module_run.inputs = InputSchema(**module_run.inputs)
+    
+    return module_run
+
+async def load_module(run, module_type="agent"):
+    """Loads a module (agent or environment) and returns the function and validated run data
+    
+    Args:
+        run: Either AgentRun or EnvironmentRun object
+        module_type: String indicating the type ("agent" or "environment")
+    
+    Returns:
+        tuple: (module_func, validated_run)
+    """
+    # Load the module from the modules directory
+    if module_type == "agent":
+        module_name = run.agent_deployment.module['name']
+        deployment_attr = "agent_deployment"
+        module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}")
+        
+        # Load configs
+        deployments = await load_agent_deployments(
+            module_path / module_name / "configs/agent_deployments.json",
+            getattr(run, deployment_attr).module
+        )
+        deployment = deployments[0]
+        setattr(run, deployment_attr, deployment)
+
+    elif module_type == "environment":
+        module_name = run.environment_deployment.module['name']
+        deployment_attr = "environment_deployment"
+        module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}")
+        
+        # Load configs
+        deployments = load_environment_deployments(
+            module_path / module_name / "configs/environment_deployments.json",
+            getattr(run, deployment_attr).module
+        )
+        deployment = deployments[0]
+        setattr(run, deployment_attr, deployment)
+
+    else:
+        raise ValueError("module_type must be either 'agent' or 'environment'")
+
+    if module_type == "agent":
+        # Handle output configuration
+        if deployment.data_generation_config.save_outputs:
+            if ':' in run.id:
+                output_path = f"{BASE_OUTPUT_DIR}/{run.id.split(':')[1]}"
+            else:
+                output_path = f"{BASE_OUTPUT_DIR}/{run.id}"
+            deployment.data_generation_config.save_outputs_path = output_path
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+
+    run = await load_and_validate_input_schema(run)
+    
+    # Load the module function
+    module_name = module_name.replace("-", "_")
+    entrypoint = deployment.module["entrypoint"].split(".")[0]
+    main_module = importlib.import_module(f"{module_name}.run")
     main_module = importlib.reload(main_module)
-    agent_func = getattr(main_module, entrypoint)
+    module_func = getattr(main_module, entrypoint)
     
-    return agent_func, agent_run
+    return module_func, run
 
 async def load_orchestrator(orchestrator_run, agent_source_dir):
     """Loads the orchestrator and returns the orchestrator function"""
     workflow_name = orchestrator_run.orchestrator_deployment.module['name']
     workflow_path = f"{agent_source_dir}/{workflow_name}"
-
-    # Load the component.yaml file
-    # cfg = load_yaml_config(f"{workflow_path}/{workflow_name}/component.yaml")
 
     # Load configuration JSONs
     config_path = f"{workflow_path}/{workflow_name}/configs"

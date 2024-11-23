@@ -1,18 +1,18 @@
-import os
-import zipfile
-import tempfile
-import ipfshttpclient
-from dotenv import load_dotenv
-from pathlib import Path
-from node.schemas import AgentRun, OrchestratorRun
-from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
-from node.storage.db.db import DB
-from typing import Dict, Optional
-import logging
-import yaml
-from websockets.exceptions import ConnectionClosedError
 import asyncio
+from dotenv import load_dotenv
 from functools import wraps
+import ipfshttpclient
+import logging
+from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
+from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun
+from node.storage.db.db import DB
+import os
+from pathlib import Path
+import tempfile
+from typing import Dict, Optional, Union
+from websockets.exceptions import ConnectionClosedError
+import yaml
+import zipfile
 
 from node.storage.storage import get_ipns_record
 
@@ -102,33 +102,31 @@ def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
 
 
 @with_retry()
-async def update_db_with_status_sync(
-    agent_run: AgentRun = None, 
-    orchestrator_run: OrchestratorRun = None
-) -> None:
+async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> None:
     """
-    Update the DB with the agent run status synchronously
-    param agent_run: AgentRun data to update
+    Update the DB with the module run status synchronously
+    param module_run: AgentRun, OrchestratorRun, or EnvironmentRun data to update
     """
-    logger.info("Updating DB with agent run")
+    logger.info(f"Updating DB with {type(module_run).__name__}")
 
     try:
-        if agent_run:
-            async with DB() as db:
-                updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
-                logger.info(f"Updated agent run: {updated_agent_run}")
-        elif orchestrator_run:
-            async with DB() as db:
-                updated_orchestrator_run = await db.update_orchestrator_run(orchestrator_run.id, orchestrator_run)
-                logger.info(f"Updated orchestrator run: {updated_orchestrator_run}")
-        else:
-            logger.error("Either agent_run or orchestrator_run must be provided")
-            raise ValueError("Either agent_run or orchestrator_run must be provided")
+        async with DB() as db:
+            if isinstance(module_run, AgentRun):
+                updated_run = await db.update_agent_run(module_run.id, module_run)
+                logger.info(f"Updated agent run: {updated_run}")
+            elif isinstance(module_run, OrchestratorRun):
+                updated_run = await db.update_orchestrator_run(module_run.id, module_run)
+                logger.info(f"Updated orchestrator run: {updated_run}")
+            elif isinstance(module_run, EnvironmentRun):
+                updated_run = await db.update_environment_run(module_run.id, module_run)
+                logger.info(f"Updated environment run: {updated_run}")
+            else:
+                raise ValueError("module_run must be either AgentRun, OrchestratorRun, or EnvironmentRun")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
         raise
     except Exception as e:
-        logger.error(f"Failed to update DB with agent run status: {str(e)}")
+        logger.error(f"Failed to update DB with {type(module_run).__name__} status: {str(e)}")
         raise
 
 
