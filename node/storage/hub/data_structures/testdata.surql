@@ -97,10 +97,10 @@ RELATE user:seller1->is_associated_with->organization:naptha;
 
 
 -- AGENTS
-CREATE agent:hello_world_agent SET name="hello_world_agent", description="A simple hello world agent", author=user:naptha, url="https://github.com/NapthaAI/hello_world_agent", type="package", version="0.13", entrypoint="run.py";
+CREATE agent:hello_world_agent SET name="hello_world_agent", description="A simple hello world agent", author=user:naptha, url="https://github.com/NapthaAI/hello_world_agent", type="package", version="0.14", entrypoint="run.py";
 CREATE agent:simple_chat_agent SET name="simple_chat_agent", description="A simple chat agent", author=user:naptha, url="https://github.com/NapthaAI/simple_chat_agent", type="package", version="0.12", entrypoint="run.py";
-CREATE agent:generate_image SET name="generate_image", description="A simple agent for generating an image from text with Stable Diffusion", author=user:naptha, url="https://github.com/NapthaAI/module_generate_image", type="package", version="0.9", entrypoint="run.py";
-CREATE agent:image_to_image SET name="image_to_image", description="A simple agent for generating an image from another image with Stable Diffusion", author=user:naptha, url="https://github.com/NapthaAI/module_image2image", type="package", version="0.8", entrypoint="run.py";
+CREATE agent:generate_image SET name="generate_image", description="A simple agent for generating an image from text with Stable Diffusion", author=user:naptha, url="https://github.com/NapthaAI/module_generate_image", type="package", version="0.10", entrypoint="run.py";
+CREATE agent:image_to_image SET name="image_to_image", description="A simple agent for generating an image from another image with Stable Diffusion", author=user:naptha, url="https://github.com/NapthaAI/module_image2image", type="package", version="0.9", entrypoint="run.py";
 CREATE agent:babyagi_task_initiator SET name="babyagi_task_initiator", description="A simple agent for initiating tasks in BabyAGI", author=user:naptha, url="https://github.com/NapthaAI/babyagi_task_initiator", type="package", version="0.2", entrypoint="run.py";
 CREATE agent:babyagi_task_executor SET name="babyagi_task_executor", description="A simple agent for executing tasks in BabyAGI", author=user:naptha, url="https://github.com/NapthaAI/babyagi_task_executor", type="package", version="0.2", entrypoint="run.py";
 CREATE agent:babyagi_task_finalizer SET name="babyagi_task_finalizer", description="A simple agent for finalizing tasks in BabyAGI", author=user:naptha, url="https://github.com/NapthaAI/babyagi_task_finalizer", type="package", version="0.2", entrypoint="run.py";
