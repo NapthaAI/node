@@ -44,7 +44,7 @@ LOCAL_DB_URL=f"postgresql://{LOCAL_DB_USER}:{LOCAL_DB_PASSWORD}@localhost:{LOCAL
 file_path = Path(__file__).resolve()
 repo_dir = file_path.parent.parent
 BASE_OUTPUT_DIR=f"{repo_dir}/node/storage/fs"
-AGENTS_SOURCE_DIR=f"{repo_dir}/node/storage/hub/agents"
+MODULES_SOURCE_DIR=f"{repo_dir}/node/storage/hub/modules"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
