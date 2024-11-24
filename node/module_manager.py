@@ -130,7 +130,7 @@ async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentR
             if isinstance(run, AgentRun):
                 if hasattr(run, 'personas_urls') and run.agent_deployment.module["personas_urls"]:
                     logger.info(f"Installing personas for agent {module_name}")
-                    await install_personas_if_needed(run.agent_deployment.module["personas_urls"])
+                    await install_persona(run.agent_deployment.module["personas_urls"])
 
             logger.info(f"Module {module_name} version {run_version} is installed and verified")
             INSTALLED_MODULES[module_name] = run_version
@@ -155,7 +155,7 @@ def verify_module_installation(module_name: str) -> bool:
         return False
     
 
-async def install_personas_if_needed(personas_url: str):
+async def install_persona(personas_url: str):
     if not personas_url:
         logger.info("No personas to install")
         return
@@ -350,11 +350,12 @@ async def load_agent_deployments(agent_deployments_path, module):
         llm_config = next(config for config in llm_configs if config.config_name == config_name)
         deployment["agent_config"]["llm_config"] = llm_config   
 
-        # Load persona
-        persona_dir = await install_personas_if_needed(deployment["agent_config"]["persona_module"]["url"])
-        logger.info(f"Persona directory: {persona_dir}")
-        persona_data = load_persona(persona_dir)
-        deployment["agent_config"]["persona_module"]["data"] = persona_data
+        # Load persona if persona_module url exists
+        if "persona_module" in deployment["agent_config"] and "url" in deployment["agent_config"]["persona_module"]:
+            persona_dir = await install_persona(deployment["agent_config"]["persona_module"]["url"])
+            logger.info(f"Persona directory: {persona_dir}")
+            persona_data = load_persona(persona_dir)
+            deployment["agent_config"]["persona_module"]["data"] = persona_data
 
     return [AgentDeployment(**deployment) for deployment in agent_deployments]
 
