@@ -341,7 +341,7 @@ def load_llm_configs(llm_configs_path):
 
 async def load_data_generation_config(agent_deployment_path):
 
-    data_config_path = agent_deployment_path.parent / "data_configuration.json"
+    data_config_path = agent_deployment_path.parent / "data_generation_config.json"
 
     if os.path.exists(data_config_path):    
         with open(data_config_path, "r") as file:

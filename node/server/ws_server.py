@@ -91,6 +91,17 @@ class WebSocketServer:
         self.app = FastAPI()
         self.temp_files = {}
         self.manager = ConnectionManager()
+        self.server = None
+        self._started = False
+
+        # Add shutdown event handler
+        @self.app.on_event("shutdown")
+        async def shutdown_event():
+            logger.info("Received shutdown signal from FastAPI")
+            try:
+                await self.graceful_shutdown()
+            except Exception as e:
+                logger.error(f"Error during shutdown: {e}")
 
         self.app.add_middleware(
             CORSMiddleware,
@@ -1044,21 +1055,66 @@ class WebSocketServer:
             }
             await self.send_response(json.dumps(response))
 
-    async def launch_server(self):
-        if self.node_type == "indirect":
-            node_id_app = FastAPI()
+    async def graceful_shutdown(self):
+        """Handle graceful shutdown of the WebSocket server"""
+        try:
+            logger.info("WebSocket server shutting down...")
 
+            # Close all active connections
+            for client_id in list(self.manager.active_connections.keys()):
+                for task in list(self.manager.active_connections[client_id].keys()):
+                    try:
+                        websocket = self.manager.active_connections[client_id][task]
+                        await websocket.close()
+                        self.manager.disconnect(client_id, task)
+                    except Exception as e:
+                        logger.error(f"Error closing connection for {client_id}_{task}: {e}")
+
+            # Stop the server if it exists
+            if self.server and self._started:
+                logger.info("Stopping WebSocket server...")
+                try:
+                    await asyncio.wait_for(self.server.shutdown(), timeout=10.0)
+                    logger.info("WebSocket server stopped successfully")
+                except asyncio.TimeoutError:
+                    logger.error("WebSocket server stop timed out")
+                except Exception as e:
+                    logger.error(f"Error stopping WebSocket server: {e}")
+                finally:
+                    self._started = False
+
+            # Clean up temp files
+            for filepath in list(self.temp_files.values()):
+                try:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                except Exception as e:
+                    logger.error(f"Error removing temp file {filepath}: {e}")
+            self.temp_files.clear()
+
+            logger.info("WebSocket server shutdown complete")
+
+        except Exception as e:
+            logger.error(f"Error during WebSocket server shutdown: {e}")
+            raise
+
+    async def launch_server(self):
+        """Start the WebSocket server"""
+        if self.node_type == "indirect":
+            # Your existing indirect server code...
+            node_id_app = FastAPI()
+            
             @node_id_app.get("/node_id")
             async def get_node_id():
                 return {"node_id": self.node_id}
 
-            # Configure the node_id server
             node_id_config = uvicorn.Config(
-                node_id_app, host="0.0.0.0", port=self.port, log_level="info"
+                node_id_app, 
+                host="0.0.0.0", 
+                port=self.port, 
+                log_level="info"
             )
             node_id_server = uvicorn.Server(node_id_config)
-
-            import asyncio
 
             asyncio.create_task(node_id_server.serve())
             self.relay_websocket = await self.establish_connection()
@@ -1072,6 +1128,12 @@ class WebSocketServer:
                 timeout_keep_alive=300,
                 limit_concurrency=2000,
                 backlog=4096,
+                timeout_graceful_shutdown=30,
+                reload=False
             )
-            server = uvicorn.Server(config)
-            await server.serve()
+            self.server = uvicorn.Server(config)
+            self._started = True
+            try:
+                await self.server.serve()
+            finally:
+                self._started = False

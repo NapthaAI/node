@@ -34,22 +34,35 @@ class NodeServer:
     async def register_node(self):
         """Register the node with the hub - only HTTP server does this"""
         if self.server_type == "http":
-            async with Hub() as hub:
-                self.hub = hub
-                success, user, user_id = await hub.signin(
-                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
-                )
-                if not success:
-                    raise Exception("Failed to sign in to hub")
-                
-                # After registration, node_config might be returned as dict
-                self.node_config = await hub.create_node(node_config=self.node_config)
-                # Update stored values if node_config is returned as dict
-                if isinstance(self.node_config, dict):
-                    self.node_id = self.node_config["id"].split(":")[1]
-                    self.ip = self.node_config["ip"]
-                    self.type = self.node_config["node_type"]
-                logger.info(f"Registered node: {self.node_config['id'] if isinstance(self.node_config, dict) else self.node_config.id}")
+            try:
+                async with Hub() as hub:
+                    self.hub = hub
+                    success, user, user_id = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    if not success:
+                        raise Exception("Failed to sign in to hub")
+                    
+                    # First try to delete any existing node registration
+                    node_id = self.node_config.id
+                    try:
+                        await hub.delete_node(node_id=node_id)
+                        logger.info(f"Cleaned up existing node registration: {node_id}")
+                    except Exception as e:
+                        logger.info(f"No existing node to clean up: {e}")
+                    
+                    # Now register the node
+                    self.node_config = await hub.create_node(node_config=self.node_config)
+                    if isinstance(self.node_config, dict):
+                        self.node_id = self.node_config["id"].split(":")[1]
+                        self.ip = self.node_config["ip"]
+                        self.type = self.node_config["node_type"]
+                    logger.info(f"Registered node: {self.node_config['id'] if isinstance(self.node_config, dict) else self.node_config.id}")
+            except Exception as e:
+                logger.error(f"Error during node registration: {e}")
+                # Ensure we try to clean up even if registration fails
+                await self.unregister_node()
+                raise
 
     async def start_server(self):
         """Start the server based on type and port"""
@@ -62,6 +75,18 @@ class NodeServer:
         if self.server_type == "http":
             logger.info(f"Starting HTTP server on port {self.port}...")
             self.server = HTTPServer(ip, self.port)
+            # Store reference to NodeServer in app state
+            self.server.app.state.node_server = self
+            
+            # Add shutdown event handler
+            @self.server.app.on_event("shutdown")
+            async def shutdown_event():
+                logger.info("FastAPI shutdown event triggered")
+                try:
+                    await self.graceful_shutdown()
+                except Exception as e:
+                    logger.error(f"Error during shutdown: {e}")
+
         elif self.server_type == "ws":
             logger.info(f"Starting WebSocket server on port {self.port}...")
             self.server = WebSocketServer(
@@ -89,18 +114,32 @@ class NodeServer:
             try:
                 logger.info("Unregistering node from hub")
                 node_id = self.node_config["id"] if isinstance(self.node_config, dict) else self.node_config.id
+                logger.info(f"Attempting to unregister node: {node_id}")
 
                 async with Hub() as hub:
-                    success, user, user_id = await hub.signin(
-                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
-                    )
-                    success = await hub.delete_node(node_id=node_id)
+                    try:
+                        # Add timeout to signin
+                        success, user, user_id = await asyncio.wait_for(
+                            hub.signin(os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")),
+                            timeout=10.0
+                        )
+                        if not success:
+                            raise Exception("Failed to sign in to hub during unregistration")
 
-                if success:
-                    logger.info("Successfully unregistered node")
-                else:
-                    logger.error("Failed to unregister node")
-                    raise Exception("Failed to unregister node")
+                        # Add timeout to delete_node
+                        success = await asyncio.wait_for(
+                            hub.delete_node(node_id=node_id),
+                            timeout=10.0
+                        )
+
+                        if success:
+                            logger.info(f"Successfully unregistered node: {node_id}")
+                        else:
+                            logger.error(f"Failed to unregister node: {node_id}")
+                            raise Exception("Failed to unregister node")
+                    except asyncio.TimeoutError:
+                        logger.error("Hub operation timed out")
+                        raise
             except Exception as e:
                 logger.error(f"Error during node unregistration: {e}")
                 raise
@@ -110,26 +149,39 @@ class NodeServer:
         if sig:
             logger.info(f'Received exit signal {sig.name}...')
         
-        logger.info("Initiating graceful shutdown...")
+        logger.info(f"Initiating graceful shutdown for {self.server_type} server on port {self.port}...")
         self.shutdown_event.set()
         
         try:
-            if isinstance(self.server, GrpcServer):
-                await self.server.graceful_shutdown(timeout=10.0)
-            elif isinstance(self.server, WebSocketServer):
-                if hasattr(self.server, 'graceful_shutdown'):
-                    await self.server.graceful_shutdown()
-                else:
-                    self.server.manager.active_connections.clear()
+            if self.server_type == "http":
+                logger.info("HTTP server shutting down, attempting to unregister node...")
+                # Add timeout to unregister operation
+                try:
+                    await asyncio.wait_for(self.unregister_node(), timeout=20.0)
+                    logger.info("Node unregistration completed successfully")
+                except asyncio.TimeoutError:
+                    logger.error("Node unregistration timed out")
+                except Exception as e:
+                    logger.error(f"Failed to unregister node during shutdown: {e}")
             
-            # Only HTTP server handles node registration
-            await self.unregister_node()
-            logger.info("Graceful shutdown completed")
+            # Handle server-specific shutdown
+            if isinstance(self.server, HTTPServer):
+                logger.info("Stopping HTTP server...")
+                try:
+                    await asyncio.wait_for(self.server.stop(), timeout=10.0)
+                    logger.info("HTTP server stopped successfully")
+                except asyncio.TimeoutError:
+                    logger.error("HTTP server stop timed out")
+                except Exception as e:
+                    logger.error(f"Error stopping HTTP server: {e}")
             
         except Exception as e:
-            logger.error(f"Error during graceful shutdown: {e}")
+            logger.error(f"Error during {self.server_type} server shutdown: {e}")
         finally:
-            logger.info("Forcing exit...")
+            # Give time for cleanup operations to complete
+            logger.info("Cleanup delay before exit...")
+            await asyncio.sleep(1)
+            logger.info(f"Forcing exit of {self.server_type} server...")
             os._exit(0)
 
 async def run_server(server_type: str, port: int):
@@ -139,7 +191,7 @@ async def run_server(server_type: str, port: int):
     def signal_handler(sig):
         """Handle shutdown signals"""
         asyncio.create_task(node_server.graceful_shutdown(sig))
-
+    
     try:
         # Set up signal handlers
         loop = asyncio.get_running_loop()
@@ -160,7 +212,8 @@ async def run_server(server_type: str, port: int):
         
     except Exception as e:
         logger.error(f"Error running server: {e}")
-        await node_server.graceful_shutdown()
+        if not node_server.shutdown_event.is_set():
+            await node_server.graceful_shutdown()
     finally:
         if not node_server.shutdown_event.is_set():
             await node_server.graceful_shutdown()
