@@ -773,6 +773,14 @@ WorkingDirectory=$WORKING_DIR
 EnvironmentFile=$ENVIRONMENT_FILE_PATH
 User=$USER_NAME
 Restart=always
+TimeoutStopSec=90
+KillMode=mixed
+KillSignal=SIGTERM
+SendSIGKILL=yes
+
+# Environment variables for shutdown behavior
+Environment=UVICORN_TIMEOUT=30
+Environment=UVICORN_GRACEFUL_SHUTDOWN=30
 
 [Install]
 WantedBy=multi-user.target
@@ -811,6 +819,10 @@ WorkingDirectory=$WORKING_DIR
 EnvironmentFile=$ENVIRONMENT_FILE_PATH
 User=$USER_NAME
 Restart=always
+TimeoutStopSec=90
+KillMode=mixed
+KillSignal=SIGTERM
+SendSIGKILL=yes
 
 [Install]
 WantedBy=multi-user.target
