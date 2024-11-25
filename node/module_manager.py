@@ -161,7 +161,11 @@ async def install_persona(personas_url: str):
         logger.info("No personas to install")
         return
 
+<<<<<<< HEAD
     personas_base_dir = Path(MODULES_SOURCE_DIR) / "personas"
+=======
+    personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
+>>>>>>> f084f30 (fix load_orchestrator)
     personas_base_dir.mkdir(exist_ok=True)
 
     logger.info(f"Installing persona {personas_url}")
@@ -517,11 +521,13 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
                 agent_deployment.agent_config.llm_config = llm_config
             
             # Update other agent config fields if None
-            if agent_deployment.agent_config.persona_module is None:
-                agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
+            if 'persona_module' in default_config["agent_config"]:
+                if agent_deployment.agent_config.persona_module is None:
+                    agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
             
-            if agent_deployment.agent_config.system_prompt is None:
-                agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
+            if 'system_prompt' in default_config["agent_config"]:
+                if agent_deployment.agent_config.system_prompt is None:
+                    agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
 
     validated_data = load_and_validate_input_schema(orchestrator_run)
 
