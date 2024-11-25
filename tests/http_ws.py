@@ -423,5 +423,125 @@ class TestHTTPServer(unittest.TestCase):
 
         self.loop.run_until_complete(check_multiagent_chat())
 
+    def test_09_random_number_agent(self):
+        async def random_number_agent():
+            agent_run_input = {
+                'consumer_id': self.consumer_id,
+                "inputs": {"agent_name": "random_number"},
+                "agent_deployment": {
+                    'name': 'random_number_agent',
+                    'module': {'name': 'random_number_agent'},
+                    'worker_node_url': '',
+                    'agent_config': {}
+                },
+            }
+
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
+                logger.debug(f"Random number agent response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(random_number_agent())
+
+        async def check_random_number_agent():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/agent/check", json=self.response.json())
+                    logger.debug(f"Check random number agent response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Agent error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = response.json()["results"]
+            logger.debug(f"Agent results: {results}")
+            self.assertIsInstance(int(results[0]), int)
+
+        self.loop.run_until_complete(check_random_number_agent())
+
+    def test_10_keynesian_beauty_contest(self):
+        async def keynesian_beauty_contest():
+            orchestrator_run_input = {
+                'consumer_id': self.consumer_id,
+                "inputs": {"num_agents": 3},
+                "orchestrator_deployment": {
+                    'name': 'keynesian_beauty_contest',
+                    'module': {'name': 'keynesian_beauty_contest'},
+                    'orchestrator_node_url': self.base_url
+                },
+                "agent_deployments": [
+                    {'worker_node_url': 'ws://localhost:7002'}
+                ],
+                "environment_deployments": [{'environment_node_url': 'ws://localhost:7002'}]
+            }
+
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                self.response = await client.post(f"{self.base_url}/orchestrator/run", json=orchestrator_run_input)
+                logger.debug(f"Keynesian beauty contest response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(keynesian_beauty_contest())
+
+        async def check_keynesian_beauty_contest():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/orchestrator/check", json=self.response.json())
+                    logger.debug(f"Check keynesian beauty contest response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Orchestrator error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = response.json()["results"]
+            logger.debug(f"Orchestrator results: {results}")
+            self.assertIn("The winner is", results[0])
+
+        self.loop.run_until_complete(check_keynesian_beauty_contest())
+
+    def test_11_test_personas(self):
+        async def test_personas():
+            agent_run_input = {
+                'consumer_id': self.consumer_id,
+                "inputs": {"question": "is the price of bitcoin going up?", "num_personas": 2},
+                "agent_deployment": {
+                    'name': 'test_personas',
+                    'module': {'name': 'test_personas'},
+                    'worker_node_url': '',
+                    'agent_config': {}
+                },
+            }
+
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
+                logger.debug(f"Test personas response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(test_personas())
+
+        async def check_test_personas():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/agent/check", json=self.response.json())
+                    logger.debug(f"Check test personas response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Agent error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = response.json()["results"]
+            logger.debug(f"Agent results: {results}")
+            self.assertTrue(results[0])
+
+        self.loop.run_until_complete(check_test_personas())
+
 if __name__ == '__main__':
-    unittest.main(failfast=True)
+    unittest.main(failfast=False)
