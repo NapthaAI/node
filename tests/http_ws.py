@@ -31,6 +31,7 @@ class TestHTTPServer(unittest.TestCase):
         cls.base_url = "http://localhost:7001"
         cls.public_key = uuid.uuid4().hex
         cls.consumer_id = None
+        cls.folder_id = None
         cls.test_file_path = "./img.png"
         cls.output_dir = "./test_output"
         cls.chunk_size = 256 * 1024  # 256 KB chunks
@@ -65,7 +66,7 @@ class TestHTTPServer(unittest.TestCase):
             cls.consumer_id = response.json()['id']
             logger.debug(f"Registered user ID: {cls.consumer_id}")
 
-    def test_check_user(self):
+    def test_01_check_user(self):
         async def check_user():
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
                 response = await client.post(f"{self.base_url}/user/check", json={"public_key": self.public_key})
@@ -79,7 +80,7 @@ class TestHTTPServer(unittest.TestCase):
 
         self.loop.run_until_complete(check_user())
 
-    def test_no_user(self):
+    def test_02_no_user(self):
         async def check_user():
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
                 response = await client.post(f"{self.base_url}/user/check", json={"public_key": "no_user"})
@@ -89,15 +90,21 @@ class TestHTTPServer(unittest.TestCase):
 
         self.loop.run_until_complete(check_user())
 
-    def test_run_agent(self):
+    def test_03_run_agent(self):
         async def run_agent():
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
-                params = {
-                    "agent_name": "hello_world_agent",
-                    "agent_run_params": {"firstname": "hellish", "surname": "world"},
-                    "consumer_id": self.consumer_id,
+                agent_run_input = {
+                    'consumer_id': self.consumer_id,
+                    "inputs": {"firstname": "hello", "surname": "world"},
+                    "agent_deployment": {
+                        'name': 'hello_world_agent',
+                        'module': {'name': 'hello_world_agent'},
+                        'worker_node_url': '',
+                        'agent_config': {}
+                    },
+                    "personas_urls": None
                 }
-                self.response = await client.post(f"{self.base_url}/agent/run", json=params)
+                self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
                 logger.debug(f"Run agent response: {self.response.json()}")
                 self.assertEqual(self.response.status_code, 200)
                 self.assertIn("id", self.response.json())
@@ -117,50 +124,13 @@ class TestHTTPServer(unittest.TestCase):
                         self.fail(f"Agent error: {response.json()['error']}")
                     await asyncio.sleep(1)
 
+            results = response.json()["results"]
+            logger.debug(f"Agent results: {results}")
+            self.assertEqual(results[0], "Hello hello world")
+
         self.loop.run_until_complete(check_agent())
 
-    def test_run_multi_agent(self):
-        async def run_multi_agent():
-            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
-                params = {
-                    "agent_name": "keynesian_beauty_contest",
-                    "agent_run_params": {"num_agents": 5},
-                    "consumer_id": self.consumer_id,
-                    "worker_nodes": ["http://localhost:7001"]
-                }
-
-                self.response = await client.post(f"{self.base_url}/agent/run", json=params)
-                logger.debug(f"Run multi agent response: {self.response.json()}")
-                self.assertEqual(self.response.status_code, 200)
-                self.assertIn("id", self.response.json())
-
-        self.loop.run_until_complete(run_multi_agent())
-
-        async def check_multi_agent():
-            while True:
-                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
-                    response = await client.post(f"{self.base_url}/agent/check", json=self.response.json())
-                    logger.debug(f"Check multi agent response: {response.json()}")
-                    self.assertEqual(response.status_code, 200)
-                    if response.json()["status"] == "completed":
-                        break
-                    elif response.json()["status"] == "error":
-                        # fail the test
-                        self.fail(f"Agent error: {response.json()['error']}")
-                    await asyncio.sleep(3)
-
-            if response.json()["status"] == "completed":
-                results = response.json()["results"][0]
-                logger.debug(f"Results: {results}")
-                results = json.loads(results)
-                logger.debug(f"Results: {results}")
-                self.assertEqual(len(results), 5)
-            else:
-                self.fail(f"Agent error: {response.json()['error_message']}")
-
-        self.loop.run_until_complete(check_multi_agent())
-
-    def test_write_read_storage(self):
+    def test_04_write_read_storage(self):
         async def write_read_storage():
             # Write to storage
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
@@ -171,6 +141,8 @@ class TestHTTPServer(unittest.TestCase):
                 self.assertEqual(response.status_code, 201)  # Assuming 201 for successful creation
                 self.assertIn("folder_id", response.json())
                 folder_id = response.json()["folder_id"]
+                TestHTTPServer.folder_id = response.json()["folder_id"]
+                logger.debug(f"Set folder_id to: {TestHTTPServer.folder_id}")
 
             # Read from storage
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
@@ -217,7 +189,7 @@ class TestHTTPServer(unittest.TestCase):
 
         self.loop.run_until_complete(write_read_storage())
 
-    def test_write_read_ipfs(self):
+    def test_05_write_read_ipfs(self):
         async def write_read_ipfs():
             # Write to IPFS
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
@@ -289,5 +261,167 @@ class TestHTTPServer(unittest.TestCase):
 
         self.loop.run_until_complete(write_read_ipfs())
 
+    def test_06_generate_image(self):
+        async def generate_image():
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                agent_run_input = {
+                    'consumer_id': self.consumer_id,
+                    "inputs": {"prompt": "A beautiful image of a sunset over a calm ocean"},
+                    "agent_deployment": {
+                        'name': 'generate_image',
+                        'module': {'name': 'generate_image'},
+                        'worker_node_url': '',
+                        'agent_config': {}
+                    },
+                }
+                self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
+                logger.debug(f"Generate image response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(generate_image())
+
+        async def check_generate_image():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/agent/check", json=self.response.json())
+                    logger.debug(f"Check generate image response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Agent error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = response.json()["results"]
+            logger.debug(f"Agent results: {results}")
+            self.assertIn("Image saved to", results[0])
+
+        self.loop.run_until_complete(check_generate_image())
+
+    def test_07_image_to_image(self):
+        async def image_to_image():
+            logger.debug(f"Folder ID: {self.folder_id}")
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                agent_run_input = {
+                    'consumer_id': self.consumer_id,
+                    "inputs": {
+                        "prompt": "A beautiful image of a sunset over a calm ocean",
+                        "input_dir": self.folder_id
+                    },
+                    "agent_deployment": {
+                        'name': 'image_to_image',
+                        'module': {'name': 'image_to_image'},
+                        'worker_node_url': '',
+                        'agent_config': {}
+                    },
+                }
+                self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
+                logger.debug(f"Image to image response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(image_to_image())
+
+        async def check_image_to_image():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/agent/check", json=self.response.json())
+                    logger.debug(f"Check image to image response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Agent error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = response.json()["results"]
+            logger.debug(f"Agent results: {results}")
+            self.assertIn("Image saved to", results[0])
+
+        self.loop.run_until_complete(check_image_to_image())
+
+    def test_simple_chat_agent(self):
+        async def simple_chat_agent():
+            agent_run_input = {
+                'consumer_id': self.consumer_id,
+                "inputs": {"tool_name": "chat", "tool_input_data": "what is the weather in tokyo?"},
+                "agent_deployment": {
+                    'name': 'simple_chat_agent',
+                    'module': {'name': 'simple_chat_agent'},
+                    'worker_node_url': '',
+                    'agent_config': {}
+                },
+            }
+
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
+                logger.debug(f"Simple chat agent response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(simple_chat_agent())
+
+        async def check_simple_chat_agent():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/agent/check", json=self.response.json())
+                    logger.debug(f"Check simple chat agent response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Agent error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = json.loads(response.json()["results"][0])
+            logger.debug(f"Agent results: {results[0]}")
+            self.assertIn(results[0]['role'], 'system')
+
+        self.loop.run_until_complete(check_simple_chat_agent())
+
+    def test_08_multiagent_chat(self):
+        async def multiagent_chat():
+            orchestrator_run_input = {
+                'consumer_id': self.consumer_id,
+                "inputs": {"prompt": "what is life?"},
+                "orchestrator_deployment": {
+                    'name': 'multiagent_chat',
+                    'module': {'name': 'multiagent_chat'},
+                    'orchestrator_node_url': self.base_url
+                },
+                "agent_deployments": [
+                    {'worker_node_url': 'ws://localhost:7002'},
+                    {'worker_node_url': 'ws://localhost:7002'}
+                ],
+                "environment_deployments": [{'environment_node_url': 'ws://localhost:7002'}]
+            }
+
+            async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                self.response = await client.post(f"{self.base_url}/orchestrator/run", json=orchestrator_run_input)
+                logger.debug(f"Multiagent chat response: {self.response.json()}")
+                self.assertEqual(self.response.status_code, 200)
+                self.assertIn("id", self.response.json())
+
+        self.loop.run_until_complete(multiagent_chat())
+
+        async def check_multiagent_chat():
+            while True:
+                async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
+                    response = await client.post(f"{self.base_url}/orchestrator/check", json=self.response.json())
+                    logger.debug(f"Check multiagent chat response: {response.json()}")
+                    self.assertEqual(response.status_code, 200)
+                    if response.json()["status"] == "completed":
+                        break
+                    elif response.json()["status"] == "error":
+                        self.fail(f"Orchestrator error: {response.json()['error']}")
+                    await asyncio.sleep(1)
+
+            results = response.json()["results"]
+            logger.debug(f"Orchestrator results: {results}")
+            self.assertIn("The meaning of life is", results[0])
+
+        self.loop.run_until_complete(check_multiagent_chat())
+
 if __name__ == '__main__':
-    unittest.main(failfast=False)
+    unittest.main(failfast=True)
