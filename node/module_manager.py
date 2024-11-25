@@ -161,11 +161,7 @@ async def install_persona(personas_url: str):
         logger.info("No personas to install")
         return
 
-<<<<<<< HEAD
     personas_base_dir = Path(MODULES_SOURCE_DIR) / "personas"
-=======
-    personas_base_dir = Path(AGENTS_SOURCE_DIR) / "personas"
->>>>>>> f084f30 (fix load_orchestrator)
     personas_base_dir.mkdir(exist_ok=True)
 
     logger.info(f"Installing persona {personas_url}")
