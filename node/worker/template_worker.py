@@ -208,6 +208,7 @@ class AgentEngine:
             response = await maybe_async_call(
                 self.agent_func,
                 agent_run=self.agent_run,
+                agents_dir=MODULES_SOURCE_DIR,
             )
         except Exception as e:
             logger.error(f"Error running agent: {e}")
@@ -491,22 +492,6 @@ class OrchestratorEngine:
                         consumer = await node.register_user(user_input=consumer)
                         logger.info(f"User registered: {consumer} on worker node: {worker_node_url}")
 
-    # TODO: do we need to handle output at the orchestrator level?
-    # async def handle_ipfs_output(self, cfg, results):
-    #     """
-    #     Handles the outputs of the orchestrator
-    #     """
-    #     save_location = self.parameters.get("save_location", None)
-    #     if save_location:
-    #         self.cfg["outputs"]["location"] = save_location
-
-    #     if self.cfg["outputs"]["save"]:
-    #         if self.cfg["outputs"]["location"] == "ipfs":
-    #             out_msg = upload_to_ipfs(self.parameters["output_path"])
-    #             out_msg = f"IPFS Hash: {out_msg}"
-    #             logger.info(f"Output uploaded to IPFS: {out_msg}")
-    #             self.orchestrator_run.results = [out_msg]
-
     async def start_run(self):
         logger.info("Starting orchestrator run")
         self.orchestrator_run.status = "running"
@@ -516,8 +501,6 @@ class OrchestratorEngine:
             response = await maybe_async_call(
                 self.orchestrator_func,
                 orchestrator_run=self.orchestrator_run,
-                task_engine_cls=TaskEngine,
-                node_cls=Node,
                 db_url=LOCAL_DB_URL,
                 agents_dir=MODULES_SOURCE_DIR,
             )
@@ -537,8 +520,6 @@ class OrchestratorEngine:
             raise ValueError(f"Agent/orchestrator response is not a string: {response}. Current response type: {type(response)}")
 
         self.orchestrator_run.results = [response]
-
-        # await self.handle_ipfs_output(self.cfg, response)
         self.orchestrator_run.status = "completed"
 
     async def complete(self):
@@ -565,11 +546,4 @@ class OrchestratorEngine:
             datetime.fromisoformat(self.orchestrator_run.completed_time)
             - datetime.fromisoformat(self.orchestrator_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(module_run=self.orchestrator_run)
-
-    async def upload_input_params_to_ipfs(self, validated_data):
-        """
-        Uploads the input parameters to IPFS
-        """
-        ipfs_hash = upload_json_string_to_ipfs(validated_data.model_dump_json())
-        return ipfs_hash
+        await update_db_with_status_sync(orchestrator_run=self.orchestrator_run)

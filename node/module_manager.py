@@ -19,7 +19,8 @@ from node.schemas import (
     EnvironmentRun,
     OrchestratorRun, 
     LLMConfig, 
-    AgentConfig
+    AgentConfig,
+    DataGenerationConfig
 )
 from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -337,9 +338,23 @@ def load_llm_configs(llm_configs_path):
         llm_configs = json.loads(file.read())
     return [LLMConfig(**config) for config in llm_configs]
 
+
+async def load_data_generation_config(data_generation_config_path, default_data_generation_config):
+    if os.path.exists(data_generation_config_path):    
+        with open(data_generation_config_path, "r") as file:
+            data_generation_config = json.loads(file.read())
+            if data_generation_config:
+                new_data_generation_config = {**default_data_generation_config.model_dump(), **data_generation_config}
+                return DataGenerationConfig(**new_data_generation_config)
+            else:
+                return default_data_generation_config
+    else:
+        return default_data_generation_config
+
 async def load_agent_deployments(agent_deployments_path, module):
     with open(agent_deployments_path, "r") as file:
         agent_deployments = json.loads(file.read())
+
 
     for deployment in agent_deployments:
         deployment["module"] = module
@@ -427,6 +442,14 @@ async def load_module(run, module_type="agent"):
         deployment = deployments[0]
         setattr(run, deployment_attr, deployment)
 
+        # Load data generation config
+        default_data_generation_config = run.agent_deployment.data_generation_config
+        data_generation_config = await load_data_generation_config(
+            module_path / module_name / "configs/data_generation_config.json",
+            default_data_generation_config
+        )
+        run.agent_deployment.data_generation_config = data_generation_config
+        
     elif module_type == "environment":
         module_name = run.environment_deployment.module['name']
         deployment_attr = "environment_deployment"
@@ -503,11 +526,13 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
                 agent_deployment.agent_config.llm_config = llm_config
             
             # Update other agent config fields if None
-            if agent_deployment.agent_config.persona_module is None:
-                agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
+            if 'persona_module' in default_config["agent_config"]:
+                if agent_deployment.agent_config.persona_module is None:
+                    agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
             
-            if agent_deployment.agent_config.system_prompt is None:
-                agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
+            if 'system_prompt' in default_config["agent_config"]:
+                if agent_deployment.agent_config.system_prompt is None:
+                    agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
 
     validated_data = load_and_validate_input_schema(orchestrator_run)
 

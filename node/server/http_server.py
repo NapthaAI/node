@@ -49,10 +49,17 @@ class HTTPServer:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
-
         self.app = FastAPI()
-
         router = APIRouter()
+        self.server = None
+        self.should_exit = False
+
+        @self.app.on_event("shutdown")
+        async def shutdown_event():
+            logger.info("Received shutdown signal from FastAPI")
+            self.should_exit = True
+            # Add a short delay to allow the signal to propagate
+            await asyncio.sleep(1)
 
         @router.post("/agent/run")
         async def agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
@@ -451,6 +458,14 @@ class HTTPServer:
                 detail="Internal server error occurred while updating agent run",
             )
 
+    async def stop(self):
+        """Handle graceful server shutdown"""
+        if self.server and self._started:
+            logger.info("Stopping HTTP server...")
+            self.server.should_exit = True
+            await self.server.shutdown()
+            logger.info("HTTP server stopped")
+
     async def launch_server(self):
         logger.info(f"Launching HTTP server on 0.0.0.0:{self.port}...")
         config = uvicorn.Config(
@@ -461,7 +476,12 @@ class HTTPServer:
             timeout_keep_alive=300,
             limit_concurrency=200,
             backlog=4096,
-            reload=True,
+            reload=False,  # Important: set to False for proper shutdown
+            timeout_graceful_shutdown=30  # Add explicit graceful shutdown timeout
         )
-        server = uvicorn.Server(config)
-        await server.serve()
+        self.server = uvicorn.Server(config)
+        self._started = True
+        try:
+            await self.server.serve()
+        finally:
+            self._started = False
