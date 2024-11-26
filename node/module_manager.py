@@ -339,16 +339,17 @@ def load_llm_configs(llm_configs_path):
     return [LLMConfig(**config) for config in llm_configs]
 
 
-async def load_data_generation_config(agent_deployment_path):
-
-    data_config_path = agent_deployment_path.parent / "data_generation_config.json"
-
-    if os.path.exists(data_config_path):    
-        with open(data_config_path, "r") as file:
+async def load_data_generation_config(data_generation_config_path, default_data_generation_config):
+    if os.path.exists(data_generation_config_path):    
+        with open(data_generation_config_path, "r") as file:
             data_generation_config = json.loads(file.read())
-        return data_generation_config
+            if data_generation_config:
+                new_data_generation_config = {**default_data_generation_config.model_dump(), **data_generation_config}
+                return DataGenerationConfig(**new_data_generation_config)
+            else:
+                return default_data_generation_config
     else:
-        return None
+        return default_data_generation_config
 
 async def load_agent_deployments(agent_deployments_path, module):
     with open(agent_deployments_path, "r") as file:
@@ -441,6 +442,14 @@ async def load_module(run, module_type="agent"):
         deployment = deployments[0]
         setattr(run, deployment_attr, deployment)
 
+        # Load data generation config
+        default_data_generation_config = run.agent_deployment.data_generation_config
+        data_generation_config = await load_data_generation_config(
+            module_path / module_name / "configs/data_generation_config.json",
+            default_data_generation_config
+        )
+        run.agent_deployment.data_generation_config = data_generation_config
+        
     elif module_type == "environment":
         module_name = run.environment_deployment.module['name']
         deployment_attr = "environment_deployment"
