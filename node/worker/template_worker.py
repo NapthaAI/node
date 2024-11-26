@@ -208,7 +208,7 @@ class AgentEngine:
             response = await maybe_async_call(
                 self.agent_func,
                 agent_run=self.agent_run,
-                agents_dir=AGENTS_SOURCE_DIR,
+                agents_dir=MODULES_SOURCE_DIR,
             )
         except Exception as e:
             logger.error(f"Error running agent: {e}")
