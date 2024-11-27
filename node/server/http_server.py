@@ -15,6 +15,7 @@ from node.schemas import (
     OrchestratorRunInput,
     EnvironmentRun,
     EnvironmentRunInput,
+    DockerParams,
 )
 
 from node.storage.storage import (
@@ -289,6 +290,11 @@ class HTTPServer:
                 elif module_type == "environment":
                     _ = run_environment.delay(run_data)
             elif deployment.module.type == "docker" and module_type == "agent":
+                # validate docker params
+                try:
+                    _ = DockerParams(**run_data["inputs"])
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid docker params: {str(e)}")
                 _ = execute_docker_agent.delay(run_data)
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid {module_type} run type")
