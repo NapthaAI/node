@@ -363,46 +363,50 @@ darwin_install_docker() {
     if [ "$DOCKER_JOBS" = "True" ]; then
         echo "Docker jobs are enabled." | log_with_service_name "Docker" $RED
     else
+        echo "DOCKER_JOBS: $DOCKER_JOBS" | log_with_service_name "Docker" $RED
         echo "Docker jobs are disabled." | log_with_service_name "Docker" $RED
         return
     fi
 
     if docker --version >/dev/null 2>&1; then
         echo "Docker is already installed." | log_with_service_name "Docker" $RED
+        
+        # Try to start Docker even if it's installed
+        echo "Starting Docker..." | log_with_service_name "Docker" $RED
+        open -a Docker
     else
         echo "Installing Docker..." | log_with_service_name "Docker" $RED
 
-        # Check if Homebrew is installed
         if ! command -v brew >/dev/null 2>&1; then
             echo "Homebrew not found. Installing Homebrew..." | log_with_service_name "Homebrew" $NC
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         fi
 
-        # Install Docker using Homebrew
         brew install --cask docker
-
         echo "Docker installed." | log_with_service_name "Docker" $RED
         echo "Starting Docker..." | log_with_service_name "Docker" $RED
-
-        # Start Docker.app
-        open /Applications/Docker.app
-
-        # Wait for Docker to start
-        echo "Waiting for Docker to start..."
-        while ! docker system info >/dev/null 2>&1; do
-            sleep 1
-        done
+        open -a Docker
     fi
 
-    echo "Checking if Docker is running..." | log_with_service_name "Docker" $RED
-    if docker info >/dev/null 2>&1; then
-        echo "Docker is already running." | log_with_service_name "Docker" $RED
-    else
-        echo "Failed to start Docker. Exiting..." | log_with_service_name "Docker" $RED
-        exit 1
-    fi
+    # Wait for Docker to start with timeout
+    echo "Waiting for Docker to start..." | log_with_service_name "Docker" $RED
+    timeout=60
+    start_time=$(date +%s)
+    
+    while ! docker info >/dev/null 2>&1; do
+        current_time=$(date +%s)
+        elapsed=$((current_time - start_time))
+        
+        if [ $elapsed -gt $timeout ]; then
+            echo "Timeout after ${timeout} seconds waiting for Docker" | log_with_service_name "Docker" $RED
+            return 1
+        fi
+        echo "Still waiting... (${elapsed}s)" | log_with_service_name "Docker" $RED
+        sleep 5
+    done
 
     echo "Docker is running." | log_with_service_name "Docker" $RED
+    return 0
 }
 
 # Function to start RabbitMQ on Linux

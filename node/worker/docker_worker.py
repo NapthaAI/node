@@ -58,7 +58,7 @@ def monitor_container_logs(
     for line in container.logs(stream=True, follow=True):
         output += line.strip().decode("utf-8") + "\n"
         agent_run.status = "running"
-        asyncio.run(update_db_with_status_sync(agent_run=agent_run))
+        asyncio.run(update_db_with_status_sync(module_run=agent_run))
 
     if save_location == "node":
         out_msg = {"output": str(output), "node_storage_path": agent_run.id}
@@ -75,7 +75,7 @@ def monitor_container_logs(
     agent_run.error = False
     agent_run.error_message = ""
     agent_run.completed_time = datetime.now(pytz.utc).isoformat()
-    asyncio.run(update_db_with_status_sync(agent_run=agent_run))
+    asyncio.run(update_db_with_status_sync(module_run=agent_run))
     time.sleep(5)
 
     return output
@@ -90,50 +90,31 @@ def cleanup_container(container: Container) -> None:
 
 
 def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
-    """
-        Run a docker container
-        :param agent_run: AgentRun details
-        :param node_config: Node config
-    =    :param kwargs: Additional kwargs
-    """
-    """
-    Example agent run:
-    {
-        'id': '1',
-        'docker_image': 'nbs-test',
-        'docker_command': 'python3 test.py',
-        'docker_volumes': {'/home/': {'bind': '/home/', 'mode': 'rw'}}
-        'docker_num_gpus': 0,
-        'docker_env_vars': {'TEST': 'test'},
-        'kwargs': {}
-    }
-    """
-
-    if agent_run.agent_run_params.save_location:
-        if agent_run.agent_run_params.save_location not in ["node", "ipfs"]:
+    if agent_run.inputs.save_location:
+        if agent_run.inputs.save_location not in ["node", "ipfs"]:
             raise ValueError("save_location must be either 'node' or 'ipfs'")
 
     volumes = {}
     if (
-        agent_run.agent_run_params.input_dir
-        or agent_run.agent_run_params.input_ipfs_hash
+        agent_run.inputs.input_dir
+        or agent_run.inputs.input_ipfs_hash
     ):
         logger.info("Preparing input directory")
         inp_vol = prepare_volume_directory(
             base_dir=BASE_OUTPUT_DIR,
-            bind_path=agent_run.agent_run_params.bind_input_dir,
+            bind_path=agent_run.inputs.bind_input_dir,
             mode="ro",
-            input_dir=agent_run.agent_run_params.input_dir,
-            input_ipfs_hash=agent_run.agent_run_params.input_ipfs_hash,
+            input_dir=agent_run.inputs.input_dir,
+            input_ipfs_hash=agent_run.inputs.input_ipfs_hash,
         )
         volumes.update(inp_vol)
 
-    if agent_run.agent_run_params.docker_output_dir:
+    if agent_run.inputs.docker_output_dir:
         logger.info("Preparing output directory")
         out_vol = prepare_volume_directory(
             base_dir=BASE_OUTPUT_DIR,
             agent_run=agent_run.id.split(":")[1],
-            bind_path=agent_run.agent_run_params.docker_output_dir,
+            bind_path=agent_run.inputs.docker_output_dir,
             mode="rw",
         )
         volumes.update(out_vol)
@@ -146,15 +127,15 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
 
     try:
         # GPU allocation
-        if agent_run.agent_run_params.docker_num_gpus != 0:
+        if agent_run.inputs.docker_num_gpus != 0:
             gpu_request = DeviceRequest(
-                count=agent_run.agent_run_params.docker_num_gpus, capabilities=[["gpu"]]
+                count=agent_run.inputs.docker_num_gpus, capabilities=[["gpu"]]
             )
             kwargs["device_requests"] = [gpu_request]
 
         # Environment variables
-        if agent_run.agent_run_params.docker_env_vars:
-            kwargs["environment"] = agent_run.agent_run_params.docker_env_vars
+        if agent_run.inputs.docker_env_vars:
+            kwargs["environment"] = agent_run.inputs.docker_env_vars
 
         # Volumes
         if volumes:
@@ -163,14 +144,14 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
         logger.debug(f"Running container with kwargs: {kwargs}")
 
         container = client.containers.run(
-            image=agent_run.agent_run_params.docker_image,
-            command=agent_run.agent_run_params.docker_command,
+            image=agent_run.inputs.docker_image,
+            command=agent_run.inputs.docker_command,
             detach=True,
             **kwargs,
         )
 
         monitor_container_logs(
-            container, agent_run, save_location=agent_run.agent_run_params.save_location
+            container, agent_run, save_location=agent_run.inputs.save_location
         )
 
         # Update the agent_run status to completed
@@ -196,7 +177,7 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
 
         asyncio.run(
             update_db_with_status_sync(
-                agent_run=agent_run,
+                module_run=agent_run,
             )
         )
 
@@ -220,7 +201,7 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
         # Update the agent run status to error
         asyncio.run(
             update_db_with_status_sync(
-                agent_run=agent_run,
+                module_run=agent_run,
             )
         )
 
@@ -232,32 +213,32 @@ def run_container_agent(agent_run: AgentRun = None, **kwargs) -> None:
 
 
 # Function to execute a docker agent
-@app.task
-def execute_docker_agent(agent_run: Dict) -> None:
-    """
-    Execute a docker agent
-    :param agent_run: AgentRun details
-    :param hub_config: Hub config
-    """
-    agent_run = AgentRun(**agent_run)
-    agent_run.agent_run_params = DockerParams(**agent_run.agent_run_params)
-    logger.info(f"Executing docker agent run: {agent_run}")
-
-    agent_run.status = "processing"
-    agent_run.start_processing_time = datetime.now(pytz.utc).isoformat()
-
-    # Update the agent run status to processing
-    asyncio.run(
-        update_db_with_status_sync(
-            agent_run=agent_run,
-        )
-    )
+@app.task(bind=True, acks_late=True)
+def execute_docker_agent(self, agent_run: Dict) -> None:
     try:
-        run_container_agent(
-            agent_run=agent_run,
-        )
+        agent_run = AgentRun(**agent_run)
+        docker_params = DockerParams(**agent_run.inputs)
+        agent_run.inputs = docker_params
+        logger.info(f"Executing docker agent run: {agent_run}")
 
-    except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-        error_details = traceback.format_exc()
-        logger.error(f"Full traceback: {error_details}")
+        agent_run.status = "processing"
+        agent_run.start_processing_time = datetime.now(pytz.utc).isoformat()
+
+        # Update the agent run status to processing
+        asyncio.run(
+            update_db_with_status_sync(
+                module_run=agent_run,
+            )
+        )
+        try:
+            run_container_agent(
+                agent_run=agent_run,
+            )
+
+        except Exception as e:
+            logger.error(f"An error occurred: {str(e)}")
+            error_details = traceback.format_exc()
+            logger.error(f"Full traceback: {error_details}")
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
