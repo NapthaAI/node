@@ -1,13 +1,14 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 import uvicorn
 import io
 import os
+import json
 import logging
 import traceback
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional, Union, Any, Dict
 from node.schemas import (
     AgentRun,
     AgentRunInput,
@@ -216,7 +217,66 @@ class HTTPServer:
         async def monitor_update_agent_run_endpoint(agent_run: AgentRun) -> AgentRun:
             """Update an existing agent run with orchestrator."""
             return await self.monitor_update_agent_run(agent_run)
+        # Local DB endpoints
+        @router.post("/local-db/create-table")
+        async def create_local_table_endpoint(
+            table_name: str = Body(...),
+            schema: Dict[str, Dict[str, Any]] = Body(...)
+        ) -> Dict[str, Any]:
+            """Create a table in the local database"""
+            logger.info(f"Creating table: {table_name} with schema: {schema}")
+            return await self.create_local_table(table_name, schema)
 
+        @router.post("/local-db/add-row")
+        async def add_local_row_endpoint(
+            table_name: str = Body(...),
+            data: Dict[str, Any] = Body(...),
+            schema: Optional[Dict[str, Dict[str, Any]]] = Body(None)
+        ) -> Dict[str, Any]:
+            """Add a row to a table in the local database"""
+            return await self.add_local_row(table_name, data, schema)
+
+        @router.post("/local-db/update-row")
+        async def update_local_row_endpoint(
+            table_name: str = Body(...),
+            data: Dict[str, Any] = Body(...),
+            condition: Dict[str, Any] = Body(...),
+            schema: Optional[Dict[str, Dict[str, Any]]] = Body(None)  # Make schema optional
+        ) -> Dict[str, Any]:
+            """Update rows in a table in the local database"""
+            return await self.update_local_row(table_name, data, condition, schema)
+
+        @router.post("/local-db/delete-row")
+        async def delete_local_row_endpoint(
+            table_name: str = Body(...),
+            condition: Dict[str, Any] = Body(...)
+        ) -> Dict[str, Any]:
+            """Delete rows from a table in the local database"""
+            return await self.delete_local_row(table_name, condition)
+
+        @router.get("/local-db/tables")
+        async def list_tables_endpoint() -> Dict[str, Any]:
+            """Get list of all tables in the local database"""
+            return await self.list_local_tables()
+
+        @router.get("/local-db/table/{table_name}")
+        async def get_table_schema_endpoint(table_name: str) -> Dict[str, Any]:
+            """Get schema information for a specific table"""
+            return await self.get_local_table_schema(table_name)
+
+        @router.get("/local-db/table/{table_name}/rows")
+        async def query_table_rows_endpoint(
+            table_name: str,
+            columns: Optional[str] = None,
+            condition: Optional[str] = None,
+            order_by: Optional[str] = None,
+            limit: Optional[int] = None
+        ) -> Dict[str, Any]:
+            """Query rows from a table with optional filters"""
+            return await self.query_local_table(
+                table_name, columns, condition, order_by, limit
+            )
+    
         # Include the router
         self.app.include_router(router)
 
@@ -464,6 +524,98 @@ class HTTPServer:
                 detail="Internal server error occurred while updating agent run",
             )
 
+    async def create_local_table(self, table_name: str, 
+                            schema: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Create a table in the local database"""
+        try:
+            async with DB() as db:
+                result = await db.create_dynamic_table(table_name, schema)
+                return {"success": result, "message": f"Table {table_name} created successfully"}
+        except Exception as e:
+            logger.error(f"Failed to create table: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def add_local_row(self, table_name: str, data: Dict[str, Any], 
+                        schema: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Add a row to the local database"""
+        try:
+            async with DB() as db:
+                result = await db.add_dynamic_row(table_name, data)
+                return {"success": result, "message": "Row added successfully"}
+        except Exception as e:
+            logger.error(f"Failed to add row: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def update_local_row(
+        self, 
+        table_name: str, 
+        data: Dict[str, Any],
+        condition: Dict[str, Any], 
+        schema: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """Update rows in the local database"""
+        try:
+            async with DB() as db:
+                rows_updated = await db.update_dynamic_row(table_name, data, condition)
+                return {"success": True, "rows_updated": rows_updated}
+        except Exception as e:
+            logger.error(f"Failed to update row: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def delete_local_row(self, table_name: str, 
+                            condition: Dict[str, Any]) -> Dict[str, Any]:
+        """Delete rows from the local database"""
+        try:
+            async with DB() as db:
+                rows_deleted = await db.delete_dynamic_row(table_name, condition)
+                return {"success": True, "rows_deleted": rows_deleted}
+        except Exception as e:
+            logger.error(f"Failed to delete row: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def list_local_tables(self) -> Dict[str, Any]:
+        """Get list of all tables"""
+        try:
+            async with DB() as db:
+                tables = await db.list_dynamic_tables()
+                return {"success": True, "tables": tables}
+        except Exception as e:
+            logger.error(f"Failed to list tables: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def get_local_table_schema(self, table_name: str) -> Dict[str, Any]:
+        """Get schema for a specific table"""
+        try:
+            async with DB() as db:
+                schema = await db.get_dynamic_table_schema(table_name)
+                return {"success": True, "table_name": table_name, "schema": schema}
+        except Exception as e:
+            logger.error(f"Failed to get table schema: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    async def query_local_table(self, table_name: str, 
+                            columns: Optional[str] = None,
+                            condition: Optional[str] = None, 
+                            order_by: Optional[str] = None,
+                            limit: Optional[int] = None) -> Dict[str, Any]:
+        """Query rows from a table"""
+        try:
+            column_list = columns.split(',') if columns else None
+            condition_dict = json.loads(condition) if condition else None
+            
+            async with DB() as db:
+                rows = await db.query_dynamic_table(
+                    table_name=table_name,
+                    columns=column_list,
+                    condition=condition_dict,
+                    order_by=order_by,
+                    limit=limit
+                )
+                return {"success": True, "rows": rows}
+        except Exception as e:
+            logger.error(f"Failed to query table: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
+        
     async def stop(self):
         """Handle graceful server shutdown"""
         if self.server and self._started:
