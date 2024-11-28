@@ -127,8 +127,11 @@ darwin_install_ollama() {
         launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
     else
         echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        sudo curl -L https://ollama.ai/download/ollama-linux-amd64 -o /usr/bin/ollama
-        sudo chmod +x /usr/bin/ollama
+        # Download and install Ollama for macOS
+        curl -L https://ollama.com/download/Ollama-darwin.zip -o ollama.zip
+        unzip ollama.zip
+        sudo mv Ollama.app /Applications/
+        # Create ollama user
         sudo dscl . -create /Users/ollama
         sudo dscl . -create /Users/ollama UserShell /bin/false
         sudo dscl . -create /Users/ollama NFSHomeDirectory /usr/share/ollama
@@ -136,8 +139,11 @@ darwin_install_ollama() {
         launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
         echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
     fi
-    ollama serve &
+
+    # Start Ollama service
+    open -a Ollama
     sleep 1
+
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
     IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
@@ -202,38 +208,53 @@ darwin_install_miniforge() {
     else
         # Installation process
         echo "Installing Miniforge..." | log_with_service_name "Miniforge" $BLUE
-        MINIFORGE_INSTALLER="Miniforge3-MacOSX-arm64.sh"
-        curl -sSL "https://github.com/conda-forge/miniforge/releases/latest/download/$MINIFORGE_INSTALLER" -o $MINIFORGE_INSTALLER
-        chmod +x $MINIFORGE_INSTALLER
-        ./$MINIFORGE_INSTALLER -b
-        rm $MINIFORGE_INSTALLER
+        
+        # Detect architecture
+        if [[ $(uname -m) == "arm64" ]]; then
+            MINIFORGE_INSTALLER="Miniforge3-MacOSX-arm64.sh"
+        else
+            MINIFORGE_INSTALLER="Miniforge3-MacOSX-x86_64.sh"
+        fi
+        
+        curl -sSL "https://github.com/conda-forge/miniforge/releases/latest/download/$MINIFORGE_INSTALLER" -o "$MINIFORGE_INSTALLER"
+        chmod +x "$MINIFORGE_INSTALLER"
+        bash "$MINIFORGE_INSTALLER" -b -p "$HOME/miniforge3"
+        rm "$MINIFORGE_INSTALLER"
+        
+        # Initialize for both bash and zsh
         "$HOME/miniforge3/bin/conda" init zsh
+        "$HOME/miniforge3/bin/conda" init bash
     fi
 
-    # Ensure Miniforge's bin directory is in PATH in .zshrc
+    # Ensure Miniforge's bin directory is in PATH
     if ! grep -q 'miniforge3/bin' ~/.zshrc; then
         echo 'export PATH="$HOME/miniforge3/bin:$PATH"' >> ~/.zshrc
-        source ~/.zshrc
         echo "Miniforge path added to .zshrc" | log_with_service_name "Miniforge" $BLUE
     fi
 
-    # Activate Miniforge environment
-    eval "$($HOME/miniforge3/bin/conda shell.zsh hook)"
-    conda activate
-
-    # Check which Python is in use
-    PYTHON_PATH=$(which python)
-    if [[ $PYTHON_PATH == *"$HOME/miniforge3"* ]]; then
-        echo "Miniforge Python is in use." | log_with_service_name "Miniforge" $BLUE
-    else
-        echo "Miniforge Python is not in use. Activating..." | log_with_service_name "Miniforge" $BLUE
-        # Assuming there is a default environment to activate or using base
-        conda activate base
-
-        # Check which Python is in use again
-        PYTHON_PATH=$(which python)
-        echo "Python path: $PYTHON_PATH" | log_with_service_name "Miniforge" $BLUE
+    # Source the current shell's rc file
+    if [ -n "$ZSH_VERSION" ]; then
+        source ~/.zshrc
+    elif [ -n "$BASH_VERSION" ]; then
+        source ~/.bashrc
     fi
+
+    # Activate Miniforge environment
+    eval "$("$HOME/miniforge3/bin/conda" shell.$(basename $SHELL) hook)"
+    conda activate base
+
+    # Verify installation
+    PYTHON_PATH=$(which python)
+    echo "Python path: $PYTHON_PATH" | log_with_service_name "Miniforge" $BLUE
+    
+    if [[ $PYTHON_PATH == *"$HOME/miniforge3"* ]]; then
+        echo "Miniforge Python is successfully activated." | log_with_service_name "Miniforge" $BLUE
+    else
+        echo "Warning: Miniforge Python is not in use." | log_with_service_name "Miniforge" $BLUE
+    fi
+
+    # Display conda version
+    conda --version | log_with_service_name "Miniforge" $BLUE
 }
 
 # Fuction to clean the node
