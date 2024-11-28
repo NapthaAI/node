@@ -110,7 +110,7 @@ CREATE agent:napthaville_module SET name="napthaville_module", description="An a
 CREATE agent:docker_hello_world SET name="docker_hello_world", description="A simple hello world app using docker", author=user:naptha, url="https://hub.docker.com/_/hello-world", type="docker", version="0.1", entrypoint="run.py";
 CREATE agent:random_number_agent SET name="random_number_agent", description="A simple agent for taking part in Keynesian beauty contests", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.4", entrypoint="run.py";
 CREATE agent:test_personas SET name="test_personas", description="A simple test agent for testing personas", author=user:naptha, url="https://github.com/moarshy/test_personas", type="package", version="0.1", personas_urls=["https://huggingface.co/datasets/NapthaAI/market_agents_personas"], entrypoint="run.py";
-
+CREATE agent:tweets_to_character SET name="tweets_to_character", description="An agent for generating character personas from twitter data", author=user:naptha, url="https://github.com/NapthaAI/tweets_to_character", type="package", version="0.1", entrypoint="run.py";
 -- ORCHESTRATORS
 CREATE orchestrator:multiagent_chat SET name="multiagent_chat", description="Multi-agent network for chat", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.12", entrypoint="run.py";
 CREATE orchestrator:babyagi SET name="babyagi", description="Multi-agent network for running task-solving", author=user:naptha, url="https://github.com/NapthaAI/babyagi", type="package", version="0.2", entrypoint="run.py";
