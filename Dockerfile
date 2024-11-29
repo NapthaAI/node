@@ -97,14 +97,17 @@ RUN if [ "$OS_TYPE" = "linux" ]; then \
         sed -i "s/#listen_addresses = .*/listen_addresses = '*'/" /etc/postgresql/16/main/postgresql.conf && \
         echo "host    all             all             0.0.0.0/0               md5" >> /etc/postgresql/16/main/pg_hba.conf; \
     elif [ "$OS_TYPE" = "macos" ]; then \
-        # macOS specific paths and configuration
-        mkdir -p /opt/homebrew/var/postgresql@16 && \
+        # macOS specific installation using Linux paths
         apt-get update && \
         apt-get install -y postgresql-16 postgresql-contrib-16 && \
-        su - postgres -c "/usr/lib/postgresql/16/bin/initdb -D /opt/homebrew/var/postgresql@16" && \
-        echo "port = 3002" >> /opt/homebrew/var/postgresql@16/postgresql.conf && \
-        echo "listen_addresses = '*'" >> /opt/homebrew/var/postgresql@16/postgresql.conf && \
-        echo "host    all             all             0.0.0.0/0               md5" >> /opt/homebrew/var/postgresql@16/pg_hba.conf; \
+        rm -rf /var/lib/postgresql/16/main && \
+        mkdir -p /var/lib/postgresql/16/main && \
+        chown postgres:postgres /var/lib/postgresql/16/main && \
+        chmod 700 /var/lib/postgresql/16/main && \
+        su - postgres -c "/usr/lib/postgresql/16/bin/initdb -D /var/lib/postgresql/16/main" && \
+        sed -i "s/#port = .*/port = 3002/" /etc/postgresql/16/main/postgresql.conf && \
+        sed -i "s/#listen_addresses = .*/listen_addresses = '*'/" /etc/postgresql/16/main/postgresql.conf && \
+        echo "host    all             all             0.0.0.0/0               md5" >> /etc/postgresql/16/main/pg_hba.conf; \
     fi && \
     rm -rf /var/lib/apt/lists/*
 
