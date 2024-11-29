@@ -83,8 +83,6 @@ fi
 echo "Starting new container..."
 docker run -d \
     --name $CONTAINER_NAME \
-    -p 3002:3002 \
-    -p 8000:8000 \
     -p 7001:7001 \
     -p 7002:7002 \
     -p 5672:5672 \
