@@ -339,31 +339,65 @@ def load_llm_configs(llm_configs_path):
     return [LLMConfig(**config) for config in llm_configs]
 
 
-async def load_data_generation_config(data_generation_config_path, default_data_generation_config):
+async def load_data_generation_config(agent_run, data_generation_config_path):
+    run_config = agent_run.agent_deployment.data_generation_config
+    if run_config is None:
+        run_config = DataGenerationConfig()
+    
     if os.path.exists(data_generation_config_path):    
         with open(data_generation_config_path, "r") as file:
-            data_generation_config = json.loads(file.read())
-            if data_generation_config:
-                new_data_generation_config = {**default_data_generation_config.model_dump(), **data_generation_config}
-                return DataGenerationConfig(**new_data_generation_config)
-            else:
-                return default_data_generation_config
-    else:
-        return default_data_generation_config
+            file_config = json.loads(file.read())
+            if file_config:
+                # Start with run config as base
+                config_dict = run_config.copy()
+                
+                # Fill in None values from file config
+                for key, run_value in run_config.items():
+                    if run_value is None and key in file_config:
+                        config_dict[key] = file_config[key]
+                        
+                return DataGenerationConfig(**config_dict)
+    
+    # If no file exists or file is empty, use run config
+    return agent_run.agent_deployment.data_generation_config
 
-async def load_agent_deployments(agent_deployments_path, module):
+async def load_agent_deployments(agent_run, agent_deployments_path, module):
     with open(agent_deployments_path, "r") as file:
-        agent_deployments = json.loads(file.read())
+        default_agent_deployments = json.loads(file.read())
 
+    def merge_configs(run_config, default_config):
+        """Merge configs with run_config taking precedence"""
+        if not run_config:
+            return default_config
+            
+        if isinstance(run_config, dict) and isinstance(default_config, dict):
+            result = default_config.copy()  # Start with defaults
+            # Override with run_config values that aren't None
+            for key, run_value in run_config.items():
+                if run_value is not None:
+                    if isinstance(run_value, (dict, list)):
+                        result[key] = merge_configs(run_value, result.get(key, {}))
+                    else:
+                        result[key] = run_value
+            return result
+        return run_config if run_config is not None else default_config
 
-    for deployment in agent_deployments:
+    result_deployments = []
+    for default_deployment in default_agent_deployments:
+        deployment = default_deployment.copy()
         deployment["module"] = module
+        
         # Load LLM config
-        config_name = deployment["agent_config"]["llm_config"]["config_name"]
-        config_path = agent_deployments_path.parent / "llm_configs.json"
-        llm_configs = load_llm_configs(config_path)
-        llm_config = next(config for config in llm_configs if config.config_name == config_name)
-        deployment["agent_config"]["llm_config"] = llm_config   
+        if "agent_config" in deployment and "llm_config" in deployment["agent_config"]:
+            config_name = deployment["agent_config"]["llm_config"]["config_name"]
+            config_path = agent_deployments_path.parent / "llm_configs.json"
+            llm_configs = load_llm_configs(config_path)
+            llm_config = next(config for config in llm_configs if config.config_name == config_name)
+            deployment["agent_config"]["llm_config"] = llm_config.dict()
+
+        # Merge with run configuration
+        run_deployment = agent_run.agent_deployment.dict(exclude_unset=True)
+        merged_deployment = merge_configs(run_deployment, deployment)
 
         # Load persona if persona_module url exists
         if "persona_module" in deployment["agent_config"] and "url" in deployment["agent_config"]["persona_module"]:
@@ -371,8 +405,11 @@ async def load_agent_deployments(agent_deployments_path, module):
             logger.info(f"Persona directory: {persona_dir}")
             persona_data = load_persona(persona_dir)
             deployment["agent_config"]["persona_module"]["data"] = persona_data
+            merged_deployment["agent_config"]["persona_module"]["data"] = persona_data
+        
+        result_deployments.append(AgentDeployment(**merged_deployment))
 
-    return [AgentDeployment(**deployment) for deployment in agent_deployments]
+    return result_deployments
 
 def load_environment_deployments(environment_deployments_path, module):
     with open(environment_deployments_path, "r") as file:
@@ -391,14 +428,6 @@ def load_environment_deployments(environment_deployments_path, module):
     return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
 
 async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
-    """Loads and validates the input schema for the agent, orchestrator, or environment
-
-    Args:
-        module_run: Either AgentRun, OrchestratorRun, or EnvironmentRun object
-
-    Returns:
-        The validated module run with inputs schema
-    """
     if isinstance(module_run, AgentRun):
         module_name = module_run.agent_deployment.module['name']
     elif isinstance(module_run, OrchestratorRun):
@@ -419,15 +448,6 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     return module_run
 
 async def load_module(run, module_type="agent"):
-    """Loads a module (agent or environment) and returns the function and validated run data
-    
-    Args:
-        run: Either AgentRun or EnvironmentRun object
-        module_type: String indicating the type ("agent" or "environment")
-    
-    Returns:
-        tuple: (module_func, validated_run)
-    """
     # Load the module from the modules directory
     if module_type == "agent":
         module_name = run.agent_deployment.module['name']
@@ -436,17 +456,17 @@ async def load_module(run, module_type="agent"):
         
         # Load configs
         deployments = await load_agent_deployments(
-            module_path / module_name / "configs/agent_deployments.json",
-            getattr(run, deployment_attr).module
+            agent_run=run,
+            agent_deployments_path=module_path / module_name / "configs/agent_deployments.json",
+            module=getattr(run, deployment_attr).module
         )
         deployment = deployments[0]
         setattr(run, deployment_attr, deployment)
 
         # Load data generation config
-        default_data_generation_config = run.agent_deployment.data_generation_config
         data_generation_config = await load_data_generation_config(
-            module_path / module_name / "configs/data_generation_config.json",
-            default_data_generation_config
+            agent_run=run,
+            data_generation_config_path=module_path / module_name / "configs/data_generation_config.json"
         )
         run.agent_deployment.data_generation_config = data_generation_config
         
@@ -457,8 +477,8 @@ async def load_module(run, module_type="agent"):
         
         # Load configs
         deployments = load_environment_deployments(
-            module_path / module_name / "configs/environment_deployments.json",
-            getattr(run, deployment_attr).module
+            environment_deployments_path=module_path / module_name / "configs/environment_deployments.json",
+            module=getattr(run, deployment_attr).module
         )
         deployment = deployments[0]
         setattr(run, deployment_attr, deployment)
@@ -466,7 +486,7 @@ async def load_module(run, module_type="agent"):
     else:
         raise ValueError("module_type must be either 'agent' or 'environment'")
 
-    if module_type == "agent":
+    if module_type == "agent" and deployment.data_generation_config:
         # Handle output configuration
         if deployment.data_generation_config.save_outputs:
             if ':' in run.id:
@@ -487,6 +507,7 @@ async def load_module(run, module_type="agent"):
     module_func = getattr(main_module, entrypoint)
     
     return module_func, run
+
 
 async def load_orchestrator(orchestrator_run, agent_source_dir):
     """Loads the orchestrator and returns the orchestrator function"""
@@ -542,5 +563,7 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
     main_module = importlib.import_module(f"{tn}.run")
     main_module = importlib.reload(main_module)
     orchestrator_func = getattr(main_module, entrypoint)
+
+    logger.info(f"Orchestrator run x2: {orchestrator_run}")
 
     return orchestrator_func, orchestrator_run, validated_data
