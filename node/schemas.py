@@ -79,7 +79,7 @@ class DataGenerationConfig(BaseModel):
     save_inputs_location: Optional[str] = None
 
 class AgentDeployment(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = "agent_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     worker_node_url: Optional[str] = None
     agent_config: Optional[AgentConfig] = AgentConfig()
@@ -161,7 +161,7 @@ class AgentRun(BaseModel):
 class AgentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    agent_deployment: AgentDeployment
+    agent_deployment: AgentDeployment = AgentDeployment()
     orchestrator_runs: List['OrchestratorRun'] = []
     
 class OrchestratorRunInput(BaseModel):
