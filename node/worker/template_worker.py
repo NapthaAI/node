@@ -392,9 +392,6 @@ class OrchestratorEngine:
             "id": self.orchestrator_run.consumer_id,
         }
 
-        # set environment url TODO: here override the environment url. is this correct?
-        self.orchestrator_run.environment_deployments[0].environment_node_url = LOCAL_DB_URL
-
 
     async def init_run(self):
         logger.info("Initializing orchestrator run")
