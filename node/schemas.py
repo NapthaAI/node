@@ -34,11 +34,11 @@ class LLMClientType(str, Enum):
     OLLAMA = "ollama"
 
 class LLMConfig(BaseModel):
-    config_name: Optional[str] = "llm_config"
+    config_name: Optional[str] = None
     client: Optional[LLMClientType] = None
     model: Optional[str] = None
-    max_tokens: Optional[int] = 400
-    temperature: Optional[float] = 0
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
     api_base: Optional[str] = None
 
 class AgentModuleType(str, Enum):
@@ -58,30 +58,30 @@ class AgentModule(BaseModel):
     personas_urls: Optional[List[str]] = None
 
 class AgentConfig(BaseModel):
-    config_name: Optional[str] = "agent_config"
-    llm_config: Optional[LLMConfig] = LLMConfig()
+    config_name: Optional[str] = None
+    llm_config: Optional[LLMConfig] = None
     persona_module: Optional[Union[Dict, BaseModel]] = None
-    system_prompt: Optional[Union[Dict, BaseModel]] = {'role': 'system', 'content': 'You are a helpful assistant.'}
+    system_prompt: Optional[Union[Dict, BaseModel]] = None
 
 class OrchestratorConfig(BaseModel):
     config_name: Optional[str] = "orchestrator_config"
     max_rounds: Optional[int] = 5
 
 class EnvironmentConfig(BaseModel):
-    config_name: Optional[str] = "environment_config"
+    config_name: Optional[str] = None
     environment_type: Optional[str] = None
 
 class DataGenerationConfig(BaseModel):
-    save_outputs: Optional[bool] = False
-    save_outputs_location: Optional[str] = "node"
+    save_outputs: Optional[bool] = None
+    save_outputs_location: Optional[str] = None
     save_outputs_path: Optional[str] = None
-    save_inputs: Optional[bool] = False
-    save_inputs_location: Optional[str] = "node"
+    save_inputs: Optional[bool] = None
+    save_inputs_location: Optional[str] = None
 
 class AgentDeployment(BaseModel):
     name: Optional[str] = "agent_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    worker_node_url: Optional[str] = "http://localhost:7001"
+    worker_node_url: Optional[str] = None
     agent_config: Optional[AgentConfig] = AgentConfig()
     data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
 
@@ -161,7 +161,7 @@ class AgentRun(BaseModel):
 class AgentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    agent_deployment: AgentDeployment
+    agent_deployment: AgentDeployment = AgentDeployment()
     orchestrator_runs: List['OrchestratorRun'] = []
     
 class OrchestratorRunInput(BaseModel):
