@@ -1,4 +1,5 @@
 celery_worker_start.sh
+celeryworker.service
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
