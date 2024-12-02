@@ -513,7 +513,7 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
     """Loads the orchestrator and returns the orchestrator function"""
     workflow_name = orchestrator_run.orchestrator_deployment.module['name']
     workflow_path = f"{agent_source_dir}/{workflow_name}"
-
+    
     # Load configuration JSONs
     config_path = f"{workflow_path}/{workflow_name}/configs"
     with open(f"{config_path}/agent_deployments.json") as f:
@@ -521,43 +521,72 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
     with open(f"{config_path}/llm_configs.json") as f:
         llm_configs = {conf["config_name"]: conf for conf in json.load(f)}
 
-    for i, agent_deployment in enumerate(orchestrator_run.agent_deployments):
-        if i < len(default_agent_deployments):
-            default_config = default_agent_deployments[i]
-            
-            # Update agent deployment name
-            agent_deployment.name = default_config["name"]
+    # Track which default configs have been used
+    used_defaults = set()
+    
+    # Convert list to keep final agent deployments
+    final_agent_deployments = []
 
-            # Update missing module info
+    # First process incoming agent deployments
+    for agent_deployment in orchestrator_run.agent_deployments:
+        matched_default = None
+        
+        # Try to find matching default config by name
+        for i, default_config in enumerate(default_agent_deployments):
+            if agent_deployment.name == default_config["name"]:
+                matched_default = default_config
+                used_defaults.add(i)
+                break
+        
+        if matched_default:
+            # Use existing agent_deployment but fill in missing fields from default
             if agent_deployment.module is None:
-                agent_deployment.module = default_config["module"]
-            
-            # Update missing worker_node_url
+                agent_deployment.module = matched_default["module"]
             if agent_deployment.worker_node_url is None:
-                agent_deployment.worker_node_url = default_config["worker_node_url"]
+                agent_deployment.worker_node_url = matched_default["worker_node_url"]
             
-            # Update agent config
+            # Handle agent_config
             if agent_deployment.agent_config is None:
-                agent_deployment.agent_config = AgentConfig(**default_config["agent_config"])
+                agent_deployment.agent_config = AgentConfig(**matched_default["agent_config"])
+            else:
+                default_agent_config = matched_default["agent_config"]
+                for key, value in default_agent_config.items():
+                    if not hasattr(agent_deployment.agent_config, key) or getattr(agent_deployment.agent_config, key) is None:
+                        setattr(agent_deployment.agent_config, key, value)
             
-            # Get LLM config from default config and llm_configs
-            if default_config["agent_config"]["llm_config"]["config_name"] in llm_configs:
-                llm_config_name = default_config["agent_config"]["llm_config"]["config_name"]
-                llm_config = LLMConfig(**llm_configs[llm_config_name])
-                agent_deployment.agent_config.llm_config = llm_config
+            # Handle LLM config
+            llm_config_name = matched_default["agent_config"]["llm_config"]["config_name"]
+            if llm_config_name in llm_configs and agent_deployment.agent_config.llm_config is None:
+                agent_deployment.agent_config.llm_config = LLMConfig(**llm_configs[llm_config_name])
             
-            # Update other agent config fields if None
-            if 'persona_module' in default_config["agent_config"]:
-                if agent_deployment.agent_config.persona_module is None:
-                    agent_deployment.agent_config.persona_module = default_config["agent_config"]["persona_module"]
-            
-            if 'system_prompt' in default_config["agent_config"]:
-                if agent_deployment.agent_config.system_prompt is None:
-                    agent_deployment.agent_config.system_prompt = default_config["agent_config"]["system_prompt"]
+            final_agent_deployments.append(agent_deployment)
 
+    # Add any unused default configurations
+    for i, default_config in enumerate(default_agent_deployments):
+        if i not in used_defaults:
+            # Create new agent deployment from default config
+            agent_config = AgentConfig(**default_config["agent_config"])
+            
+            # Set LLM config
+            llm_config_name = default_config["agent_config"]["llm_config"]["config_name"]
+            if llm_config_name in llm_configs:
+                agent_config.llm_config = LLMConfig(**llm_configs[llm_config_name])
+            
+            new_deployment = AgentDeployment(
+                name=default_config["name"],
+                module=default_config["module"],
+                worker_node_url=default_config["worker_node_url"],
+                agent_config=agent_config
+            )
+            final_agent_deployments.append(new_deployment)
+
+    # Update orchestrator_run with final deployments
+    orchestrator_run.agent_deployments = final_agent_deployments
+
+    # Validate the input schema
     validated_data = load_and_validate_input_schema(orchestrator_run)
 
-    # TODO: check if there is dynamic entrypoint
+    # Import and reload the orchestrator module
     tn = workflow_name.replace("-", "_")
     entrypoint = 'run'
     main_module = importlib.import_module(f"{tn}.run")
