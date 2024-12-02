@@ -1120,7 +1120,6 @@ ulimit -n 65536 || log_error "Failed to set ulimit"
 # Start Celery
 exec celery -A node.worker.main.app worker \
     --loglevel=info \
-    --concurrency=120 \
     --max-tasks-per-child=100 \
     --max-memory-per-child=350000
 EOF
