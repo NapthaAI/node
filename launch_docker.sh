@@ -18,14 +18,8 @@ CONTAINER_NAME="naptha-container"
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
     BASE_IMAGE="ubuntu:24.04"
-    BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=false --build-arg OS_TYPE=macos"
+    BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg OS_TYPE=macos"
     echo "Detected macOS. Using base image: $BASE_IMAGE"
-    
-    # Ensure LLM_BACKEND is set to 'ollama' for macOS
-    if [ "$LLM_BACKEND" != "ollama" ]; then
-        echo "Setting LLM_BACKEND to 'ollama' for macOS"
-        sed -i '' 's/^LLM_BACKEND=.*/LLM_BACKEND=ollama/' .env
-    fi
     
     # Ensure OLLAMA_MODELS is set
     if [ -z "$OLLAMA_MODELS" ]; then
@@ -35,13 +29,8 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     fi
 else
     # Linux
-    if [ "$GPU" = "true" ]; then
-        BASE_IMAGE="nvidia/cuda:12.2.0-base-ubuntu22.04"
-        BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=true --build-arg OS_TYPE=linux"
-    else
-        BASE_IMAGE="ubuntu:24.04"
-        BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg USE_GPU=false --build-arg OS_TYPE=linux"
-    fi
+    BASE_IMAGE="ubuntu:24.04"
+    BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE} --build-arg OS_TYPE=linux"
     echo "Detected Linux. Using base image: $BASE_IMAGE"
 fi
 
@@ -92,39 +81,21 @@ fi
 
 # Run the new container
 echo "Starting new container..."
-if [ "$GPU" = "true" ] && [[ "$OSTYPE" != "darwin"* ]]; then
-    # GPU version (Linux only)
-    docker run -d \
-        --gpus all \
-        --name $CONTAINER_NAME \
-        -p 3002:3002 \
-        -p 8000:8000 \
-        -p 7001:7001 \
-        -p 5672:5672 \
-        -p 15672:15672 \
-        -p 11434:11434 \
-        -v "$(pwd)/node/storage/fs:/app/node/storage/fs" \
-        -v "$(pwd)/node/storage/db/db.db:/app/node/storage/db/db.db" \
-        -v "$(pwd)/logs:/var/log" \
-        -v "$HOME/.cache:/root/.cache" \
-        --env-file .env \
-        $IMAGE_NAME
-else
-    # CPU version (Linux and macOS)
-    docker run -d \
-        --name $CONTAINER_NAME \
-        -p 3002:3002 \
-        -p 8000:8000 \
-        -p 7001:7001 \
-        -p 5672:5672 \
-        -p 15672:15672 \
-        -p 11434:11434 \
-        -v "$(pwd)/node/storage/fs:/app/node/storage/fs" \
-        -v "$(pwd)/node/storage/db/db.db:/app/node/storage/db/db.db" \
-        -v "$(pwd)/logs:/var/log" \
-        -v "$HOME/.cache:/root/.cache" \
-        --env-file .env \
-        $IMAGE_NAME
-fi
+docker run -d \
+    --name $CONTAINER_NAME \
+    -p 7001:7001 \
+    -p 7002:7002 \
+    -p 5672:5672 \
+    -p 15672:15672 \
+    -p 11434:11434 \
+    -v "$(pwd)/node/storage/fs:/app/node/storage/fs" \
+    -v "$(pwd)/node/storage/db/db.db:/app/node/storage/db/db.db" \
+    -v "$(pwd)/logs:/var/log" \
+    --env-file .env \
+    $IMAGE_NAME
 
 echo "Container started. You can check its logs with: docker logs $CONTAINER_NAME"
+
+
+# give me single line docker run command
+# echo "docker run -d --name naptha-container -p 3002:3002 -p 8000:8000 -p 7001:7001 -p 7002:7002 -p 5672:5672 -p 15672:15672 -p 11434:11434 -v "$(pwd)/node/storage/fs:/app/node/storage/fs" -v "$(pwd)/node/storage/db/db.db:/app/node/storage/db/db.db" -v "$(pwd)/logs:/var/log" --env-file .env naptha-full-stack"

@@ -12,8 +12,6 @@ ENV PATH="/root/miniforge3/bin:${PATH}"
 # Set work directory
 WORKDIR /app
 
-# Use ARG to determine if we're building for GPU
-ARG USE_GPU=false
 ARG OS_TYPE=linux
 
 # Install system dependencies, build tools, and networking utilities
@@ -78,13 +76,47 @@ RUN mkdir -p /var/log/rabbitmq /var/lib/rabbitmq && \
     chown -R rabbitmq:rabbitmq /var/log/rabbitmq /var/lib/rabbitmq && \
     chmod 777 /var/log/rabbitmq /var/lib/rabbitmq
 
-# Set up RabbitMQ directories and permissions
-RUN mkdir -p /var/log/rabbitmq /var/lib/rabbitmq && \
-    chown -R rabbitmq:rabbitmq /var/log/rabbitmq /var/lib/rabbitmq && \
-    chmod 777 /var/log/rabbitmq /var/lib/rabbitmq
 
 # Install Ollama
 RUN curl https://ollama.ai/install.sh | sh
+
+# Add PostgreSQL repository and install PostgreSQL 16
+RUN if [ "$OS_TYPE" = "linux" ]; then \
+        # Linux installation
+        sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' && \
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
+        apt-get update && \
+        apt-get install -y postgresql-16 postgresql-contrib-16 && \
+        # Clean up and initialize PostgreSQL data directory
+        rm -rf /var/lib/postgresql/16/main && \
+        mkdir -p /var/lib/postgresql/16/main && \
+        chown postgres:postgres /var/lib/postgresql/16/main && \
+        su - postgres -c "/usr/lib/postgresql/16/bin/initdb -D /var/lib/postgresql/16/main" && \
+        # Configure PostgreSQL
+        sed -i "s/#port = .*/port = 3002/" /etc/postgresql/16/main/postgresql.conf && \
+        sed -i "s/#listen_addresses = .*/listen_addresses = '*'/" /etc/postgresql/16/main/postgresql.conf && \
+        echo "host    all             all             0.0.0.0/0               md5" >> /etc/postgresql/16/main/pg_hba.conf; \
+    elif [ "$OS_TYPE" = "macos" ]; then \
+        # macOS specific installation using Linux paths
+        apt-get update && \
+        apt-get install -y postgresql-16 postgresql-contrib-16 && \
+        rm -rf /var/lib/postgresql/16/main && \
+        mkdir -p /var/lib/postgresql/16/main && \
+        chown postgres:postgres /var/lib/postgresql/16/main && \
+        chmod 700 /var/lib/postgresql/16/main && \
+        su - postgres -c "/usr/lib/postgresql/16/bin/initdb -D /var/lib/postgresql/16/main" && \
+        sed -i "s/#port = .*/port = 3002/" /etc/postgresql/16/main/postgresql.conf && \
+        sed -i "s/#listen_addresses = .*/listen_addresses = '*'/" /etc/postgresql/16/main/postgresql.conf && \
+        echo "host    all             all             0.0.0.0/0               md5" >> /etc/postgresql/16/main/pg_hba.conf; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set permissions for PostgreSQL directories
+RUN mkdir -p /var/log/postgresql && \
+    chown -R postgres:postgres /var/log/postgresql && \
+    chmod -R 777 /var/log/postgresql && \
+    chown -R postgres:postgres /var/lib/postgresql && \
+    chmod -R 700 /var/lib/postgresql/16/main
 
 # Create conda environment with Python 3.12
 RUN conda create -n myenv python=3.12 -y
@@ -92,37 +124,21 @@ RUN conda create -n myenv python=3.12 -y
 # Activate conda environment
 SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
 
-# Install vLLM dependencies based on GPU flag and OS type
-RUN if [ "$OS_TYPE" = "macos" ]; then \
-        pip install -vv poetry; \
-    elif [ "$USE_GPU" = "true" ]; then \
-        pip install -vv vllm poetry; \
-    else \
-        pip install -vv poetry && \
-        git clone https://github.com/vllm-project/vllm.git /app/vllm && \
-        cd /app/vllm && \
-        pip install --upgrade pip && \
-        pip install wheel packaging ninja "setuptools>=49.4.0" numpy && \
-        pip install -v -r requirements-cpu.txt --extra-index-url https://download.pytorch.org/whl/cpu && \
-        pip uninstall -y torchvision && \
-        wget https://download.pytorch.org/whl/cpu/torchvision-0.19.0%2Bcpu-cp312-cp312-linux_x86_64.whl && \
-        pip install torchvision-0.19.0+cpu-cp312-cp312-linux_x86_64.whl && \
-        VLLM_TARGET_DEVICE=cpu python setup.py install && \
-        cd /app; \
-    fi
+
+RUN pip install -vv poetry
 
 # Copy the project files
-COPY ./.dockerignore /app/
+COPY ./docker-utils/.dockerignore /app/
+COPY ./docker-utils/celery_worker_start_docker.sh /app/
+COPY ./docker-utils/environment.yml /app/
+COPY ./docker-utils/init_llm.py /app/
+COPY ./docker-utils/setup_venv.sh /app/
+COPY ./docker-utils/supervisord.conf /app/
+COPY ./docker-utils/start.sh /app/
 COPY ./node /app/node
-COPY ./celery_worker_start_docker.sh /app/
-COPY ./environment.yml /app/
-COPY ./init_llm.py /app/
-COPY ./setup_venv.sh /app/
-COPY ./supervisord.conf /app/
 COPY ./pyproject.toml /app/
 COPY ./poetry.lock /app/
 COPY ./README.md /app/
-COPY ./start.sh /app/
 
 # After copying all files
 WORKDIR /app
@@ -151,17 +167,17 @@ RUN mkdir -p /var/log && \
     chmod 666 /var/log/*.log
 
 # Expose ports
-EXPOSE 3001 3002 7001 7002 5672 15672 11434 
-
-# Expose ssh
-EXPOSE 22
+EXPOSE 3001 3002 7001 7002 5672 15672 11434 22
 
 # Set up supervisord configuration
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY ./docker-utils/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy the start script
-COPY start.sh /app/start.sh
+COPY ./docker-utils/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
+
+COPY ./docker-utils/init_postgres.sh /app/init_postgres.sh
+RUN chmod +x /app/init_postgres.sh
 
 # Set the entrypoint to the start script
 ENTRYPOINT ["/app/start.sh"]
