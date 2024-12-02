@@ -1,4 +1,0 @@
-diffusers 
-transformers 
-accelerate 
-omegaconf
