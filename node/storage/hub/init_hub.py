@@ -35,6 +35,7 @@ def import_surql():
         f"{surql_path}/auction.surql",
         f"{surql_path}/kb.surql",
         f"{surql_path}/testdata.surql",
+        f"{surql_path}/tools.surql",
     ]
 
     for file in import_files:

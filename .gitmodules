@@ -1,0 +1,3 @@
+[submodule "node/libs/toolset_manager"]
+	path = node/libs/toolset_manager
+	url = git@github.com:C0deMunk33/toolset_manager.git

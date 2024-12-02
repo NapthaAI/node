@@ -38,6 +38,7 @@ from node.schemas import (
     KBRunInput,
     KBRun,
     AgentModuleType,
+    ToolsetList
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -52,6 +53,11 @@ from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_environment, run_orchestrator, run_kb
 
+
+###### toolset stuff ###############
+from node.libs.toolset_manager import ToolsetManager
+######### end toolset stuff ########
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 
@@ -65,6 +71,9 @@ class HTTPServer:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
+
+        self.toolset_manager = ToolsetManager()
+
         self.app = FastAPI()
         router = APIRouter()
         self.server = None
@@ -371,6 +380,61 @@ class HTTPServer:
                 logger.error(f"Error in chat endpoint: {str(e)}")
                 logger.error(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
+            
+        ##################### Tool Endpoints #########################################
+        @router.post("/tool/get_toolset_list")
+        async def get_toolset_list_endpoint(agent_run: AgentRun) -> ToolsetList:
+            """Get the list of available toolsets for a given agent run."""
+            # TODO: figure out how this id is set
+            # TODO: isolate tool calls from the node, maybe make a server
+            if agent_run.id is None:
+                print("HERE")
+                raise HTTPException(status_code=400, detail="Agent run ID is required")
+            
+            toolset_list = await self.get_toolset_list(agent_run.id)
+            return {"toolsets": "moo"}
+
+        @router.post("/tool/get_tool_list")
+        async def get_tool_list_endpoint():
+            """Get the list of available tools."""
+            return {"tools": ["tool1", "tool2", "tool3"]}
+        
+        @router.post("/tool/run_tool")
+        async def run_tool_endpoint(tool_name: str, tool_input: dict):
+            """Run a tool."""
+            return {"tool_name": tool_name, "tool_input": tool_input}
+        
+        @router.post("/tool/query_toolsets")
+        async def query_toolsets_endpoint(toolset_name: str):
+            """Query toolsets."""
+            return {"toolset_name": toolset_name}
+
+        @router.post("/tool/query_tools")
+        async def query_tools_endpoint(tool_name: str):
+            """Query tools."""
+            return {"tool_name": tool_name}
+        
+        @router.post("/tool/add_tool_repo_to_toolset")
+        async def add_tool_repo_endpoint(tool_name: str, tool_repo: str):
+            """Add tool repository."""
+            return {"tool_name": tool_name, "tool_repo": tool_repo}
+
+        @router.post("/tool/load_toolset")
+        async def load_tool_context_endpoint(tool_name: str):
+            """Load tool context."""
+            return {"tool_name": tool_name}
+        
+        # create tool context
+        @router.post("/tool/create_toolset")
+        async def create_tool_context_endpoint(tool_name: str, tool_input: dict):
+            """Create tool context."""
+            return {"tool_name": tool_name, "tool_input": tool_input}
+        
+        # add tool to context
+        @router.post("/tool/add_tool_to_toolset")
+        async def add_tool_to_context_endpoint(tool_name: str, tool_input: dict):
+            """Add tool to context."""
+            return {"tool_name": tool_name, "tool_input": tool_input}
 
         # Include the router
         self.app.include_router(router)
@@ -1079,3 +1143,9 @@ class HTTPServer:
             await self.server.serve()
         finally:
             self._started = False
+
+    ###### toolset stuff ###############
+    async def get_toolset_list(self, agent_run_id: str):
+        # TODO: update toolset manager to use agent_run_id
+        return await self.toolset_manager.get_toolset_names()
+    ######### end toolset stuff ########

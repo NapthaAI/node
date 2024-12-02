@@ -231,6 +231,31 @@ class KBRun(BaseModel):
     error: bool = False
     id: Optional[str] = None
     results: list[Optional[str]] = []   
+    
+################# Toolset stuff####################
+
+class Tool(BaseModel):
+    id: str
+    name: str
+    description: str
+    source_url: str
+
+class Toolset(BaseModel):
+    id: str
+    name: str
+    description: str
+    tools: List[Tool]
+
+class ToolsetList(BaseModel):
+    toolsets: List[Toolset]
+
+class ToolsetRun(BaseModel):
+    toolset: Toolset
+    agent_run: AgentRun
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[str] = []
     error_message: Optional[str] = None
     created_time: Optional[str] = None
     start_processing_time: Optional[str] = None
