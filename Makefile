@@ -45,10 +45,15 @@ remove:
 	@rm -rf node/storage/hub/modules
 	@echo "Cleanup completed."
 
-# Target to remove hub.db and db.db
-remove-db:
-	@echo "Removing hub.db and db.db..."
+# Target to remove hub.db
+remove-hub:
+	@echo "Removing hub.db"
 	cd $(shell pwd) && \
-	db_path=$$PWD/node/storage/db/db.db && \
 	hub_path=$$PWD/node/storage/hub/hub.db && \
 	rm -rf $$db_path $$hub_path
+
+# Reset database completely
+local-db-reset:
+	@echo "Resetting database state..."
+	@python3 scripts/reset_db.py
+	@echo "Database reset completed. Ready for init_db.py to be executed by launch.sh"
