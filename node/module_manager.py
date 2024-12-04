@@ -580,6 +580,12 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
             )
             final_agent_deployments.append(new_deployment)
 
+    # Replace worker_node_url if it exists in incoming orchestrator_run
+    for i, deployment in enumerate(final_agent_deployments):
+        incoming_deployment = orchestrator_run.agent_deployments[i]
+        if incoming_deployment.worker_node_url:
+            deployment.worker_node_url = incoming_deployment.worker_node_url
+
     # Update orchestrator_run with final deployments
     orchestrator_run.agent_deployments = final_agent_deployments
 
