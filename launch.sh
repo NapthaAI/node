@@ -1291,6 +1291,15 @@ darwin_setup_local_db() {
         echo "PostgreSQL 16 installed successfully." | log_with_service_name "PostgreSQL" $BLUE
     fi
 
+    # Ensure PostgreSQL 16 is linked and in PATH
+    if ! command -v psql &>/dev/null; then
+        echo "Adding PostgreSQL 16 to PATH..." | log_with_service_name "PostgreSQL" $BLUE
+        brew link --force postgresql@16
+        echo 'export PATH="/usr/local/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
+        source ~/.zshrc
+        echo "PostgreSQL 16 added to PATH." | log_with_service_name "PostgreSQL" $BLUE
+    fi
+
     # Add PostgreSQL 16 to PATH for this session
     export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
 
