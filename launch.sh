@@ -1017,30 +1017,34 @@ linux_start_celery_worker() {
     CURRENT_DIR=$(pwd)
     WORKING_DIR="$CURRENT_DIR"
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
-    EXECUTION_PATH="$CURRENT_DIR/celery_worker_start.sh"
 
-    # cd to the directory of the service file
-    cd ops/systemd
-
-    # Replace the fieldsin the service file with the dynamic path
-    sed -i "s|ExecStart=.*|ExecStart=$EXECUTION_PATH|" celeryworker.service
-    sed -i "s|WorkingDirectory=.*|WorkingDirectory=$WORKING_DIR|" celeryworker.service
-    sed -i "s|EnvironmentFile=.*|EnvironmentFile=$ENVIRONMENT_FILE_PATH|" celeryworker.service
-    sed -i "/^User=/c\User=$USER_NAME" celeryworker.service
-
-    # cd back to the original directory
-    cd -
-
-    # Write celery_worker_start.sh
+    # Create celery_worker_start.sh
     echo "#!/bin/bash" > celery_worker_start.sh
     echo "source $CURRENT_DIR/.venv/bin/activate" >> celery_worker_start.sh
     echo "exec celery -A node.worker.main.app worker --loglevel=info" >> celery_worker_start.sh
-
-    # Make the script executable
     chmod +x celery_worker_start.sh
 
-    # Move the celeryworker.service to the systemd directory
-    sudo cp ops/systemd/celeryworker.service /etc/systemd/system/celeryworker.service
+    # Create temporary systemd service file
+    cat > /tmp/celeryworker.service << EOF
+[Unit]
+Description=Celery Worker Service
+After=network.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+WorkingDirectory=$WORKING_DIR
+EnvironmentFile=$ENVIRONMENT_FILE_PATH
+ExecStart=$CURRENT_DIR/celery_worker_start.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Move the temporary service file to systemd directory
+    sudo cp /tmp/celeryworker.service /etc/systemd/system/celeryworker.service
+    rm /tmp/celeryworker.service
 
     # Reload systemd to recognize new service
     sudo systemctl daemon-reload
@@ -1055,11 +1059,7 @@ linux_start_celery_worker() {
         sleep 1
     done
 
-    # Check if the Celery worker service is running
     sudo systemctl status celeryworker | log_with_service_name "Celery" $GREEN
-
-    # Change back to the original directory (if needed)
-    cd -
 }
 
 darwin_start_celery_worker() {
@@ -1291,6 +1291,15 @@ darwin_setup_local_db() {
         echo "PostgreSQL 16 installed successfully." | log_with_service_name "PostgreSQL" $BLUE
     fi
 
+    # Ensure PostgreSQL 16 is linked and in PATH
+    if ! command -v psql &>/dev/null; then
+        echo "Adding PostgreSQL 16 to PATH..." | log_with_service_name "PostgreSQL" $BLUE
+        brew link --force postgresql@16
+        echo 'export PATH="/usr/local/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
+        source ~/.zshrc
+        echo "PostgreSQL 16 added to PATH." | log_with_service_name "PostgreSQL" $BLUE
+    fi
+
     # Add PostgreSQL 16 to PATH for this session
     export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
 
@@ -1409,6 +1418,145 @@ darwin_start_local_db() {
     fi
 }
 
+startup_summary() {
+    echo "🔍 Checking status of all services..." | log_with_service_name "Summary" $BLUE
+    
+    # Use simple arrays with consistent indexing instead of associative arrays
+    services=()
+    statuses=()
+    logs=()
+    
+    # Check PostgreSQL
+    services+=("PostgreSQL")
+    if [ "$os" = "Darwin" ]; then
+        if psql -p $LOCAL_DB_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(tail -n 20 /opt/homebrew/var/log/postgresql@16.log)")
+        fi
+    else
+        if sudo -u postgres psql -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(sudo journalctl -u postgresql -n 20)")
+        fi
+    fi
+
+    # Check Local Hub if enabled
+    if [ "$LOCAL_HUB" == "True" ]; then
+        services+=("Hub_DB")
+        if curl -s http://localhost:$HUB_DB_PORT/health > /dev/null; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(tail -n 20 /tmp/hub_db.log 2>/dev/null || echo 'Log file not found')")
+        fi
+    fi
+
+    # Check Celery
+    services+=("Celery")
+    if [ "$os" = "Darwin" ]; then
+        if pgrep -f "celery.*worker" > /dev/null; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(tail -n 20 /tmp/celeryworker.out 2>/dev/null || echo 'Log file not found')")
+        fi
+    else
+        if systemctl is-active --quiet celeryworker; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(sudo journalctl -u celeryworker -n 20)")
+        fi
+    fi
+
+    # Wait before checking HTTP and WS servers
+    echo "Waiting for HTTP and WebSocket servers to fully initialize..." | log_with_service_name "Summary" $BLUE
+    sleep 5
+
+    # Check Node HTTP Server
+    services+=("HTTP_Server")
+    if [ "$os" = "Darwin" ]; then
+        if curl -s http://localhost:7001/health > /dev/null; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(tail -n 20 /tmp/nodeapp_http.out 2>/dev/null || echo 'Log file not found')")
+        fi
+    else
+        if curl -s http://localhost:7001/health > /dev/null; then
+            statuses+=("✅")
+            logs+=("")
+        else
+            statuses+=("❌")
+            logs+=("$(sudo journalctl -u nodeapp_http -n 20)")
+        fi
+    fi
+
+    # Check Node WS Server(s)
+    for port in $(echo $NODE_PORTS | tr ',' ' '); do
+        if [ "$port" != "7001" ]; then  # Skip HTTP port
+            services+=("WS_Server_${port}")
+            if curl -s http://localhost:$port/health > /dev/null; then
+                statuses+=("✅")
+                logs+=("")
+            else
+                statuses+=("❌")
+                if [ "$os" = "Darwin" ]; then
+                    logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo 'Log file not found')")
+                else
+                    logs+=("$(sudo journalctl -u nodeapp_ws_$port -n 20)")
+                fi
+            fi
+        fi
+    done
+
+    # Print formatted summary
+    echo -e "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
+    echo -e "           🔍 SERVICE STATUS              " | log_with_service_name "Summary" $BLUE
+    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
+    echo -e "                                         " | log_with_service_name "Summary" $BLUE
+
+    # Print status for each service
+    local failed_services=0
+    for i in "${!services[@]}"; do
+        service_name="${services[$i]}"
+        service_name="${service_name//_/ }"  # Replace underscores with spaces
+        printf "  %-20s %s\n" "$service_name" "${statuses[$i]}" | log_with_service_name "Summary" $BLUE
+        if [ "${statuses[$i]}" == "❌" ]; then
+            failed_services=$((failed_services + 1))
+        fi
+    done
+
+    echo -e "                                         " | log_with_service_name "Summary" $BLUE
+    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
+
+    # Print logs for failed services
+    if [ $failed_services -gt 0 ]; then
+        echo -e "\n📋 Error Logs for Failed Services:" | log_with_service_name "Summary" $RED
+        for i in "${!services[@]}"; do
+            if [ "${statuses[$i]}" == "❌" ]; then
+                service_name="${services[$i]}"
+                service_name="${service_name//_/ }"
+                echo -e "\n🔴 ${service_name} Logs:" | log_with_service_name "Summary" $RED
+                echo "${logs[$i]}" | log_with_service_name "Summary" $RED
+            fi
+        done
+        exit 1
+    else
+        echo -e "\n✨ All services started successfully!" | log_with_service_name "Summary" $GREEN
+    fi
+}
+
 print_logo(){
     printf """
                  █▀█                  
@@ -1454,6 +1602,7 @@ main() {
         darwin_start_local_db
         darwin_start_servers
         darwin_start_celery_worker
+        startup_summary
     else
         print_logo
         install_python312
@@ -1474,6 +1623,7 @@ main() {
         linux_start_local_db
         linux_start_servers
         linux_start_celery_worker
+        startup_summary
     fi
 
     echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN
