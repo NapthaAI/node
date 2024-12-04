@@ -16,6 +16,23 @@ log_with_service_name() {
     done
 }
 
+# Function to detect architecture
+get_architecture() {
+    arch=$(uname -m)
+    case $arch in
+        x86_64|amd64)
+            echo "amd64"
+            ;;
+        aarch64|arm64)
+            echo "arm64"
+            ;;
+        *)
+            echo "Unsupported architecture: $arch" >&2
+            exit 1
+            ;;
+    esac
+}
+
 get_surrealdb_version() {
     surreal -V | awk '{print $6}'
 }
@@ -96,10 +113,7 @@ linux_install_ollama() {
         sudo systemctl start ollama
     else
         echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        sudo curl -L https://ollama.ai/download/ollama-linux-amd64 -o /usr/bin/ollama
-        sudo chmod +x /usr/bin/ollama
-        sudo useradd -r -s /bin/false -m -d /usr/share/ollama ollama
-        sudo cp ./ops/systemd/ollama.service /etc/systemd/system/
+        sudo curl -fsSL https://ollama.com/install.sh | sh
         sudo systemctl daemon-reload
         sudo systemctl enable ollama
         sudo systemctl start ollama
@@ -120,14 +134,14 @@ darwin_install_ollama() {
     
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-
+    arch=$(get_architecture)
     if command -v ollama >/dev/null 2>&1; then
         echo "Ollama is already installed." | log_with_service_name "Ollama" $RED
         cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
         launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
     else
         echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        sudo curl -L https://ollama.ai/download/ollama-linux-amd64 -o /usr/bin/ollama
+        sudo curl -L https://ollama.ai/download/ollama-linux-$arch -o /usr/bin/ollama
         sudo chmod +x /usr/bin/ollama
         sudo dscl . -create /Users/ollama
         sudo dscl . -create /Users/ollama UserShell /bin/false
@@ -159,7 +173,12 @@ linux_install_miniforge() {
     else
         # Installation process
         echo "Installing Miniforge..." | log_with_service_name "Miniforge" $BLUE
-        MINIFORGE_INSTALLER="Miniforge3-Linux-x86_64.sh"
+        arch=$(get_architecture)
+        if [ "$arch" = "amd64" ]; then
+            MINIFORGE_INSTALLER="Miniforge3-Linux-x86_64.sh"
+        else
+            MINIFORGE_INSTALLER="Miniforge3-Linux-$arch.sh"
+        fi
         curl -sSL "https://github.com/conda-forge/miniforge/releases/latest/download/$MINIFORGE_INSTALLER" -o $MINIFORGE_INSTALLER
         chmod +x $MINIFORGE_INSTALLER
         ./$MINIFORGE_INSTALLER -b
@@ -202,7 +221,12 @@ darwin_install_miniforge() {
     else
         # Installation process
         echo "Installing Miniforge..." | log_with_service_name "Miniforge" $BLUE
-        MINIFORGE_INSTALLER="Miniforge3-MacOSX-arm64.sh"
+        arch=$(get_architecture)
+        if [ "$arch" = "amd64" ]; then
+            MINIFORGE_INSTALLER="Miniforge3-Darwin-x86_64.sh"
+        else
+            MINIFORGE_INSTALLER="Miniforge3-Darwin-$arch.sh"
+        fi
         curl -sSL "https://github.com/conda-forge/miniforge/releases/latest/download/$MINIFORGE_INSTALLER" -o $MINIFORGE_INSTALLER
         chmod +x $MINIFORGE_INSTALLER
         ./$MINIFORGE_INSTALLER -b
