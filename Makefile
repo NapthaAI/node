@@ -55,5 +55,5 @@ remove-hub:
 # Reset database completely
 local-db-reset:
 	@echo "Resetting database state..."
-	@PYTHONPATH=$(shell pwd) poetry run python scripts/reset_db.py
+	@PYTHONPATH=$(shell pwd) poetry run python node/storage/db/reset_db.py
 	@echo "Database reset completed."
