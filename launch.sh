@@ -1017,30 +1017,34 @@ linux_start_celery_worker() {
     CURRENT_DIR=$(pwd)
     WORKING_DIR="$CURRENT_DIR"
     ENVIRONMENT_FILE_PATH="$CURRENT_DIR/.env"
-    EXECUTION_PATH="$CURRENT_DIR/celery_worker_start.sh"
 
-    # cd to the directory of the service file
-    cd ops/systemd
-
-    # Replace the fieldsin the service file with the dynamic path
-    sed -i "s|ExecStart=.*|ExecStart=$EXECUTION_PATH|" celeryworker.service
-    sed -i "s|WorkingDirectory=.*|WorkingDirectory=$WORKING_DIR|" celeryworker.service
-    sed -i "s|EnvironmentFile=.*|EnvironmentFile=$ENVIRONMENT_FILE_PATH|" celeryworker.service
-    sed -i "/^User=/c\User=$USER_NAME" celeryworker.service
-
-    # cd back to the original directory
-    cd -
-
-    # Write celery_worker_start.sh
+    # Create celery_worker_start.sh
     echo "#!/bin/bash" > celery_worker_start.sh
     echo "source $CURRENT_DIR/.venv/bin/activate" >> celery_worker_start.sh
     echo "exec celery -A node.worker.main.app worker --loglevel=info" >> celery_worker_start.sh
-
-    # Make the script executable
     chmod +x celery_worker_start.sh
 
-    # Move the celeryworker.service to the systemd directory
-    sudo cp ops/systemd/celeryworker.service /etc/systemd/system/celeryworker.service
+    # Create temporary systemd service file
+    cat > /tmp/celeryworker.service << EOF
+[Unit]
+Description=Celery Worker Service
+After=network.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+WorkingDirectory=$WORKING_DIR
+EnvironmentFile=$ENVIRONMENT_FILE_PATH
+ExecStart=$CURRENT_DIR/celery_worker_start.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Move the temporary service file to systemd directory
+    sudo cp /tmp/celeryworker.service /etc/systemd/system/celeryworker.service
+    rm /tmp/celeryworker.service
 
     # Reload systemd to recognize new service
     sudo systemctl daemon-reload
@@ -1055,11 +1059,7 @@ linux_start_celery_worker() {
         sleep 1
     done
 
-    # Check if the Celery worker service is running
     sudo systemctl status celeryworker | log_with_service_name "Celery" $GREEN
-
-    # Change back to the original directory (if needed)
-    cd -
 }
 
 darwin_start_celery_worker() {
