@@ -175,3 +175,4 @@ logs/
 .env copy
 node/storage/db/alembic/versions
 celery_worker_start.sh
+ops/systemd/*
