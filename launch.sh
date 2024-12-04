@@ -1409,6 +1409,139 @@ darwin_start_local_db() {
     fi
 }
 
+startup_summary() {
+    echo "🔍 Checking status of all services..." | log_with_service_name "Summary" $BLUE
+    
+    # Array to store service statuses
+    declare -A service_status
+    declare -A service_logs
+
+    # Check PostgreSQL
+    if [ "$os" = "Darwin" ]; then
+        if psql -p $LOCAL_DB_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
+            service_status["PostgreSQL"]="✅"
+        else
+            service_status["PostgreSQL"]="❌"
+            service_logs["PostgreSQL"]=$(tail -n 20 /opt/homebrew/var/log/postgresql@16.log)
+        fi
+    else
+        if sudo -u postgres psql -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
+            service_status["PostgreSQL"]="✅"
+        else
+            service_status["PostgreSQL"]="❌"
+            service_logs["PostgreSQL"]=$(sudo journalctl -u postgresql -n 20)
+        fi
+    fi
+
+    # Check Local Hub if enabled
+    if [ "$LOCAL_HUB" == "True" ]; then
+        if curl -s http://localhost:$HUB_DB_PORT/health > /dev/null; then
+            service_status["Hub DB"]="✅"
+        else
+            service_status["Hub DB"]="❌"
+            service_logs["Hub DB"]=$(tail -n 20 /tmp/hub_db.log 2>/dev/null || echo "Log file not found")
+        fi
+    fi
+
+    # Check Celery
+    if [ "$os" = "Darwin" ]; then
+        if pgrep -f "celery.*worker" > /dev/null; then
+            service_status["Celery"]="✅"
+        else
+            service_status["Celery"]="❌"
+            service_logs["Celery"]=$(tail -n 20 /tmp/celeryworker.out 2>/dev/null || echo "Log file not found")
+        fi
+    else
+        if systemctl is-active --quiet celeryworker; then
+            service_status["Celery"]="✅"
+        else
+            service_status["Celery"]="❌"
+            service_logs["Celery"]=$(sudo journalctl -u celeryworker -n 20)
+        fi
+    fi
+
+    # Wait before checking HTTP and WS servers
+    echo "Waiting for HTTP and WebSocket servers to fully initialize..." | log_with_service_name "Summary" $BLUE
+    sleep 5
+
+    # Check Node HTTP Server
+    if [ "$os" = "Darwin" ]; then
+        if curl -s http://localhost:7001/health > /dev/null; then
+            service_status["HTTP Server"]="✅"
+        else
+            service_status["HTTP Server"]="❌"
+            service_logs["HTTP Server"]=$(tail -n 20 /tmp/nodeapp_http.out 2>/dev/null || echo "Log file not found")
+        fi
+    else
+        if curl -s http://localhost:7001/health > /dev/null; then
+            service_status["HTTP Server"]="✅"
+        else
+            service_status["HTTP Server"]="❌"
+            service_logs["HTTP Server"]=$(sudo journalctl -u nodeapp_http -n 20)
+        fi
+    fi
+
+    # Check Node WS Server(s)
+    for port in $(echo $NODE_PORTS | tr ',' ' '); do
+        if [ "$port" != "7001" ]; then  # Skip HTTP port
+            if curl -s http://localhost:$port/health > /dev/null; then
+                service_status["WS Server :$port"]="✅"
+            else
+                service_status["WS Server :$port"]="❌"
+                if [ "$os" = "Darwin" ]; then
+                    service_logs["WS Server :$port"]=$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo "Log file not found")
+                else
+                    service_logs["WS Server :$port"]=$(sudo journalctl -u nodeapp_ws_$port -n 20)
+                fi
+            fi
+        fi
+    done
+
+    # Print formatted summary
+    echo -e "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
+    echo -e "           🔍 SERVICE STATUS              " | log_with_service_name "Summary" $BLUE
+    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
+    echo -e "                                         " | log_with_service_name "Summary" $BLUE
+    printf "  %-20s %s\n" "PostgreSQL" "${service_status['PostgreSQL']}" | log_with_service_name "Summary" $BLUE
+    printf "  %-20s %s\n" "HTTP Server" "${service_status['HTTP Server']}" | log_with_service_name "Summary" $BLUE
+    printf "  %-20s %s\n" "Celery" "${service_status['Celery']}" | log_with_service_name "Summary" $BLUE
+
+    # Print WS servers
+    for port in $(echo $NODE_PORTS | tr ',' ' '); do
+        if [ "$port" != "7001" ]; then
+            printf "  %-20s %s\n" "WS Server :$port" "${service_status["WS Server :$port"]}" | log_with_service_name "Summary" $BLUE
+        fi
+    done
+
+    if [ "$LOCAL_HUB" == "True" ]; then
+        printf "  %-20s %s\n" "Hub DB" "${service_status['Hub DB']}" | log_with_service_name "Summary" $BLUE
+    fi
+
+    echo -e "                                         " | log_with_service_name "Summary" $BLUE
+    echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
+
+    # Check if any services failed
+    local failed_services=0
+    for service in "${!service_status[@]}"; do
+        if [ "${service_status[$service]}" == "❌" ]; then
+            failed_services=$((failed_services + 1))
+        fi
+    done
+
+    if [ $failed_services -gt 0 ]; then
+        echo -e "\n📋 Error Logs for Failed Services:" | log_with_service_name "Summary" $RED
+        for service in "${!service_status[@]}"; do
+            if [ "${service_status[$service]}" == "❌" ]; then
+                echo -e "\n🔴 ${service} Logs:" | log_with_service_name "Summary" $RED
+                echo "${service_logs[$service]}" | log_with_service_name "Summary" $RED
+            fi
+        done
+        exit 1
+    else
+        echo -e "\n✨ All services started successfully!" | log_with_service_name "Summary" $GREEN
+    fi
+}
+
 print_logo(){
     printf """
                  █▀█                  
@@ -1454,6 +1587,7 @@ main() {
         darwin_start_local_db
         darwin_start_servers
         darwin_start_celery_worker
+        startup_summary
     else
         print_logo
         install_python312
@@ -1474,6 +1608,7 @@ main() {
         linux_start_local_db
         linux_start_servers
         linux_start_celery_worker
+        startup_summary
     fi
 
     echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN
