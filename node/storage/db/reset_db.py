@@ -10,6 +10,7 @@ def reset_db():
     
     if is_macos:
         commands = [
+            "rm -rf node/storage/db/alembic/versions/*",
             f"psql -p {LOCAL_DB_PORT} postgres -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{LOCAL_DB_NAME}' AND pid <> pg_backend_pid();\"",
             f"dropdb -p {LOCAL_DB_PORT} --if-exists {LOCAL_DB_NAME}",
             f"dropuser -p {LOCAL_DB_PORT} --if-exists {LOCAL_DB_USER}",
@@ -20,6 +21,7 @@ def reset_db():
         ]
     else:
         commands = [
+            "rm -rf node/storage/db/alembic/versions/*",
             f"sudo -u postgres psql -d template1 -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{LOCAL_DB_NAME}' AND pid <> pg_backend_pid();\"",
             f"sudo -u postgres psql -d template1 -c \"DROP DATABASE IF EXISTS {LOCAL_DB_NAME};\"",
             f"sudo -u postgres psql -d template1 -c \"DROP USER IF EXISTS {LOCAL_DB_USER};\"",
