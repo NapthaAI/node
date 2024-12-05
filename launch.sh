@@ -1502,19 +1502,49 @@ startup_summary() {
         fi
     fi
 
-    # Check Node WS Server(s)
+    # Check Secondary Servers (WS or gRPC)
     for port in $(echo $NODE_PORTS | tr ',' ' '); do
         if [ "$port" != "7001" ]; then  # Skip HTTP port
-            services+=("WS_Server_${port}")
-            if curl -s http://localhost:$port/health > /dev/null; then
-                statuses+=("✅")
-                logs+=("")
-            else
-                statuses+=("❌")
-                if [ "$os" = "Darwin" ]; then
-                    logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo 'Log file not found')")
+            services+=("${SERVER_TYPE^^}_Server_${port}")  # ^^ converts to uppercase
+            
+            # Health check based on server type
+            if [ "${SERVER_TYPE}" = "ws" ]; then
+                # WebSocket health check using /health endpoint
+                if curl -s http://localhost:$port/health > /dev/null; then
+                    statuses+=("✅")
+                    logs+=("")
                 else
-                    logs+=("$(sudo journalctl -u nodeapp_ws_$port -n 20)")
+                    if [ "$os" = "Darwin" ]; then
+                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo 'Log file not found')")
+                    else
+                        logs+=("$(sudo journalctl -u nodeapp_ws_$port -n 20)")
+                    fi
+                    statuses+=("❌")
+                fi
+            else  # grpc
+                # gRPC health check using is_alive
+                if python3 -c "
+import grpc
+import sys
+from node.server import grpc_server_pb2_grpc, grpc_server_pb2
+from google.protobuf.empty_pb2 import Empty
+channel = grpc.insecure_channel('localhost:$port')
+stub = grpc_server_pb2_grpc.GrpcServerStub(channel)
+try:
+    response = stub.is_alive(Empty())
+    sys.exit(0 if response.ok else 1)
+except Exception as e:
+    sys.exit(1)
+" > /dev/null 2>&1; then
+                    statuses+=("✅")
+                    logs+=("")
+                else
+                    if [ "$os" = "Darwin" ]; then
+                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.out 2>/dev/null || echo 'Log file not found')")
+                    else
+                        logs+=("$(sudo journalctl -u nodeapp_grpc_$port -n 20)")
+                    fi
+                    statuses+=("❌")
                 fi
             fi
         fi
