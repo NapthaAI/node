@@ -1585,7 +1585,7 @@ except Exception as e:
     else
         echo -e "\n✨ All services started successfully!" | log_with_service_name "Summary" $GREEN
     fi
-}
+}   
 
 print_logo(){
     printf """
