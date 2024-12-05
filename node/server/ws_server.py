@@ -110,7 +110,12 @@ class WebSocketServer:
             allow_methods=["*"],
             allow_headers=["*"],
         )
-
+        # Add health check endpoint
+        @self.app.get("/health")
+        async def health_check():
+            """Simple health check endpoint"""
+            return {"status": "ok", "server_type": "websocket"}
+        
         self.app.add_api_websocket_route(
             "/ws/run_agent/{client_id}", self.run_agent_endpoint
         )
