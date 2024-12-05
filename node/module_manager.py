@@ -343,6 +343,9 @@ async def load_data_generation_config(agent_run, data_generation_config_path):
     run_config = agent_run.agent_deployment.data_generation_config
     if run_config is None:
         run_config = DataGenerationConfig()
+
+    if isinstance(run_config, DataGenerationConfig):
+        run_config = run_config.model_dump()
     
     if os.path.exists(data_generation_config_path):    
         with open(data_generation_config_path, "r") as file:
