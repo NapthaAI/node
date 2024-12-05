@@ -391,8 +391,8 @@ class TestHTTPServer(unittest.TestCase):
                     'orchestrator_node_url': self.base_url
                 },
                 "agent_deployments": [
-                    {'worker_node_url': 'ws://localhost:7002'},
-                    {'worker_node_url': 'ws://localhost:7002'}
+                    {'worker_node_url': 'grpc://localhost:7002'},
+                    {'worker_node_url': 'grpc://localhost:7002'}
                 ],
                 "environment_deployments": [{'environment_node_url': 'http://localhost:7001'}]
             }
@@ -481,7 +481,7 @@ class TestHTTPServer(unittest.TestCase):
                     'module': {'name': 'keynesian_beauty_contest'},
                     'orchestrator_node_url': self.base_url
                 },
-                "agent_deployments": [{'worker_node_url': 'ws://localhost:7002'} for _ in range(2)],
+                "agent_deployments": [{'worker_node_url': 'grpc://localhost:7002'} for _ in range(2)],
                 "environment_deployments": [{'environment_node_url': 'http://localhost:7001'}]
             }
 
