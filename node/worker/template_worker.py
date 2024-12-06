@@ -439,7 +439,8 @@ class OrchestratorEngine:
             return Node(node_url=node_url, server_type='ws')
         elif 'http://' in node_url:
             return Node(node_url=node_url, server_type='http')
-        elif '://' not in node_url:
+        elif 'grpc://' in node_url:
+            node_url = node_url.replace('grpc://', '')
             return Node(node_url=node_url, server_type='grpc')
         else:
             raise ValueError(f"Invalid node URL: {node_url}")

@@ -62,6 +62,10 @@ class HTTPServer:
             self.should_exit = True
             # Add a short delay to allow the signal to propagate
             await asyncio.sleep(1)
+        
+        @self.app.get("/health")
+        async def health_check():
+            return {"status": "ok", "server_type": "http"}
 
         @router.post("/agent/run")
         async def agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
