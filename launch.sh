@@ -1505,7 +1505,7 @@ startup_summary() {
     # Check Secondary Servers (WS or gRPC)
     for port in $(echo $NODE_PORTS | tr ',' ' '); do
         if [ "$port" != "7001" ]; then  # Skip HTTP port
-            services+=("${SERVER_TYPE^^}_Server_${port}")  # ^^ converts to uppercase
+            services+=("$(echo $SERVER_TYPE | tr '[:lower:]' '[:upper:]')_Server_${port}")
             
             # Health check based on server type
             if [ "${SERVER_TYPE}" = "ws" ]; then
