@@ -233,34 +233,48 @@ class KBRun(BaseModel):
     results: list[Optional[str]] = []   
     
 ################# Toolset stuff####################
-
-class Tool(BaseModel):
+class ToolDetails(BaseModel):
     id: str
     name: str
     description: str
     source_url: str
 
-class Toolset(BaseModel):
+class ToolsetDetails(BaseModel):
     id: str
     name: str
     description: str
-    tools: List[Tool]
+    tools: List[ToolDetails]
+
+class ToolsetRequest(BaseModel):
+    agent_id: str
+
+class SetToolsetRequest(BaseModel):
+    agent_id: str
+    toolset_name: str
+
+class ToolsetListRequest(BaseModel):
+    agent_id: str
+
+class ToolsetLoadRepoRequest(BaseModel):
+    agent_id: str
+    repo_url: str
+    toolset_name: str
 
 class ToolsetList(BaseModel):
-    toolsets: List[Toolset]
+    toolsets: List[ToolsetDetails]
 
-class ToolsetRun(BaseModel):
-    toolset: Toolset
-    agent_run: AgentRun
-    status: str = "pending"
-    error: bool = False
-    id: Optional[str] = None
-    results: list[str] = []
-    error_message: Optional[str] = None
-    created_time: Optional[str] = None
-    start_processing_time: Optional[str] = None
-    completed_time: Optional[str] = None
-    duration: Optional[float] = None
+class ToolsetRunRequest(BaseModel):
+    agent_id: str
+    toolset_id: str
+    tool_id: str
+    params: Optional[Dict] = None
+
+class ToolsetRunResult(BaseModel):
+    agent_id: str
+    toolset_id: str
+    tool_id: str
+    params: Optional[Dict] = None
+    result: Optional[Dict] = None
 
 class ChatMessage(BaseModel):
     role: str
@@ -276,3 +290,4 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
     stream: Optional[bool] = None
+

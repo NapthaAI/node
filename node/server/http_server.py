@@ -38,7 +38,13 @@ from node.schemas import (
     KBRunInput,
     KBRun,
     AgentModuleType,
-    ToolsetList
+    ToolsetList,
+    ToolsetListRequest,
+    ToolsetDetails,
+    ToolDetails,
+    ToolsetLoadRepoRequest,
+    ToolsetRequest,
+    SetToolsetRequest    
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -55,7 +61,7 @@ from node.worker.template_worker import run_agent, run_environment, run_orchestr
 
 
 ###### toolset stuff ###############
-from node.libs.toolset_manager import ToolsetManager
+from node.libs.toolset_manager.toolset_manager import ToolsetManager
 ######### end toolset stuff ########
 
 logger = logging.getLogger(__name__)
@@ -383,22 +389,49 @@ class HTTPServer:
             
         ##################### Tool Endpoints #########################################
         @router.post("/tool/get_toolset_list")
-        async def get_toolset_list_endpoint(agent_run: AgentRun) -> ToolsetList:
+        async def get_toolset_list_endpoint(request: ToolsetListRequest) -> ToolsetList:
             """Get the list of available toolsets for a given agent run."""
-            # TODO: figure out how this id is set
-            # TODO: isolate tool calls from the node, maybe make a server
-            if agent_run.id is None:
-                print("HERE")
-                raise HTTPException(status_code=400, detail="Agent run ID is required")
-            
-            toolset_list = await self.get_toolset_list(agent_run.id)
-            return {"toolsets": "moo"}
+            # TODO: isolate tool calls from the node, maybe make a server?            
+            toolset_list = ToolsetList(toolsets=[])
+            toolset_names = self.toolset_manager.get_toolset_names()
 
-        @router.post("/tool/get_tool_list")
-        async def get_tool_list_endpoint():
-            """Get the list of available tools."""
-            return {"tools": ["tool1", "tool2", "tool3"]}
+            
+            for toolset_name in toolset_names:
+                toolset = ToolsetDetails(
+                    id=toolset_name, 
+                    name=toolset_name, 
+                    description="Toolset description", 
+                    tools=[])
+                toolset_list.toolsets.append(toolset)
+            return toolset_list
         
+        @router.post("/tool/add_tool_repo_to_toolset")
+        async def add_tool_repo_endpoint(toolset_repo_request: ToolsetLoadRepoRequest):
+            """Add tool repository to toolset."""
+            await self.toolset_manager.create_or_add_function_toolset_from_github(toolset_repo_request.toolset_name, toolset_repo_request.repo_url)
+
+        @router.post("/tool/set_toolset")
+        async def set_toolset_endpoint(load_toolset_resquest: SetToolsetRequest) -> ToolsetDetails:
+            """Sets a toolset."""
+            self.toolset_manager.set_current_toolset(load_toolset_resquest.toolset_name)
+            toolset = self.toolset_manager.get_current_toolset()
+            return ToolsetDetails(
+                id=toolset.toolset_name, 
+                name=toolset.toolset_name, 
+                description= toolset.get_function_list_text(), 
+                tools=[])
+        
+        @router.post("/tool/get_current_toolset")
+        async def get_tool_list_endpoint(tool_list_request: ToolsetRequest) -> ToolsetDetails:
+            """Get the list of available tools for a given toolset."""
+            toolset = self.toolset_manager.get_current_toolset()
+            return ToolsetDetails(
+                        id=toolset.toolset_name, 
+                        name=toolset.toolset_name, 
+                        description= toolset.get_function_list_text(), 
+                        tools=[])
+            
+
         @router.post("/tool/run_tool")
         async def run_tool_endpoint(tool_name: str, tool_input: dict):
             """Run a tool."""
@@ -414,15 +447,7 @@ class HTTPServer:
             """Query tools."""
             return {"tool_name": tool_name}
         
-        @router.post("/tool/add_tool_repo_to_toolset")
-        async def add_tool_repo_endpoint(tool_name: str, tool_repo: str):
-            """Add tool repository."""
-            return {"tool_name": tool_name, "tool_repo": tool_repo}
-
-        @router.post("/tool/load_toolset")
-        async def load_tool_context_endpoint(tool_name: str):
-            """Load tool context."""
-            return {"tool_name": tool_name}
+        
         
         # create tool context
         @router.post("/tool/create_toolset")
@@ -1146,6 +1171,6 @@ class HTTPServer:
 
     ###### toolset stuff ###############
     async def get_toolset_list(self, agent_run_id: str):
-        # TODO: update toolset manager to use agent_run_id
-        return await self.toolset_manager.get_toolset_names()
+        pass
+        
     ######### end toolset stuff ########
