@@ -177,7 +177,7 @@ linux_install_miniforge() {
         if [ "$arch" = "amd64" ]; then
             MINIFORGE_INSTALLER="Miniforge3-Linux-x86_64.sh"
         else
-            MINIFORGE_INSTALLER="Miniforge3-Linux-$arch.sh"
+            MINIFORGE_INSTALLER="Miniforge3-Linux-aarch64.sh"
         fi
         curl -sSL "https://github.com/conda-forge/miniforge/releases/latest/download/$MINIFORGE_INSTALLER" -o $MINIFORGE_INSTALLER
         chmod +x $MINIFORGE_INSTALLER
