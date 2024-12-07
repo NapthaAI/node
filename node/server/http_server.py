@@ -44,7 +44,9 @@ from node.schemas import (
     ToolDetails,
     ToolsetLoadRepoRequest,
     ToolsetRequest,
-    SetToolsetRequest    
+    SetToolsetRequest,
+    ToolRunRequest,
+    ToolRunResult 
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -431,35 +433,22 @@ class HTTPServer:
                         description= toolset.get_function_list_text(), 
                         tools=[])
             
-
         @router.post("/tool/run_tool")
-        async def run_tool_endpoint(tool_name: str, tool_input: dict):
+        async def run_tool_endpoint(tool_run_request: ToolRunRequest):
             """Run a tool."""
-            return {"tool_name": tool_name, "tool_input": tool_input}
+            result = await self.toolset_manager.run_function( func_name=tool_run_request.tool_id, 
+                                                       file_path=None,
+                                                       **tool_run_request.params)
+            return ToolRunResult(agent_id=tool_run_request.agent_id,
+                                toolset_id=tool_run_request.toolset_id,
+                                tool_run_id=tool_run_request.tool_run_id,
+                                tool_id=tool_run_request.tool_id,
+                                params=tool_run_request.params,
+                                # cast to string for now TODO
+                                result=str(result))
+            
         
-        @router.post("/tool/query_toolsets")
-        async def query_toolsets_endpoint(toolset_name: str):
-            """Query toolsets."""
-            return {"toolset_name": toolset_name}
-
-        @router.post("/tool/query_tools")
-        async def query_tools_endpoint(tool_name: str):
-            """Query tools."""
-            return {"tool_name": tool_name}
         
-        
-        
-        # create tool context
-        @router.post("/tool/create_toolset")
-        async def create_tool_context_endpoint(tool_name: str, tool_input: dict):
-            """Create tool context."""
-            return {"tool_name": tool_name, "tool_input": tool_input}
-        
-        # add tool to context
-        @router.post("/tool/add_tool_to_toolset")
-        async def add_tool_to_context_endpoint(tool_name: str, tool_input: dict):
-            """Add tool to context."""
-            return {"tool_name": tool_name, "tool_input": tool_input}
 
         # Include the router
         self.app.include_router(router)

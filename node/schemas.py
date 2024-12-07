@@ -263,18 +263,20 @@ class ToolsetLoadRepoRequest(BaseModel):
 class ToolsetList(BaseModel):
     toolsets: List[ToolsetDetails]
 
-class ToolsetRunRequest(BaseModel):
+class ToolRunRequest(BaseModel):
+    tool_run_id: str
     agent_id: str
     toolset_id: str
     tool_id: str
     params: Optional[Dict] = None
 
-class ToolsetRunResult(BaseModel):
+class ToolRunResult(BaseModel):
     agent_id: str
     toolset_id: str
+    tool_run_id: str
     tool_id: str
     params: Optional[Dict] = None
-    result: Optional[Dict] = None
+    result: str
 
 class ChatMessage(BaseModel):
     role: str
