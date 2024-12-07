@@ -57,3 +57,56 @@ local-db-reset:
 	@echo "Resetting database state..."
 	@PYTHONPATH=$(shell pwd) poetry run python node/storage/db/reset_db.py
 	@echo "Database reset completed."
+
+# Target to restart HTTP server
+restart-http:
+	@echo "Restarting HTTP server..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		(launchctl unload ~/Library/LaunchAgents/com.example.nodeapp.http.plist && \
+		sleep 2 && \
+		launchctl load ~/Library/LaunchAgents/com.example.nodeapp.http.plist) & \
+	else \
+		(sudo systemctl restart nodeapp_http.service && \
+		sudo systemctl status nodeapp_http.service) & \
+	fi
+
+# Target to restart secondary servers
+restart-servers:
+	@echo "Restarting secondary servers..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		for plist in $$(ls ~/Library/LaunchAgents/com.example.nodeapp.*.plist | grep -v http); do \
+			(launchctl unload $$plist && \
+			sleep 2 && \
+			launchctl load $$plist) & \
+		done; \
+	else \
+		SERVER_TYPE=$$(grep SERVER_TYPE .env | cut -d '=' -f2 | tr -d '"' | tr -d ' ') && \
+		for service in $$(systemctl list-units --plain --no-legend --type=service | grep "nodeapp_$$SERVER_TYPE" | grep "loaded" | awk '{print $$1}'); do \
+			if systemctl is-active --quiet $$service; then \
+				(echo "Restarting $$service" && \
+				sudo systemctl restart $$service && \
+				sudo systemctl status --no-pager $$service) & \
+			fi \
+		done; \
+	fi
+	@wait
+	@echo "Secondary servers restarted."
+
+# Target to restart Celery
+restart-celery:
+	@echo "Restarting Celery worker..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		(launchctl unload ~/Library/LaunchAgents/com.example.celeryworker.plist && \
+		sleep 2 && \
+		launchctl load ~/Library/LaunchAgents/com.example.celeryworker.plist) & \
+	else \
+		(sudo systemctl restart celeryworker.service && \
+		sudo systemctl status --no-pager celeryworker.service) & \
+	fi
+
+# Target to restart all node components in parallel
+restart-node:
+	@echo "Restarting all components in parallel..."
+	@$(MAKE) restart-servers & $(MAKE) restart-celery
+	@wait
+	@echo "All node components have been restarted."
