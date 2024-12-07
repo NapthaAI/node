@@ -449,7 +449,7 @@ class GrpcServer:
         self.listen_addr = f"0.0.0.0:{self.port}"
         self.server.add_insecure_port(self.listen_addr)
 
-    async def graceful_shutdown(self, timeout: float = 30.0):
+    async def graceful_shutdown(self, timeout: float = 3.0):
         logger.info("Starting graceful shutdown...")
 
         await self.server.stop(timeout)
