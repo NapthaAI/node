@@ -17,9 +17,15 @@ from node.schemas import (
     OrchestratorRunInput,
     EnvironmentRun,
     EnvironmentRunInput,
+    OrchestratorDeployment,
+    AgentDeployment,
+    EnvironmentDeployment,
     DockerParams,
     ChatCompletionRequest
+    AgentModule
 )
+from node.config import MODULES_SOURCE_DIR
+from worker.template_worker import ensure_module_installation_with_lock
 
 from node.storage.storage import (
     write_to_ipfs,
@@ -70,6 +76,15 @@ class HTTPServer:
         @self.app.get("/health")
         async def health_check():
             return {"status": "ok", "server_type": "http"}
+        
+        @router.post("/agent/create")
+        async def agent_create_endpoint(agent_deployment: AgentDeployment) -> Dict:
+            """
+            Create an agent
+            :param agent_deployment: Agent deployment specifications
+            :return: Status
+            """
+            return await self.agent_create(agent_deployment)
 
         @router.post("/agent/run")
         async def agent_run_endpoint(agent_run_input: AgentRunInput) -> AgentRun:
@@ -89,6 +104,15 @@ class HTTPServer:
             """
             return await self.agent_check(agent_run)
 
+        @router.post("/orchestrator/create")
+        async def orchestrator_create_endpoint(orchestrator_deployment: OrchestratorDeployment) -> Dict:
+            """
+            Create an agent orchestrator
+            :param orchestrator_deployment: Orchestrator deployment specifications
+            :return: Status
+            """
+            return await self.orchestrator_create(orchestrator_deployment)
+        
         @router.post("/orchestrator/run")
         async def orchestrator_run_endpoint(orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRun:
             """
@@ -106,6 +130,15 @@ class HTTPServer:
             :return: Status
             """
             return await self.orchestrator_check(orchestrator_run)
+        
+        @router.post("/environment/create")
+        async def environment_create_endpoint(environment_deployment: EnvironmentDeployment) -> Dict:
+            """
+            Create an environment
+            :param environment_run_input: Environment run specifications 
+            :return: Status
+            """
+            return await self.environment_create(environment_deployment)
 
         @router.post("/environment/run")
         async def environment_run_endpoint(environment_run_input: EnvironmentRunInput) -> EnvironmentRun:
@@ -318,7 +351,263 @@ class HTTPServer:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+    async def orchestrator_create(self, orchestrator_deployment: OrchestratorDeployment) -> Dict:
+        """
+        Create an agent orchestrator
+        :param orchestrator_deployment: Orchestrator deployment specifications
+        :return: OrchestratorRun
+        """
+        try:
+            # Validate input parameters
+            if not orchestrator_deployment or not orchestrator_deployment.name:
+                raise HTTPException(status_code=400, detail="Invalid orchestrator deployment: Missing name")
 
+            # Validate environment variables
+            hub_username = os.getenv("HUB_USERNAME")
+            hub_password = os.getenv("HUB_PASSWORD")
+            if not hub_username or not hub_password:
+                raise HTTPException(status_code=400, detail="Missing Hub authentication credentials")
+
+            async with Hub() as hub:
+                try:
+                        _, _, _ = await hub.signin(hub_username, hub_password)
+                except Exception as auth_error:
+                    raise HTTPException(status_code=401, detail=f"Authentication failed: {str(auth_error)}")
+
+                # Robust orchestrator retrieval
+                orchestrator = await hub.list_orchestrators(orchestrator_deployment.name)
+                if not orchestrator:
+                    raise HTTPException(status_code=404, detail=f"Orchestrator {orchestrator_deployment.name} not found")
+                
+                # Validate orchestrator object
+                try:
+                    orchestrator = AgentModule(**orchestrator)
+                except Exception as validation_error:
+                    raise ValueError(f"Invalid orchestrator data: {str(validation_error)}")
+
+            # Robust installation parameter creation
+            install_params = {
+                "name": orchestrator.name or "unknown",
+                "url": orchestrator.url or "",
+                "version": f"v{orchestrator.version}" if orchestrator.version else "v0",
+                "type": orchestrator.type or "default",
+            }
+
+            try:
+                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.version or '0'}")
+            except Exception as install_error:
+                logger.error(f"Failed to install orchestrator: {str(install_error)}")
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail=f"Orchestrator installation failed: {str(install_error)}")
+
+            # Robust path handling
+            orchestrator_path = os.path.join(MODULES_SOURCE_DIR or "/tmp", orchestrator.name or "unknown")
+            orchestrator_config_path = os.path.join(orchestrator_path, orchestrator.name or "unknown", "configs")
+            agent_deployment_path = os.path.join(orchestrator_config_path, "agent_deployments.json")
+            environment_deployment_path = os.path.join(orchestrator_config_path, "environment_deployments.json")
+
+            # Robust file existence checks
+            if not os.path.exists(agent_deployment_path) and not os.path.exists(environment_deployment_path):
+                return {
+                    'orchestrator_name': orchestrator.name or "unknown",
+                    'orchestrator_version': orchestrator.version or "0",
+                    'orchestrator_installation_status': 'success',
+                    'orchestrator_installation_message': 'No agent or environment deployments found',
+                    'environment_installation_status': 'failed',
+                    'environment_name': '',
+                }
+
+            # Robust JSON loading
+            try:
+                with open(agent_deployment_path, "r") as f:
+                    agent_deployments = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError) as json_error:
+                logger.error(f"Failed to load agent deployments: {str(json_error)}")
+                agent_deployments = []
+
+            # Robust sub-agent processing
+            sub_agents = set(
+                agent_deployment.get("module", {}).get("name") 
+                for agent_deployment in agent_deployments 
+                if agent_deployment and "module" in agent_deployment
+            )
+
+            
+            sub_agents = list(sub_agents)
+            if len(sub_agents) > 0:
+                agent_modules = []
+                async with Hub() as hub:
+                    _, _, _ = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    for sub_agent in sub_agents:
+                        agent_module = await hub.list_agents(sub_agent)
+                        if agent_module:
+                            agent_modules.append(agent_module)
+            
+            sub_agent_installation_status = []
+            for agent_module in agent_modules:
+                install_params = {
+                    "name": agent_module.name,
+                    "url": agent_module.url,
+                    "version": f"v{agent_module.version}",
+                    "type": agent_module.type,
+                }
+                try:
+                    await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                    sub_agent_installation_status.append({
+                        "name": agent_module.name,
+                        "version": agent_module.version,
+                        "status": "success",
+                    })
+                except Exception as e:
+                    sub_agent_installation_status.append({
+                        "name": agent_module.name,
+                        "version": agent_module.version,
+                        "status": str(e),
+                    })
+            if not os.path.exists(environment_deployment_path):
+                return {
+                    'orchestrator_name': orchestrator.name,
+                    'orchestrator_version': orchestrator.version,
+                    'orchestrator_installation_status': 'success',
+                    'orchestrator_installation_message': 'Orchestrator and sub-agents installed successfully, environment deployments not found',
+                    'sub_agent_installation_status': sub_agent_installation_status,
+                    'environment_installation_status': 'failed',
+                    'environment_name': '',
+                }
+            
+            with open(environment_deployment_path, "r") as f:
+                environment_deployments = json.load(f)
+            
+            environment_module_name = environment_deployments[0]["module"]["name"]
+            if environment_module_name:
+                 async with Hub() as hub:
+                    _, _, _ = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    environment_module = await hub.list_environments(environment_module_name)
+                    environment_module = AgentModule(**environment_module)
+            
+            if environment_module:
+                install_params = {
+                    "name": environment_module.name,
+                    "url": environment_module.url,
+                    "version": f"v{environment_module.version}",
+                    "type": environment_module.type,
+                }
+                try:
+                    await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                except Exception as e:
+                    logger.error(f"Failed to install environment: {str(e)}")
+                    logger.debug(f"Full traceback: {traceback.format_exc()}")
+                    raise HTTPException(status_code=500, detail=str(e))
+
+                return {
+                    'orchestrator_name': orchestrator.name,
+                    'orchestrator_version': orchestrator.version,
+                    'orchestrator_installation_status': 'success',
+                    'orchestrator_installation_message': 'Orchestrator and sub-agents installed successfully',
+                    'sub_agent_installation_status': sub_agent_installation_status,
+                    'environment_installation_status': 'success',
+                    'environment_name': environment_module.name,
+                }
+
+
+        except Exception as e:
+            logger.error(f"Failed to create orchestrator: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    async def environment_create(self, environment_deployment: EnvironmentDeployment) -> Dict:
+        """
+        Create an environment
+        :param environment_deployment: Environment deployment specifications
+        :return: EnvironmentRun
+        """
+        try:
+            async with Hub() as hub:
+                _, _, _ = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
+                environment = await hub.list_environments(environment_deployment.name)
+                environment = AgentModule(**environment)
+                if not environment:
+                    raise HTTPException(status_code=404, detail=f"Environment {environment_deployment.name} not found")
+            
+            install_params = {
+                "name": environment.name,
+                "url": environment.url,
+                "version": f"v{environment.version}",
+                "type": environment.type,
+            }
+
+            try:
+                await ensure_module_installation_with_lock(install_params, f"v{environment.version}")
+            except Exception as e:
+                logger.error(f"Failed to install environment: {str(e)}")
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+            environment_path = f"{MODULES_SOURCE_DIR}/{environment.name}"
+            environment_config_path = f"{environment_path}/{environment.name}/configs"
+            environment_deployment_path = f"{environment_config_path}/environment_deployments.json"
+            with open(environment_deployment_path, "r") as f:
+                environment_deployments = json.load(f)
+            if environment_deployment.name not in environment_deployments:
+                raise HTTPException(status_code=404, detail=f"Environment {environment_deployment.name} not found")
+            environment_deployment = EnvironmentDeployment(**environment_deployments[environment_deployment.name])
+            return await self.run_module(EnvironmentRunInput(environment_deployment=environment_deployment))
+        except Exception as e:
+            logger.error(f"Failed to create environment: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
+        
+    async def agent_create(self, agent_deployment: AgentDeployment) -> AgentRun:
+        """
+        Create an agent
+        :param agent_deployment: Agent deployment specifications
+        :return: AgentRun
+        """
+        try:
+            async with Hub() as hub:
+                _, _, _ = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
+                agent = await hub.list_agents(agent_deployment.name)
+                agent = AgentModule(**agent)
+                if not agent:
+                    raise HTTPException(status_code=404, detail=f"Agent {agent_deployment.name} not found")
+            
+            install_params = {
+                "name": agent.name,
+                "url": agent.url,
+                "version": f"v{agent.version}",
+                "type": agent.type,
+            }
+
+            try:
+                await ensure_module_installation_with_lock(install_params, f"v{agent.version}")
+            except Exception as e:
+                logger.error(f"Failed to install agent: {str(e)}")
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+            agent_path = f"{MODULES_SOURCE_DIR}/{agent.name}"
+            agent_config_path = f"{agent_path}/{agent.name}/configs"
+            agent_deployment_path = f"{agent_config_path}/agent_deployments.json"
+            with open(agent_deployment_path, "r") as f:
+                agent_deployments = json.load(f)
+            if agent_deployment.name not in agent_deployments:
+                raise HTTPException(status_code=404, detail=f"Agent {agent_deployment.name} not found")
+            agent_deployment = AgentDeployment(**agent_deployments[agent_deployment.name])
+            return await self.run_module(AgentRunInput(agent_deployment=agent_deployment))
+        except Exception as e:
+            logger.error(f"Failed to create agent: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
     async def run_module(
         self, 
         run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput]
