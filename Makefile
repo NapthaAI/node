@@ -107,6 +107,10 @@ restart-celery:
 # Target to restart all node components in parallel
 restart-node:
 	@echo "Restarting all components in parallel..."
+	@$(MAKE) remove
+	@echo ".venv removed"
+	@poetry install
+	@echo "poetry install done"
 	@$(MAKE) restart-servers & $(MAKE) restart-celery
 	@wait
 	@echo "All node components have been restarted."
