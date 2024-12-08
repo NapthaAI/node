@@ -11,7 +11,7 @@ from pathlib import Path
 import subprocess
 import time
 import traceback
-from typing import List, Union
+from typing import List, Union, Dict
 from node.schemas import (
     AgentDeployment, 
     AgentRun, 
@@ -94,13 +94,16 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun], run_version: str):
+async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, Dict], run_version: str):
     if isinstance(run, AgentRun):
         module_name = run.agent_deployment.module["name"]
         url = run.agent_deployment.module["url"]    
     elif isinstance(run, OrchestratorRun):
         module_name = run.orchestrator_deployment.module["name"]
         url = run.orchestrator_deployment.module["url"]
+    elif isinstance(run, Dict):
+        module_name = run["name"]
+        url = run["url"]
     else:  # EnvironmentRun
         module_name = run.environment_deployment.module["name"]
         url = run.environment_deployment.module["url"]

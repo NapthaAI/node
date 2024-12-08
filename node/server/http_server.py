@@ -8,6 +8,7 @@ import json
 import logging
 import traceback
 from datetime import datetime
+from pydantic import BaseModel
 from typing import Optional, Union, Any, Dict
 from node.schemas import (
     AgentRun,
@@ -30,6 +31,8 @@ from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_environment, run_orchestrator
+from node.module_manager import ensure_module_installation_with_lock
+from node.config import MODULES_SOURCE_DIR
 from dotenv import load_dotenv
 from tenacity import (
     retry,
@@ -46,6 +49,8 @@ load_dotenv()
 class TransientDatabaseError(Exception):
     pass
 
+class OrchestratorCreateInput(BaseModel):
+    name: str
 
 class HTTPServer:
     def __init__(self, host: str, port: int):
@@ -84,6 +89,15 @@ class HTTPServer:
             :return: Status
             """
             return await self.agent_check(agent_run)
+
+        @router.post("/orchestrator/create")
+        async def orchestrator_create_endpoint(name: OrchestratorCreateInput):
+            """
+            Create an agent orchestrator
+            :param orchestrator_run_input: Orchestrator run specifications
+            :return: Status
+            """
+            return await self.orchestrator_create(name)
 
         @router.post("/orchestrator/run")
         async def orchestrator_run_endpoint(orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRun:
@@ -619,7 +633,102 @@ class HTTPServer:
         except Exception as e:
             logger.error(f"Failed to query table: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def orchestrator_create(self, orchestrator_name: OrchestratorCreateInput):
+        """Create an agent orchestrator"""
+        try:
+            # 1. Check if orchestrator in hub
+            async with Hub() as hub:
+                _, _, _ = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
+                orchestrator = await hub.list_orchestrators(orchestrator_name.name)
+                if not orchestrator:
+                    raise HTTPException(status_code=404, detail=f"Orchestrator {orchestrator_name.name} not found")
+
+            # 2. Install the orchestrator
+            install_params = {
+                "name": orchestrator.name,
+                "url": orchestrator.url,
+                "version": f"v{orchestrator.version}",
+                "type": orchestrator.type,
+            }
+
+            try:
+                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.version}")
+            except Exception as e:
+                logger.error(f"Failed to install orchestrator: {str(e)}")
+                logger.debug(f"Full traceback: {traceback.format_exc()}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+            # 3. Get some sub-agents
+            orchestrator_path = f"{MODULES_SOURCE_DIR}/{orchestrator.name}"
+            orchestrator_config_path = f"{orchestrator_path}/{orchestrator.name}/configs"
+            agent_deployment_path = f"{orchestrator_config_path}/agent_deployments.json"
+
+            if not os.path.exists(agent_deployment_path):
+                return {
+                    'orchestrator_name': orchestrator.name,
+                    'orchestrator_version': orchestrator.version,
+                    'orchestrator_installation_status': 'success',
+                    'orchestrator_installation_message': 'No agent deployments found',
+                }
+            with open(agent_deployment_path, "r") as f:
+                agent_deployments = json.load(f)
+
+            sub_agents = set()
+            for agent_deployment in agent_deployments:
+                sub_agents.add(agent_deployment["module"]["name"])
+
+            # 4. Make sure all sub-agents are present in the hub
+            sub_agents = list(sub_agents)
+            if len(sub_agents) > 0:
+                agent_modules = []
+                async with Hub() as hub:
+                    _, _, _ = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    for sub_agent in sub_agents:
+                        agent_module = await hub.list_agents(sub_agent)
+                        if agent_module:
+                            agent_modules.append(agent_module)
+
+            # 5. Install the sub-agents
+            sub_agent_installation_status = []
+            for agent_module in agent_modules:
+                install_params = {
+                    "name": agent_module.name,
+                    "url": agent_module.url,
+                    "version": f"v{agent_module.version}",
+                    "type": agent_module.type,
+                }
+                try:
+                    await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                    sub_agent_installation_status.append({
+                        "name": agent_module.name,
+                        "version": agent_module.version,
+                        "status": "success",
+                    })
+                except Exception as e:
+                    sub_agent_installation_status.append({
+                        "name": agent_module.name,
+                        "version": agent_module.version,
+                        "status": str(e),
+                    })
+            # 6. Return the install status
+            return {
+                'orchestrator_name': orchestrator.name,
+                'orchestrator_version': orchestrator.version,
+                'orchestrator_installation_status': 'success',
+                'orchestrator_installation_message': 'Orchestrator and sub-agents installed successfully',
+                'sub_agent_installation_status': sub_agent_installation_status,
+            }
         
+        except Exception as e:
+            logger.error(f"Failed to create orchestrator: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     async def stop(self):
         """Handle graceful server shutdown"""
         if self.server and self._started:
