@@ -74,7 +74,8 @@ restart-http:
 restart-servers:
 	@echo "Restarting secondary servers..."
 	@if [ "$$(uname)" = "Darwin" ]; then \
-		for plist in $$(ls ~/Library/LaunchAgents/com.example.nodeapp.*.plist | grep -v http); do \
+		for plist in $$(ls ~/Library/LaunchAgents/com.example.nodeapp.*.plist); do \
+			echo "Unloading $$plist" && \
 			(launchctl unload $$plist && \
 			sleep 2 && \
 			launchctl load $$plist) & \
