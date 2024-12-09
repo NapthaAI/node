@@ -5,6 +5,7 @@ import uvicorn
 import io
 import os
 import json
+import httpx
 import logging
 import traceback
 from datetime import datetime
@@ -17,6 +18,7 @@ from node.schemas import (
     EnvironmentRun,
     EnvironmentRunInput,
     DockerParams,
+    ChatCompletionRequest
 )
 
 from node.storage.storage import (
@@ -28,6 +30,7 @@ from node.storage.storage import (
 from node.user import check_user, register_user
 from node.storage.hub.hub import Hub
 from node.storage.db.db import DB
+from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_environment, run_orchestrator
 from dotenv import load_dotenv
@@ -281,6 +284,25 @@ class HTTPServer:
                 table_name, columns, condition, order_by, limit
             )
     
+        ####### LiteLLM endpoints #######
+        @router.post("/litellm/chat")
+        async def chat_endpoint(request: ChatCompletionRequest):
+            """
+            Forward chat completion requests to litellm proxy
+            """
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{LITELLM_URL}/chat/completions",
+                        json=request.model_dump(exclude_none=True)
+                    )
+                    return response.json()
+            except Exception as e:
+                logger.error(f"Error in chat endpoint: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        ####### LiteLLM endpoints #######
+
         # Include the router
         self.app.include_router(router)
 
