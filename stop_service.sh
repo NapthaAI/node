@@ -64,7 +64,7 @@ if [ "$os" = "Darwin" ]; then
         current_port=$((start_port + i))
         rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
     done
-    rm $LAUNCH_AGENTS_PATH/com.example.litellm.proxy.plist
+    rm $LAUNCH_AGENTS_PATH/com.litellm.proxy.plist
     rm $LAUNCH_AGENTS_PATH/com.example.ollama.plist
 
     # Stop SurrealDB
