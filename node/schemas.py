@@ -1,6 +1,7 @@
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union
-from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -48,7 +49,7 @@ class CreateModuleResponse(BaseModel):
     name: str
     version: str
     url: str
-    installation_status: str
+    status: str
     message:str
 
 class AgentModuleType(str, Enum):

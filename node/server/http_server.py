@@ -1,15 +1,27 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
-import uvicorn
+import asyncio
 import io
-import os
 import json
 import httpx
 import logging
+import os
 import traceback
 from datetime import datetime
 from typing import Optional, Union, Any, Dict
+
+import uvicorn
+from dotenv import load_dotenv
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
+
+from node.config import MODULES_SOURCE_DIR
+from node.module_manager import ensure_module_installation_with_lock
 from node.schemas import (
     AgentRun,
     AgentRunInput,
@@ -23,9 +35,8 @@ from node.schemas import (
     ChatCompletionRequest
     AgentModule
 )
-from node.config import MODULES_SOURCE_DIR
-from worker.template_worker import ensure_module_installation_with_lock
-
+from node.storage.db.db import DB
+from node.storage.hub.hub import Hub
 from node.storage.storage import (
     write_to_ipfs,
     read_from_ipfs_or_ipns,
@@ -33,19 +44,9 @@ from node.storage.storage import (
     read_storage,
 )
 from node.user import check_user, register_user
-from node.storage.hub.hub import Hub
-from node.storage.db.db import DB
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_environment, run_orchestrator
-from dotenv import load_dotenv
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
-import asyncio
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -374,11 +375,6 @@ class HTTPServer:
                 orchestrator = await hub.list_orchestrators(orchestrator_create_input.name)
                 if not orchestrator:
                     raise HTTPException(status_code=404, detail=f"Orchestrator {orchestrator_create_input.name} not found")
-                
-                try:
-                    orchestrator = AgentModule(**orchestrator)
-                except Exception as validation_error:
-                    raise ValueError(f"Invalid orchestrator data: {str(validation_error)}")
 
             install_params = {
                 "name": orchestrator.name or "unknown",
@@ -474,7 +470,6 @@ class HTTPServer:
                         os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                     )
                     environment_module = await hub.list_environments(environment_module_name)
-                    environment_module = AgentModule(**environment_module)
             
             if environment_module:
                 install_params = {
@@ -484,7 +479,7 @@ class HTTPServer:
                     "type": environment_module.type,
                 }
                 try:
-                    await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                    await ensure_module_installation_with_lock(install_params, f"v{environment_module.version}")
                 except Exception as e:
                     logger.error(f"Failed to install environment: {str(e)}")
                     logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -517,7 +512,6 @@ class HTTPServer:
                     os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                 )
                 environment = await hub.list_environments(environment_create_input.name)
-                environment = AgentModule(**environment)
                 if not environment:
                     raise HTTPException(status_code=404, detail=f"Environment {environment_create_input.name} not found")
             
@@ -560,7 +554,6 @@ class HTTPServer:
                     os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                 )
                 agent = await hub.list_agents(agent_create_input.name)
-                agent = AgentModule(**agent)
                 if not agent:
                     raise HTTPException(status_code=404, detail=f"Agent {agent_create_input.name} not found")
             
