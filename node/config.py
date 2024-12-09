@@ -55,6 +55,9 @@ HUB_DB_PORT=3001
 HUB_NS="naptha"
 HUB_DB="naptha"
 
+# LiteLLM
+LITELLM_URL="http://localhost:4000"
+
 def get_node_config():
     """Get the node configuration."""
     from node.user import get_public_key
