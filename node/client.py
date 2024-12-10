@@ -92,6 +92,20 @@ class Node:
         finally:
             await self.disconnect_ws(client_id)
 
+    async def check_health(self):
+        # only works for http and ws
+        if self.server_type == "http" or self.server_type == "ws":
+            try:
+                async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                    response = await client.get(f"{self.node_url}/health")
+                    response.raise_for_status()
+                    return True
+            except Exception as e:
+                logger.error(f"Error checking health: {e}")
+                return False
+        else:
+            raise ValueError("Invalid server type")
+
     async def check_user(self, user_input):
         print("Checking user... ", user_input)
         if self.server_type == "http":
