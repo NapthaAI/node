@@ -48,6 +48,12 @@ if [ "$os" = "Darwin" ]; then
         echo "Unloading com.example.nodeapp.${server_type}_${current_port}.plist"
         launchctl unload $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
     done
+    # Stop LiteLLM
+    if launchctl list | grep -q "com.litellm.proxy"; then
+        echo "Stopping LiteLLM..."
+        launchctl unload ~/Library/LaunchAgents/com.litellm.proxy.plist
+    fi
+
     launchctl unload $LAUNCH_AGENTS_PATH/com.example.ollama.plist
     brew services stop rabbitmq
 
@@ -58,6 +64,7 @@ if [ "$os" = "Darwin" ]; then
         current_port=$((start_port + i))
         rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
     done
+    rm $LAUNCH_AGENTS_PATH/com.litellm.proxy.plist
     rm $LAUNCH_AGENTS_PATH/com.example.ollama.plist
 
     # Stop SurrealDB
@@ -115,6 +122,7 @@ else
         stop_service "nodeapp_${server_type}_${current_port}.service"
     done
     
+    stop_service litellm.service
     stop_service ollama.service
     stop_service rabbitmq-server.service
 
@@ -129,6 +137,7 @@ else
         current_port=$((start_port + i))
         sudo systemctl disable "nodeapp_${server_type}_${current_port}.service"
     done
+    sudo systemctl disable litellm.service
     sudo systemctl disable ollama.service
     sudo systemctl disable rabbitmq-server.service
 
@@ -140,6 +149,7 @@ else
         current_port=$((start_port + i))
         sudo rm -f "/etc/systemd/system/nodeapp_${server_type}_${current_port}.service"
     done
+    sudo rm -f /etc/systemd/system/litellm.service
     sudo rm -f /etc/systemd/system/ollama.service
     sudo rm -f /etc/systemd/system/rabbitmq-server.service
 

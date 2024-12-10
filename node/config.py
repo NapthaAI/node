@@ -28,10 +28,13 @@ NUM_SERVERS=1
 # MQ
 CELERY_BROKER_URL="amqp://localhost:5672/"
 
-# LLMs
+# LLMs Inference
+LITELLM_URL="http://localhost:4000"
 LLM_BACKEND="vllm"
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
-OLLAMA_MODELS="phi"
+OLLAMA_MODELS="phi3:mini"
+# OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
+OPENAI_MODELS="gpt-4o-mini"
 
 # Local DB
 LOCAL_DB_PORT=3002
@@ -54,6 +57,9 @@ PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_PORT=3001
 HUB_NS="naptha"
 HUB_DB="naptha"
+
+# LiteLLM
+
 
 def get_node_config():
     """Get the node configuration."""

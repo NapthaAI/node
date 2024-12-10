@@ -121,7 +121,8 @@ linux_install_ollama() {
     fi
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
-    for model in $OLLAMA_MODELS; do
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    for model in "${MODELS[@]}"; do
         echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
         ollama pull "$model"
     done
@@ -1442,6 +1443,130 @@ darwin_start_local_db() {
     fi
 }
 
+linux_start_litellm() {
+    echo "Starting LiteLLM proxy server..." | log_with_service_name "LiteLLM" $BLUE
+    
+    # Get absolute paths
+    CURRENT_DIR=$(pwd)
+    PROJECT_DIR="$CURRENT_DIR/node/litellm"
+    VENV_PATH="$PROJECT_DIR/.venv/bin"
+    
+    # Install dependencies using poetry with --no-root flag
+    echo "Installing LiteLLM dependencies..." | log_with_service_name "LiteLLM" $BLUE
+    cd $PROJECT_DIR
+    poetry install --no-root
+    
+    # Generate LiteLLM config using main project's venv
+    echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
+    cd $CURRENT_DIR
+    PYTHONPATH=$CURRENT_DIR $CURRENT_DIR/.venv/bin/poetry run python $PROJECT_DIR/generate_litellm_config.py
+    cd $PROJECT_DIR
+    
+    # Create systemd service file
+    cat > /tmp/litellm.service << EOF
+[Unit]
+Description=LiteLLM Proxy Service
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+Environment=PATH=$VENV_PATH:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=$CURRENT_DIR/.env
+ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.yaml
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Move service file and start service
+    sudo mv /tmp/litellm.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable litellm
+    sudo systemctl start litellm
+
+    # Check service status
+    echo "Checking LiteLLM service status..." | log_with_service_name "LiteLLM" $BLUE
+    sleep 5
+    if sudo systemctl is-active --quiet litellm; then
+        echo "LiteLLM proxy server started successfully." | log_with_service_name "LiteLLM" $GREEN
+    else
+        echo "Failed to start LiteLLM proxy server. Checking logs..." | log_with_service_name "LiteLLM" $RED
+        sudo journalctl -u litellm --no-pager -n 50
+        exit 1
+    fi
+}
+
+darwin_start_litellm() {
+    echo "Starting LiteLLM proxy server..." | log_with_service_name "LiteLLM" $BLUE
+    
+    # Get absolute paths
+    CURRENT_DIR=$(pwd)
+    PROJECT_DIR="$CURRENT_DIR/node/litellm"
+    VENV_PATH="$PROJECT_DIR/.venv/bin"
+    
+    # Install dependencies using poetry with --no-root flag
+    echo "Installing LiteLLM dependencies..." | log_with_service_name "LiteLLM" $BLUE
+    cd $PROJECT_DIR
+    poetry install --no-root
+    
+    # Generate LiteLLM config using main project's venv
+    echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
+    cd $CURRENT_DIR
+    PYTHONPATH=$CURRENT_DIR $CURRENT_DIR/.venv/bin/poetry run python $PROJECT_DIR/generate_litellm_config.py
+    cd $PROJECT_DIR
+
+    # Create launchd plist file
+    cat > ~/Library/LaunchAgents/com.litellm.proxy.plist << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.litellm.proxy</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$VENV_PATH/litellm</string>
+        <string>--config</string>
+        <string>$PROJECT_DIR/litellm_config.yaml</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$PROJECT_DIR</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>$VENV_PATH:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/litellm.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/litellm.error.log</string>
+</dict>
+</plist>
+EOF
+
+    # Load and start service
+    launchctl unload ~/Library/LaunchAgents/com.litellm.proxy.plist 2>/dev/null || true
+    launchctl load ~/Library/LaunchAgents/com.litellm.proxy.plist
+
+    # Check if service is running
+    sleep 5
+    if pgrep -f "litellm --config" > /dev/null; then
+        echo "LiteLLM proxy server started successfully." | log_with_service_name "LiteLLM" $GREEN
+    else
+        echo "Failed to start LiteLLM proxy server. Check logs at /tmp/litellm.log" | log_with_service_name "LiteLLM" $RED
+        tail -n 50 /tmp/litellm.error.log
+        exit 1
+    fi
+}
+
 startup_summary() {
     echo "🔍 Checking status of all services..." | log_with_service_name "Summary" $BLUE
     
@@ -1574,6 +1699,20 @@ except Exception as e:
         fi
     done
 
+    # Check LiteLLM
+    services+=("LiteLLM")
+    if curl -s http://localhost:4000/health > /dev/null; then
+        statuses+=("✅")
+        logs+=("")
+    else
+        statuses+=("❌")
+        if [ "$os" = "Darwin" ]; then
+            logs+=("$(tail -n 20 /tmp/litellm.log 2>/dev/null || echo 'Log file not found')")
+        else
+            logs+=("$(sudo journalctl -u litellm -n 20)")
+        fi
+    fi
+
     # Print formatted summary
     echo -e "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | log_with_service_name "Summary" $BLUE
     echo -e "           🔍 SERVICE STATUS              " | log_with_service_name "Summary" $BLUE
@@ -1656,6 +1795,7 @@ main() {
         darwin_start_local_db
         darwin_start_servers
         darwin_start_celery_worker
+        darwin_start_litellm
         startup_summary
     else
         print_logo
@@ -1677,6 +1817,7 @@ main() {
         linux_start_local_db
         linux_start_servers
         linux_start_celery_worker
+        linux_start_litellm
         startup_summary
     fi
 
