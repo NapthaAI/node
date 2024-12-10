@@ -31,7 +31,7 @@ CELERY_BROKER_URL="amqp://localhost:5672/"
 # LLMs
 LLM_BACKEND="vllm"
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
-OLLAMA_MODELS="phi"
+OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
 
 # Local DB
 LOCAL_DB_PORT=3002
@@ -57,6 +57,7 @@ HUB_DB="naptha"
 
 # LiteLLM
 LITELLM_URL="http://localhost:4000"
+OPENAI_MODELS="gpt-4o-mini,gpt-4o"
 
 def get_node_config():
     """Get the node configuration."""
