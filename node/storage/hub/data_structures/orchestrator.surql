@@ -5,6 +5,7 @@ DEFINE TABLE orchestrator SCHEMAFULL
 
 DEFINE FIELD name ON TABLE orchestrator TYPE string;
 DEFINE FIELD description ON TABLE orchestrator TYPE string;
+DEFINE FIELD parameters ON TABLE orchestrator TYPE string;
 DEFINE FIELD author ON TABLE orchestrator TYPE record<user>;
 DEFINE FIELD url ON TABLE orchestrator TYPE string;
 DEFINE FIELD type ON TABLE orchestrator TYPE string;

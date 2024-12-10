@@ -5,6 +5,7 @@ DEFINE TABLE agent SCHEMAFULL
 
 DEFINE FIELD name ON TABLE agent TYPE string;
 DEFINE FIELD description ON TABLE agent TYPE string;
+DEFINE FIELD parameters ON TABLE agent TYPE string;
 DEFINE FIELD author ON TABLE agent TYPE record<user>;
 DEFINE FIELD url ON TABLE agent TYPE string;
 DEFINE FIELD type ON TABLE agent TYPE string;
