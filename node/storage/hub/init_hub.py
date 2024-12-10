@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import time
 import logging
+import getpass
 
 from node.config import get_node_config, HUB_DB_PORT, HUB_NS, HUB_DB
 from node.storage.hub.hub import Hub
@@ -143,7 +144,7 @@ async def user_setup_flow():
                 logger.info("Creating new user...")
                 while True:
                     username = input("Enter username: ")
-                    password = input("Enter password: ")
+                    password = getpass.getpass("Enter password: ") 
                     print(f"Signing up user: {username} with public key: {public_key}")
                     success, token, user_id = await hub.signup(
                         username, password, public_key
