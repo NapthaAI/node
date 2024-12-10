@@ -42,16 +42,6 @@ class LLMConfig(BaseModel):
     temperature: Optional[float] = None
     api_base: Optional[str] = None
 
-class CreateModuleRequest(BaseModel):
-    name: str
-
-class CreateModuleResponse(BaseModel):
-    name: str
-    version: str
-    url: str
-    status: str
-    message:str
-
 class AgentModuleType(str, Enum):
     package = "package"
     docker = "docker"
