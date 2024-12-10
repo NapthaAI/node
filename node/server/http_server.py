@@ -284,24 +284,28 @@ class HTTPServer:
                 table_name, columns, condition, order_by, limit
             )
     
-        ####### LiteLLM endpoints #######
-        @router.post("/litellm/chat")
+        ####### Inference endpoints #######
+        @router.post("/inference/chat")
         async def chat_endpoint(request: ChatCompletionRequest):
             """
             Forward chat completion requests to litellm proxy
             """
+            logger.info(f"Received chat request: {request}")
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(
                         f"{LITELLM_URL}/chat/completions",
                         json=request.model_dump(exclude_none=True)
                     )
+                    logger.info(f"LiteLLM response: {response.json()}")
                     return response.json()
+            except httpx.ReadTimeout:
+                logger.error("Request to LiteLLM timed out")
+                raise HTTPException(status_code=504, detail="Request to LiteLLM timed out")
             except Exception as e:
                 logger.error(f"Error in chat endpoint: {str(e)}")
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
-
-        ####### LiteLLM endpoints #######
 
         # Include the router
         self.app.include_router(router)
