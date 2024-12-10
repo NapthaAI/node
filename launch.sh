@@ -107,7 +107,8 @@ linux_install_ollama() {
     fi
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
-    for model in $OLLAMA_MODELS; do
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    for model in "${MODELS[@]}"; do
         echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
         ollama pull "$model"
     done
@@ -1430,8 +1431,13 @@ linux_start_litellm() {
     echo "Installing LiteLLM dependencies..." | log_with_service_name "LiteLLM" $BLUE
     cd $PROJECT_DIR
     poetry install --no-root
+    
+    # Generate LiteLLM config using main project's venv
+    echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
     cd $CURRENT_DIR
-
+    PYTHONPATH=$CURRENT_DIR $CURRENT_DIR/.venv/bin/poetry run python $PROJECT_DIR/generate_litellm_config.py
+    cd $PROJECT_DIR
+    
     # Create systemd service file
     cat > /tmp/litellm.service << EOF
 [Unit]
@@ -1478,11 +1484,16 @@ darwin_start_litellm() {
     PROJECT_DIR="$CURRENT_DIR/node/litellm"
     VENV_PATH="$PROJECT_DIR/.venv/bin"
     
-    # Install dependencies using poetry
+    # Install dependencies using poetry with --no-root flag
     echo "Installing LiteLLM dependencies..." | log_with_service_name "LiteLLM" $BLUE
     cd $PROJECT_DIR
     poetry install --no-root
+    
+    # Generate LiteLLM config using main project's venv
+    echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
     cd $CURRENT_DIR
+    PYTHONPATH=$CURRENT_DIR $CURRENT_DIR/.venv/bin/poetry run python $PROJECT_DIR/generate_litellm_config.py
+    cd $PROJECT_DIR
 
     # Create launchd plist file
     cat > ~/Library/LaunchAgents/com.litellm.proxy.plist << EOF
