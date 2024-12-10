@@ -369,7 +369,9 @@ class OrchestratorEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
-        await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
+        
+        updated_agent_deployments = await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
+        self.orchestrator_run.agent_deployments = updated_agent_deployments
 
         # Load the orchestrator
         (
@@ -382,64 +384,81 @@ class OrchestratorEngine:
         )
         
 
-    def node_url_to_node(self, node_url: str):
+    async def node_url_to_node(self, node_url: str):
         """
         Converts the node url to a node object
         """
-        if 'ws://' in node_url:
-            return Node(node_url=node_url, server_type='ws')
-        elif 'http://' in node_url:
-            return Node(node_url=node_url, server_type='http')
-        elif 'grpc://' in node_url:
-            node_url = node_url.replace('grpc://', '')
-            return Node(node_url=node_url, server_type='grpc')
+        if node_url.startswith('ws://'):
+            return Node(node_url=node_url, server_type='ws'), node_url
+        elif node_url.startswith('http://'):
+            return Node(node_url=node_url, server_type='http'), node_url
+        elif node_url.startswith('grpc://'):
+            _node_url = node_url.replace('grpc://', '')
+            return Node(node_url=_node_url, server_type='grpc'), node_url
         else:
-            raise ValueError(f"Invalid node URL: {node_url}")
+            if node_url.endswith('/'):
+                node_url = node_url[:-1]
+            if "://" in node_url:
+                node_url = node_url.split("://")[1]
+
+            temp_url = f"http://{node_url}"
+            temp_node = Node(node_url=temp_url, server_type='http')
+            health = await temp_node.check_health()
+            if health:
+                ws_url = f"ws://{node_url}"
+                return Node(node_url=ws_url, server_type='ws'), ws_url
+            else:
+                return Node(node_url=node_url, server_type='grpc'), f"grpc://{node_url}"
         
     async def check_register_worker_nodes(self, agent_deployments: List):
         """
-        Checks if the user has the right to use the worker nodes
+        Validates and registers user access rights for worker nodes.
+        Skips validation for worker nodes on the same domain as the orchestrator.
         """
-        logger.info(f"Checking user: {self.consumer} on worker nodes: {agent_deployments}")
-        for agent_deployment in agent_deployments:
-            logger.info(f"Agent deployment: {agent_deployment}")
-            worker_node_url = agent_deployment.worker_node_url
-            logger.info(f"Checking user: {self.consumer} on worker node: {worker_node_url}")
-            if worker_node_url:
-                worker_node = self.node_url_to_node(worker_node_url)
-                logger.info(f"Checking user: {self.consumer} on worker node: {worker_node_url}")
+        logger.info(f"Validating user {self.consumer} access for {len(agent_deployments)} worker nodes")
 
-                # get only the domain from the node url
-                if "://" in worker_node_url:
-                    worker_node_url_domain = worker_node_url.split("://")[1]        
-                else:
-                    worker_node_url_domain = worker_node_url
+        def extract_domain(url: str) -> str:
+            """Extract clean domain from URL, removing protocol and port"""
+            domain = url.split("://")[-1].split(":")[0]
+            return domain
 
-                if ":" in worker_node_url_domain:
-                    worker_node_url_domain = worker_node_url_domain.split(":")[0]
+        async def process_worker_node(worker_node, node_url: str):
+            """Handle user validation and registration for a single worker node"""
+            async with worker_node as node:
+                consumer = await node.check_user(user_input=self.consumer)
+                
+                if consumer["is_registered"]:
+                    logger.info(f"User validated on worker node: {node_url}")
+                    return
+                
+                logger.info(f"Registering new user on worker node: {node_url}")
+                consumer = await node.register_user(user_input=consumer)
+                logger.info(f"User registration complete on worker node: {node_url}")
 
-                # get only the domain from the orchestrator node url
-                if "://" in self.orchestrator_node.node_url:
-                    orchestrator_node_url_domain = self.orchestrator_node.node_url.split("://")[1]
-                else:
-                    orchestrator_node_url_domain = self.orchestrator_node.node_url
-            
-                if ":" in orchestrator_node_url_domain:
-                    orchestrator_node_url_domain = orchestrator_node_url_domain.split(":")[0]
+        for deployment in agent_deployments:
+            worker_url = deployment.worker_node_url
+            if not worker_url:
+                continue
 
-                if worker_node_url_domain == orchestrator_node_url_domain:
-                    logger.info(f"Skipping check user on orchestrator node: {worker_node_url}")
+            try:
+                # Check if worker node is on same domain as orchestrator
+                worker_domain = extract_domain(worker_url)
+                orchestrator_domain = extract_domain(self.orchestrator_node.node_url)
+
+                # Process the worker node
+                worker_node, worker_node_url = await self.node_url_to_node(worker_url)
+                deployment.worker_node_url = worker_node_url
+
+                if worker_domain == orchestrator_domain:
+                    logger.info(f"Skipping validation for same-domain worker node: {worker_url}")
                     continue
+                await process_worker_node(worker_node, worker_url)
 
-                async with worker_node as node:
-                    consumer = await node.check_user(user_input=self.consumer)
-                if consumer["is_registered"] is True:
-                    logger.info(f"Found user: {consumer} on worker node: {worker_node_url}")
-                elif consumer["is_registered"] is False:
-                    logger.info(f"No user found. Registering user: {consumer} on worker node: {worker_node_url}")
-                    async with worker_node as node:
-                        consumer = await node.register_user(user_input=consumer)
-                        logger.info(f"User registered: {consumer} on worker node: {worker_node_url}")
+            except Exception as e:
+                logger.error(f"Error processing worker node {worker_url}: {e}")
+                raise
+
+        return agent_deployments
 
     async def start_run(self):
         logger.info("Starting orchestrator run")
