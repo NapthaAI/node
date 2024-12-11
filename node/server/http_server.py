@@ -456,27 +456,31 @@ class HTTPServer:
                         if agent_module:
                             agent_modules.append(agent_module)
             
-            sub_agent_installation_status = []
-            for agent_module in agent_modules:
-                install_params = {
-                    "name": agent_module.name,
-                    "url": agent_module.url,
-                    "version": f"v{agent_module.version}",
-                    "type": agent_module.type,
-                }
-                try:
-                    await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
-                    sub_agent_installation_status.append({
+                logger.info(f"Agent modules: {agent_modules}")
+
+                sub_agent_installation_status = []
+                for agent_module in agent_modules:
+                    install_params = {
                         "name": agent_module.name,
-                        "version": agent_module.version,
-                        "status": "success",
-                    })
-                except Exception as e:
-                    sub_agent_installation_status.append({
-                        "name": agent_module.name,
-                        "version": agent_module.version,
-                        "status": str(e),
-                    })
+                        "url": agent_module.url,
+                        "version": f"v{agent_module.version}",
+                        "type": agent_module.type,
+                    }
+                    try:
+                        await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                        sub_agent_installation_status.append({
+                            "name": agent_module.name,
+                            "version": agent_module.version,
+                            "status": "success",
+                        })
+                    except Exception as e:
+                        sub_agent_installation_status.append({
+                            "name": agent_module.name,
+                            "version": agent_module.version,
+                            "status": str(e),
+                        })
+            else:
+                sub_agent_installation_status = []
 
             sub_environments = set()
             for environment_deployment in environment_deployments:
@@ -505,14 +509,14 @@ class HTTPServer:
                         if environment_module:
                             environment_modules.append(environment_module)
 
-            environment_installation_status = []
-            for environment_module in environment_modules:
-                install_params = {
-                    "name": environment_module.name,
-                    "url": environment_module.url,
-                    "version": f"v{environment_module.version}",
-                    "type": environment_module.type,
-                }
+                environment_installation_status = []
+                for environment_module in environment_modules:
+                    install_params = {
+                        "name": environment_module.name,
+                        "url": environment_module.url,
+                        "version": f"v{environment_module.version}",
+                        "type": environment_module.type,
+                    }
 
                 try:
                     await ensure_module_installation_with_lock(install_params, f"v{environment_module.version}")
@@ -527,6 +531,8 @@ class HTTPServer:
                         "version": environment_module.version,
                         "status": str(e),
                     })
+            else:
+                environment_installation_status = []
 
             return JSONResponse(
                 content={
