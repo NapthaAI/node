@@ -360,6 +360,8 @@ class HTTPServer:
         :return: OrchestratorDeployment
         """
         try:
+            logger.info(f"Creating orchestrator: {orchestrator_input}")
+
             hub_username = os.getenv("HUB_USERNAME")
             hub_password = os.getenv("HUB_PASSWORD")
             if not hub_username or not hub_password:
@@ -371,7 +373,13 @@ class HTTPServer:
                 except Exception as auth_error:
                     raise HTTPException(status_code=401, detail=f"Authentication failed: {str(auth_error)}")
 
-                orchestrator = await hub.list_orchestrators(orchestrator_input.module.name)
+
+                if isinstance(orchestrator_input.module, dict):
+                    module_name = orchestrator_input.module.get("name")
+                else:
+                    module_name = orchestrator_input.module.name
+                
+                orchestrator = await hub.list_orchestrators(module_name)
                 if not orchestrator:
                     raise HTTPException(status_code=404,
                                         detail=f"Orchestrator {orchestrator_input.module.name} not found")
@@ -390,33 +398,60 @@ class HTTPServer:
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=f"Orchestrator installation failed: {str(install_error)}")
 
+            agent_deployments = orchestrator_input.agent_deployments
+            environment_deployments = orchestrator_input.environment_deployments
+
+            logger.info(f"Agent deployments: {agent_deployments}")
+            logger.info(f"Environment deployments: {environment_deployments}")
+
             orchestrator_path = os.path.join(MODULES_SOURCE_DIR or "/tmp", orchestrator.name or "unknown")
             orchestrator_config_path = os.path.join(orchestrator_path, orchestrator.name or "unknown", "configs")
-            agent_deployment_path = os.path.join(orchestrator_config_path, "agent_deployments.json")
-            environment_deployment_path = os.path.join(orchestrator_config_path, "environment_deployments.json")
 
-            if not os.path.exists(agent_deployment_path) and not os.path.exists(environment_deployment_path):
-                return OrchestratorDeployment(
-                    name=orchestrator_input.name,
-                    module=install_params,
-                    orchestrator_node_url=orchestrator_input.orchestrator_node_url,
-                    orchestrator_config=orchestrator_input.orchestrator_config
-                )
+            if not agent_deployments:
+                agent_deployment_path = os.path.join(orchestrator_config_path, "agent_deployments.json")
+                try:
+                    with open(agent_deployment_path, "r") as f:
+                        agent_deployments = json.load(f)
+                except FileNotFoundError:
+                    agent_deployments = []
+                except Exception as e:
+                    logger.error(f"Failed to load agent deployments: {str(e)}")
+                    agent_deployments = []
 
-            try:
-                with open(agent_deployment_path, "r") as f:
-                    agent_deployments = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError) as json_error:
-                logger.error(f"Failed to load agent deployments: {str(json_error)}")
-                agent_deployments = []
+            if not environment_deployments:
+                environment_deployment_path = os.path.join(orchestrator_config_path, "environment_deployments.json")
+                try:
+                    with open(environment_deployment_path, "r") as f:
+                        environment_deployments = json.load(f)
+                except FileNotFoundError:
+                    environment_deployments = []
+                except Exception as e:
+                    logger.error(f"Failed to load environment deployments: {str(e)}")
+                    environment_deployments = []
 
-            sub_agents = set(
-                agent_deployment.get("module", {}).get("name") 
-                for agent_deployment in agent_deployments 
-                if agent_deployment and "module" in agent_deployment
-            )
+            logger.info(f"Agent deployments: {agent_deployments}")
+            logger.info(f"Environment deployments: {environment_deployments}")
 
-            
+            if not agent_deployments and not environment_deployments:
+                return JSONResponse(content={"status": "success", "message": "Orchestrator created successfully. No agent or environment deployments found."})
+
+            sub_agents = set()
+            for agent_deployment in agent_deployments:
+                if isinstance(agent_deployment, dict):
+                    module = agent_deployment.get("module", {})
+                    if isinstance(module, dict):
+                        sub_agents.add(module.get("name"))
+                    else:
+                        sub_agents.add(module.name)
+                else:
+                    module = agent_deployment.module
+                    if isinstance(module, dict):
+                        sub_agents.add(module.get("name"))
+                    else:
+                        sub_agents.add(module.name)
+
+            logger.info(f"Sub agents: {sub_agents}")
+
             sub_agents = list(sub_agents)
             if len(sub_agents) > 0:
                 agent_modules = []
@@ -450,46 +485,67 @@ class HTTPServer:
                         "version": agent_module.version,
                         "status": str(e),
                     })
-            if not os.path.exists(environment_deployment_path):
-                return OrchestratorDeployment(
-                    name=orchestrator_input.name,
-                    module=install_params,
-                    orchestrator_node_url=orchestrator_input.orchestrator_node_url,
-                    orchestrator_config=orchestrator_input.orchestrator_config
-                )
-            
-            with open(environment_deployment_path, "r") as f:
-                environment_deployments = json.load(f)
-            
-            environment_module_name = environment_deployments[0]["module"]["name"]
-            if environment_module_name:
-                 async with Hub() as hub:
+
+            sub_environments = set()
+            for environment_deployment in environment_deployments:
+                if isinstance(environment_deployment, dict):
+                    module = environment_deployment.get("module", {})
+                    if isinstance(module, dict):
+                        sub_environments.add(module.get("name"))
+                    else:
+                        sub_environments.add(module.name)
+                else:
+                    module = environment_deployment.module
+                    if isinstance(module, dict):
+                        sub_environments.add(module.get("name"))
+                    else:
+                        sub_environments.add(module.name)
+
+            sub_environments = list(sub_environments)
+            if len(sub_environments) > 0:
+                environment_modules = []
+                async with Hub() as hub:
                     _, _, _ = await hub.signin(
                         os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                     )
-                    environment_module = await hub.list_environments(environment_module_name)
-            
-            if environment_module:
+                    for sub_environment in sub_environments:
+                        environment_module = await hub.list_environments(sub_environment)
+                        if environment_module:
+                            environment_modules.append(environment_module)
+
+            environment_installation_status = []
+            for environment_module in environment_modules:
                 install_params = {
                     "name": environment_module.name,
                     "url": environment_module.url,
                     "version": f"v{environment_module.version}",
                     "type": environment_module.type,
                 }
+
                 try:
                     await ensure_module_installation_with_lock(install_params, f"v{environment_module.version}")
+                    environment_installation_status.append({
+                        "name": environment_module.name,
+                        "version": environment_module.version,
+                        "status": "success",
+                    })
                 except Exception as e:
-                    logger.error(f"Failed to install environment: {str(e)}")
-                    logger.debug(f"Full traceback: {traceback.format_exc()}")
-                    raise HTTPException(status_code=500, detail=str(e))
+                    environment_installation_status.append({
+                        "name": environment_module.name,
+                        "version": environment_module.version,
+                        "status": str(e),
+                    })
 
-                return OrchestratorDeployment(
-                    name=orchestrator_input.name,
-                    module=install_params,
-                    orchestrator_node_url=orchestrator_input.orchestrator_node_url,
-                    orchestrator_config=orchestrator_input.orchestrator_config
-                )
-
+            return JSONResponse(
+                content={
+                    "status": "success", 
+                    "message": "Orchestrator created successfully", 
+                    "sub_agents": sub_agents, 
+                    "sub_environments": sub_environments, 
+                    "sub_agent_installation_status": sub_agent_installation_status, 
+                    "sub_environment_installation_status": environment_installation_status
+                }
+            )
 
         except Exception as e:
             logger.error(f"Failed to create orchestrator: {str(e)}")
@@ -530,11 +586,7 @@ class HTTPServer:
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
 
-            return EnvironmentDeployment(
-                module=install_params,
-                environment_node_url=environment_input.environment_node_url,
-                environment_config=environment_input.environment_config
-            )
+            return JSONResponse(content={"status": "success", "message": "Environment created successfully"})
             
         except Exception as e:
             logger.error(f"Failed to create environment: {str(e)}")
@@ -575,13 +627,7 @@ class HTTPServer:
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
             
-            return CreateModuleResponse(
-                name=agent.name,
-                version=agent.version,
-                url=agent.url,
-                status="Created",
-                message="Agent created successfully"
-            )
+            return JSONResponse(content={"status": "success", "message": "Agent created successfully"})
         
         except Exception as e:
             logger.error(f"Failed to create agent: {str(e)}")
