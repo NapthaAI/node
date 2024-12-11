@@ -37,8 +37,6 @@ class OrchestratorRun(Base):
     consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
     inputs = Column(JSON)
     orchestrator_deployment = Column(JSON, nullable=False)
-    agent_deployments = Column(ARRAY(JSON), nullable=False)
-    environment_deployments = Column(ARRAY(JSON))
     status = Column(String, default="pending")
     error = Column(Boolean, default=False)
     results = Column(ARRAY(String), default=[])
