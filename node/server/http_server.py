@@ -45,6 +45,7 @@ import asyncio
 logger = logging.getLogger(__name__)
 load_dotenv()
 
+LITELLM_HTTP_TIMEOUT = 60*5
 
 class TransientDatabaseError(Exception):
     pass
@@ -292,7 +293,7 @@ class HTTPServer:
             """
             logger.info(f"Received chat request: {request}")
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=LITELLM_HTTP_TIMEOUT) as client:
                     response = await client.post(
                         f"{LITELLM_URL}/chat/completions",
                         json=request.model_dump(exclude_none=True)
