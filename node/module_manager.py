@@ -534,7 +534,7 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
     final_agent_deployments = []
 
     # First process incoming agent deployments
-    for agent_deployment in orchestrator_run.agent_deployments:
+    for agent_deployment in orchestrator_run.orchestrator_deployment.agent_deployments:
         matched_default = None
         
         # Try to find matching default config by name
@@ -588,12 +588,12 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
 
     # Replace worker_node_url if it exists in incoming orchestrator_run
     for i, deployment in enumerate(final_agent_deployments):
-        incoming_deployment = orchestrator_run.agent_deployments[i]
+        incoming_deployment = orchestrator_run.orchestrator_deployment.agent_deployments[i]
         if incoming_deployment.worker_node_url:
             deployment.worker_node_url = incoming_deployment.worker_node_url
 
     # Update orchestrator_run with final deployments
-    orchestrator_run.agent_deployments = final_agent_deployments
+    orchestrator_run.orchestrator_deployment.agent_deployments = final_agent_deployments
 
     # Validate the input schema
     validated_data = load_and_validate_input_schema(orchestrator_run)
