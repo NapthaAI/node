@@ -401,9 +401,6 @@ class HTTPServer:
             agent_deployments = orchestrator_input.agent_deployments
             environment_deployments = orchestrator_input.environment_deployments
 
-            logger.info(f"Agent deployments: {agent_deployments}")
-            logger.info(f"Environment deployments: {environment_deployments}")
-
             orchestrator_path = os.path.join(MODULES_SOURCE_DIR or "/tmp", orchestrator.name or "unknown")
             orchestrator_config_path = os.path.join(orchestrator_path, orchestrator.name or "unknown", "configs")
 
@@ -429,9 +426,6 @@ class HTTPServer:
                     logger.error(f"Failed to load environment deployments: {str(e)}")
                     environment_deployments = []
 
-            logger.info(f"Agent deployments: {agent_deployments}")
-            logger.info(f"Environment deployments: {environment_deployments}")
-
             if not agent_deployments and not environment_deployments:
                 return JSONResponse(content={"status": "success", "message": "Orchestrator created successfully. No agent or environment deployments found."})
 
@@ -449,8 +443,6 @@ class HTTPServer:
                         sub_agents.add(module.get("name"))
                     else:
                         sub_agents.add(module.name)
-
-            logger.info(f"Sub agents: {sub_agents}")
 
             sub_agents = list(sub_agents)
             if len(sub_agents) > 0:
