@@ -94,13 +94,16 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun], run_version: str):
+async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, dict], run_version: str):
     if isinstance(run, AgentRun):
         module_name = run.agent_deployment.module["name"]
         url = run.agent_deployment.module["url"]    
     elif isinstance(run, OrchestratorRun):
         module_name = run.orchestrator_deployment.module["name"]
         url = run.orchestrator_deployment.module["url"]
+    elif isinstance(run, dict):
+        module_name = run["name"]
+        url = run["url"]
     else:  # EnvironmentRun
         module_name = run.environment_deployment.module["name"]
         url = run.environment_deployment.module["url"]
@@ -531,7 +534,7 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
     final_agent_deployments = []
 
     # First process incoming agent deployments
-    for agent_deployment in orchestrator_run.agent_deployments:
+    for agent_deployment in orchestrator_run.orchestrator_deployment.agent_deployments:
         matched_default = None
         
         # Try to find matching default config by name
@@ -585,12 +588,12 @@ async def load_orchestrator(orchestrator_run, agent_source_dir):
 
     # Replace worker_node_url if it exists in incoming orchestrator_run
     for i, deployment in enumerate(final_agent_deployments):
-        incoming_deployment = orchestrator_run.agent_deployments[i]
+        incoming_deployment = orchestrator_run.orchestrator_deployment.agent_deployments[i]
         if incoming_deployment.worker_node_url:
             deployment.worker_node_url = incoming_deployment.worker_node_url
 
     # Update orchestrator_run with final deployments
-    orchestrator_run.agent_deployments = final_agent_deployments
+    orchestrator_run.orchestrator_deployment.agent_deployments = final_agent_deployments
 
     # Validate the input schema
     validated_data = load_and_validate_input_schema(orchestrator_run)
