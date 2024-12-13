@@ -110,6 +110,8 @@ restart-node:
 	@echo "Restarting all components in parallel..."
 	@$(MAKE) remove
 	@echo ".venv removed"
+	@$(MAKE) pyproject-clean
+	@poetry lock
 	@poetry install
 	@echo "poetry install done"
 	@$(MAKE) restart-servers & $(MAKE) restart-celery
