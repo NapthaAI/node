@@ -51,7 +51,7 @@ MODULES_SOURCE_DIR=f"{repo_dir}/node/storage/hub/modules"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
-LOCAL_HUB=True
+LOCAL_HUB=False
 LOCAL_HUB_URL="ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_PORT=3001
