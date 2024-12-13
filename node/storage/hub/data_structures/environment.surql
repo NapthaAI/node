@@ -5,6 +5,7 @@ DEFINE TABLE environment SCHEMAFULL
 
 DEFINE FIELD name ON TABLE environment TYPE string;
 DEFINE FIELD description ON TABLE environment TYPE string;
+DEFINE FIELD parameters ON TABLE environment TYPE string;
 DEFINE FIELD author ON TABLE environment TYPE record<user>;
 DEFINE FIELD url ON TABLE environment TYPE string;
 DEFINE FIELD type ON TABLE environment TYPE string;
