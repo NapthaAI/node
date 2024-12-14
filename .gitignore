@@ -178,3 +178,6 @@ logs/
 node/storage/db/alembic/versions
 celery_worker_start.sh
 ops/systemd/*
+
+.idea/
+.idea/*
