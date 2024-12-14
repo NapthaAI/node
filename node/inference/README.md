@@ -58,3 +58,11 @@ because their tool-calling SLMs support a broad variety of a capabilities for mo
 and are generally very reliable include:
 - Alibaba Qwen (e.g. Qwen 2.5 7B Instruct)
 - Nous Research (e.g. Hermes 3 Llama 3.1 8B)
+
+## Resources
+The following links are some good resources to learn more about tool calling in vLLM:
+- [vLLM's Tool-calling documentation](https://docs.vllm.ai/en/latest/usage/tool_calling.html#quickstart) is the authoritative guide to officially supported tool-calling LLMs in vLLM, and 
+provides documentation on how to write a tool parser plugin for your own model if it's not currently supported.
+- [Berkeley Function-Calling Leaderboard](https://gorilla.cs.berkeley.edu/leaderboard.html) ranks top-performing tool-calling LLMs.
+- [Kyle Mistele's talk on tool parsing in vLLM](https://www.youtube.com/watch?v=7_XPHw_wi-c&t=2s) dives into some of the complexities on OpenAI-compatible tool use in vLLM, 
+particularly surrounding streaming. If you want to use tool streaming, or add a tool streaming parser, this may be a helpful resources.
