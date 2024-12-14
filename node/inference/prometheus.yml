@@ -1,0 +1,40 @@
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'vllm-0'
+    static_configs:
+      - targets: ['vllm-0-hermes:8000']
+
+  - job_name: 'vllm-1'
+    static_configs:
+      - targets: ['vllm-1-qwen25:8000']
+
+  - job_name: 'vllm-2'
+    static_configs:
+      - targets: ['vllm-2-llama31:8000']
+
+  - job_name: 'vllm-3'
+    static_configs:
+      - targets: ['vllm-3-toolace:8000']
+
+  - job_name: 'vllm-4'
+    static_configs:
+      - targets: ['vllm-4-minicpm3:8000']
+
+  - job_name: 'vllm-5'
+    static_configs:
+      - targets: ['vllm-5-mistral:8000']
+
+  - job_name: 'vllm-6'
+    static_configs:
+      - targets: ['vllm-6-internlm:8000']
+
+  - job_name: 'vllm-7'
+    static_configs:
+      - targets: ['vllm-7-functionary31:8000']
+
+  - job_name: 'vllm-8'
+    static_configs:
+      - targets: ['vllm-8-archfunction:8000']
