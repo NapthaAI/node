@@ -96,46 +96,6 @@ install_surrealdb() {
     fi
 }
 
-get_latest_ollama_version() {
-    local version
-    version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
-    if [ -z "$version" ]; then
-        echo "Failed to retrieve latest version" >&2
-        return 1
-    fi
-    echo "$version"
-}
-
-get_current_ollama_version() {
-    ollama -v 2>/dev/null | awk '{print $NF}' || echo "unknown"
-}
-
-install_or_update_ollama() {
-  arch=$(get_architecture)
-  if [ "$os" == "Darwin" ]; then
-        sudo curl -L https://ollama.ai/download/ollama-${arch} -o /usr/local/bin/ollama
-        sudo chmod +x /usr/local/bin/ollama
-  else
-      if ! curl -fsSL https://ollama.com/install.sh | sh; then
-          echo "Official installation failed" >&2
-          sudo chmod +x /usr/bin/ollama
-      fi
-  fi
-}
-
-configure_ollama_mac() {
-      sudo chmod +x /usr/bin/ollama
-      sudo dscl . -create /Users/ollama
-      sudo dscl . -create /Users/ollama UserShell /bin/false
-      sudo dscl . -create /Users/ollama NFSHomeDirectory /usr/share/ollama
-}
-
-restart_ollama_linux() {
-    sudo systemctl daemon-reload
-    sudo systemctl enable ollama
-    sudo systemctl start ollama
-}
-
 # Function for manual installation of Ollama
 linux_install_ollama() {
     set -a
@@ -145,27 +105,50 @@ linux_install_ollama() {
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
-    if command -v ollama >/dev/null 2>&1; then
-        echo "Ollama is already installed." | log_with_service_name "Ollama" $RED
-        echo "Checking for updates..." | log_with_service_name "Ollama" $RED
-        local current_version latest_version
-        current_version=$(get_current_ollama_version)
-        latest_version=$(get_latest_ollama_version)
+    install_ollama_app() {
+        sudo curl -fsSL https://ollama.com/install.sh | sh
+    }
 
-        if [ "$current_version" == "$latest_version" ]; then
-        echo "You are running the latest version of Ollama (${current_version})" | log_with_service_name "Ollama" $RED
-        sudo cp ./ops/systemd/ollama.service /etc/systemd/system/
+    restart_ollama_linux() {
+        sudo systemctl daemon-reload
+        sudo systemctl enable ollama
+        sudo systemctl start ollama
+    }
 
-        else
-        echo "You are running an older version of Ollama (${current_version}), trying to update to the latest version (${latest_version})..." | log_with_service_name "Ollama" $RED
-        install_or_update_ollama
-        echo "Ollama updated successfully." | log_with_service_name "Ollama" $RED
-        fi
+    # Get current version if Ollama exists
+    local current_version=""
+    current_version=$(ollama -v 2>/dev/null | grep -oP '(?:client version is |version is )(\K[\d.]+)')
 
+    # Get latest version from GitHub release
+    local latest_version=""
+    latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
+                    grep '"tag_name":' | 
+                    sed -E 's/.*"v([^"]+)".*/\1/')
+    
+    if [ -z "$latest_version" ]; then
+        echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
+        exit 1
+    fi
+
+    echo "Current version: $current_version" | log_with_service_name "Ollama" $RED
+    echo "Latest version: $latest_version" | log_with_service_name "Ollama" $RED   
+
+    # Case 1: Ollama not installed
+    if ! command -v ollama >/dev/null 2>&1; then
+        echo "Ollama is not installed. Installing..." | log_with_service_name "Ollama" $RED
+        install_ollama_app
+        echo "Ollama installed successfully" | log_with_service_name "Ollama" $RED
+
+    # Case 2: Version needs update
+    elif [ -z "$current_version" ] || [ "$current_version" != "$latest_version" ]; then
+        echo "Updating Ollama from ${current_version:-unknown} to ${latest_version}" | log_with_service_name "Ollama" $RED
+        install_ollama_app
+        echo "Ollama updated successfully" | log_with_service_name "Ollama" $RED
+
+    # Case 3: Latest version already installed
     else
-        echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        install_or_update_ollama
-        echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
+        echo "Latest version of Ollama (${current_version}) is already installed" | log_with_service_name "Ollama" $RED
+        sudo cp ./ops/systemd/ollama.service /etc/systemd/system/
     fi
 
     restart_ollama_linux
