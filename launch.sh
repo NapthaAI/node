@@ -96,6 +96,46 @@ install_surrealdb() {
     fi
 }
 
+get_latest_ollama_version() {
+    local version
+    version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p')
+    if [ -z "$version" ]; then
+        echo "Failed to retrieve latest version" >&2
+        return 1
+    fi
+    echo "$version"
+}
+
+get_current_ollama_version() {
+    ollama -v 2>/dev/null | awk '{print $NF}' || echo "unknown"
+}
+
+install_or_update_ollama() {
+  arch=$(get_architecture)
+  if [ "$os" == "Darwin" ]; then
+        sudo curl -L https://ollama.ai/download/ollama-${arch} -o /usr/local/bin/ollama
+        sudo chmod +x /usr/local/bin/ollama
+  else
+      if ! curl -fsSL https://ollama.com/install.sh | sh; then
+          echo "Official installation failed" >&2
+          sudo chmod +x /usr/bin/ollama
+      fi
+  fi
+}
+
+configure_ollama_mac() {
+      sudo chmod +x /usr/bin/ollama
+      sudo dscl . -create /Users/ollama
+      sudo dscl . -create /Users/ollama UserShell /bin/false
+      sudo dscl . -create /Users/ollama NFSHomeDirectory /usr/share/ollama
+}
+
+restart_ollama_linux() {
+    sudo systemctl daemon-reload
+    sudo systemctl enable ollama
+    sudo systemctl start ollama
+}
+
 # Function for manual installation of Ollama
 linux_install_ollama() {
     set -a
@@ -107,18 +147,28 @@ linux_install_ollama() {
 
     if command -v ollama >/dev/null 2>&1; then
         echo "Ollama is already installed." | log_with_service_name "Ollama" $RED
+        echo "Checking for updates..." | log_with_service_name "Ollama" $RED
+        local current_version latest_version
+        current_version=$(get_current_ollama_version)
+        latest_version=$(get_latest_ollama_version)
+
+        if [ "$current_version" == "$latest_version" ]; then
+        echo "You are running the latest version of Ollama (${current_version})" | log_with_service_name "Ollama" $RED
         sudo cp ./ops/systemd/ollama.service /etc/systemd/system/
-        sudo systemctl daemon-reload
-        sudo systemctl enable ollama
-        sudo systemctl start ollama
+
+        else
+        echo "You are running an older version of Ollama (${current_version}), trying to update to the latest version (${latest_version})..." | log_with_service_name "Ollama" $RED
+        install_or_update_ollama
+        echo "Ollama updated successfully." | log_with_service_name "Ollama" $RED
+        fi
+
     else
         echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        sudo curl -fsSL https://ollama.com/install.sh | sh
-        sudo systemctl daemon-reload
-        sudo systemctl enable ollama
-        sudo systemctl start ollama
+        install_or_update_ollama
         echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
     fi
+
+    restart_ollama_linux
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
     IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
@@ -138,19 +188,30 @@ darwin_install_ollama() {
     arch=$(get_architecture)
     if command -v ollama >/dev/null 2>&1; then
         echo "Ollama is already installed." | log_with_service_name "Ollama" $RED
-        cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
-        launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
+        echo "Checking for updates..." | log_with_service_name "Ollama" $RED
+        local current_version latest_version
+        current_version=$(get_current_ollama_version)
+        latest_version=$(get_latest_ollama_version)
+
+        if [ "$current_version" == "$latest_version" ]; then
+          echo "You are running the latest version of Ollama (${current_version})" | log_with_service_name "Ollama" $RED
+
+        else
+          echo "You are running an older version of Ollama (${current_version}), trying to update to the latest version (${latest_version})..." | log_with_service_name "Ollama" $RED
+          install_or_update_ollama
+          configure_ollama_mac
+          echo "Ollama updated successfully." | log_with_service_name "Ollama" $RED
+        fi
+
     else
         echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        sudo curl -L https://ollama.ai/download/ollama-linux-$arch -o /usr/bin/ollama
-        sudo chmod +x /usr/bin/ollama
-        sudo dscl . -create /Users/ollama
-        sudo dscl . -create /Users/ollama UserShell /bin/false
-        sudo dscl . -create /Users/ollama NFSHomeDirectory /usr/share/ollama
-        cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
-        launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
+        install_or_update_ollama
+        configure_ollama_mac
         echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
     fi
+
+    cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
     ollama serve &
     sleep 1
     # Pull Ollama models
