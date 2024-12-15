@@ -4,7 +4,6 @@ from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-
 class NodeConfig(BaseModel):
     id: str
     public_key: str
@@ -22,6 +21,7 @@ class NodeConfig(BaseModel):
     num_servers: int = Field(default=1)
     node_type: str = Field(default="direct")
     server_type: str = Field(default="http")
+    servers: Optional[List[Dict]] = Field(default=None)
 
     class Config:
         allow_mutation = True
