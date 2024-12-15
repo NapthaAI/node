@@ -179,49 +179,67 @@ linux_install_ollama() {
 }
 
 darwin_install_ollama() {
-    set -a
-    source .env
-    set +a
-    
-    # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-    arch=$(get_architecture)
-    if command -v ollama >/dev/null 2>&1; then
-        echo "Ollama is already installed." | log_with_service_name "Ollama" $RED
-        echo "Checking for updates..." | log_with_service_name "Ollama" $RED
-        local current_version latest_version
-        current_version=$(get_current_ollama_version)
-        latest_version=$(get_latest_ollama_version)
 
-        if [ "$current_version" == "$latest_version" ]; then
-          echo "You are running the latest version of Ollama (${current_version})" | log_with_service_name "Ollama" $RED
-
-        else
-          echo "You are running an older version of Ollama (${current_version}), trying to update to the latest version (${latest_version})..." | log_with_service_name "Ollama" $RED
-          install_or_update_ollama
-          configure_ollama_mac
-          echo "Ollama updated successfully." | log_with_service_name "Ollama" $RED
-        fi
-
-    else
-        echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
-        install_or_update_ollama
-        configure_ollama_mac
-        echo "Ollama installed successfully." | log_with_service_name "Ollama" $RED
+    # Get current version if Ollama.app exists
+    local current_version=""
+    if [ -d "/Applications/Ollama.app" ]; then
+        current_version=$(defaults read /Applications/Ollama.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo "")
     fi
 
-    cp ./ops/launchd/ollama.plist ~/Library/LaunchAgents/
-    launchctl load ~/Library/LaunchAgents/com.example.ollama.plist
-    ollama serve &
-    sleep 1
-    # Pull Ollama models
-    echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
-    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
-    echo "MODELS: $MODELS" | log_with_service_name "Ollama" $RED
-    for model in "${MODELS[@]}"; do
-        echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
-        ollama pull "$model"
-    done
+    # Get latest version from GitHub release
+    local latest_version=""
+    latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
+                    grep '"tag_name":' | 
+                    sed -E 's/.*"v([^"]+)".*/\1/')
+    
+    if [ -z "$latest_version" ]; then
+        echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
+        exit 1
+    fi
+
+    echo "Current version: $current_version" | log_with_service_name "Ollama" $RED
+    echo "Latest version: $latest_version" | log_with_service_name "Ollama" $RED
+
+    install_ollama_app() {
+        local temp_dir=$(mktemp -d)
+        curl -L https://github.com/ollama/ollama/releases/download/v${latest_version}/Ollama-darwin.zip -o "$temp_dir/ollama.zip"
+        unzip -o "$temp_dir/ollama.zip" -d "$temp_dir"
+        sudo rm -rf "/Applications/Ollama.app"
+        sudo mv "$temp_dir/Ollama.app" "/Applications/"
+        rm -rf "$temp_dir"
+    }
+
+    # Case 1: Ollama not installed
+    if [ ! -d "/Applications/Ollama.app" ]; then
+        echo "Ollama is not installed. Installing..." | log_with_service_name "Ollama" $RED
+        install_ollama_app
+        echo "Ollama installed successfully" | log_with_service_name "Ollama" $RED
+    
+    # Case 2: Version needs update
+    elif [ -z "$current_version" ] || [ "$current_version" != "$latest_version" ]; then
+        echo "Updating Ollama from ${current_version:-unknown} to ${latest_version}" | log_with_service_name "Ollama" $RED
+        pkill -f "Ollama" || true
+        install_ollama_app
+        echo "Ollama updated successfully" | log_with_service_name "Ollama" $RED
+    
+    # Case 3: Latest version already installed
+    else
+        echo "Latest version of Ollama (${current_version}) is already installed" | log_with_service_name "Ollama" $RED
+    fi
+
+    # Start Ollama.app
+    echo "Starting Ollama..." | log_with_service_name "Ollama" $RED
+    open -a Ollama
+    sleep 2
+
+    # Verify Ollama is running
+    if ! pgrep -f "Ollama" >/dev/null; then
+        echo "Failed to start Ollama" | log_with_service_name "Ollama" $RED
+        exit 1
+    fi
+
+    echo "Ollama is now running" | log_with_service_name "Ollama" $RED
 }
 
 # Function to install Miniforge
