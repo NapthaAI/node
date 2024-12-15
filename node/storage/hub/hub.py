@@ -110,9 +110,26 @@ class Hub(AsyncMixin):
             return result[0]["result"][0]
         return None
 
+    async def get_server(self, server_name: str=None, server_id: str=None) -> Optional[Dict]:
+        if server_name:
+            result = await self.surrealdb.query("SELECT * FROM server WHERE name = $server_name LIMIT 1", {"name": server_name})
+        elif server_id:
+            result = await self.surrealdb.select(server_id)
+        return result
+
+    async def create_server(self, server_config):
+        """Create a server record in the database"""
+        logger.info(f"Creating server: {server_config}")
+        server = await self.surrealdb.create("server", server_config)
+        logger.info(f"created server: {server}")
+        if isinstance(server, dict):
+            return server
+        return server[0]
+    
     async def create_node(self, node_config: NodeConfig) -> Dict:
         node_config.owner = self.user_id
         node_id = node_config.id
+
         logger.info(f"Creating node: {node_config}")
         self.node_config = await self.surrealdb.create(node_id, node_config)
         logger.info(f"Created node: {self.node_config}")
@@ -133,6 +150,9 @@ class Hub(AsyncMixin):
 
     async def delete_node(self, node_id: str) -> bool:
         return await self.surrealdb.delete(node_id)
+    
+    async def delete_server(self, server_id: str) -> bool:
+        return await self.surrealdb.delete(server_id)
 
     async def list_agents(self, agent_name=None) -> List:
         try:
