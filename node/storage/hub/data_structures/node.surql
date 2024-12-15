@@ -18,3 +18,4 @@ DEFINE FIELD owner ON TABLE node TYPE record<user>;
 DEFINE FIELD num_servers ON TABLE node TYPE number;
 DEFINE FIELD ports ON TABLE node TYPE option<array<number>>;
 DEFINE FIELD node_type ON TABLE node TYPE string;
+DEFINE FIELD servers ON TABLE node TYPE array<record<server>>;
