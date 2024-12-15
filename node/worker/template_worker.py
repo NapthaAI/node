@@ -14,6 +14,7 @@ from pydantic import BaseModel, create_model
 from typing import List, Union
 
 from node.client import Node
+from node.storage.hub.hub import Hub
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
 from node.module_manager import install_module_with_lock, load_module, load_orchestrator_deployments
 from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
@@ -382,33 +383,20 @@ class OrchestratorEngine:
             orchestrator_run=self.module_run,
             agent_source_dir=MODULES_SOURCE_DIR
         )
-        
 
-    async def node_url_to_node(self, node_url: str):
+    async def get_server_connection(self, server_id: str):
         """
-        Converts the node url to a node object
+            Gets server connection details from hub and returns appropriate Node object
         """
-        if node_url.startswith('ws://'):
-            return Node(node_url=node_url, server_type='ws'), node_url
-        elif node_url.startswith('http://'):
-            return Node(node_url=node_url, server_type='http'), node_url
-        elif node_url.startswith('grpc://'):
-            _node_url = node_url.replace('grpc://', '')
-            return Node(node_url=_node_url, server_type='grpc'), node_url
-        else:
-            if node_url.endswith('/'):
-                node_url = node_url[:-1]
-            if "://" in node_url:
-                node_url = node_url.split("://")[1]
-
-            temp_url = f"http://{node_url}"
-            temp_node = Node(node_url=temp_url, server_type='http')
-            health = await temp_node.check_health()
-            if health:
-                ws_url = f"ws://{node_url}"
-                return Node(node_url=ws_url, server_type='ws'), ws_url
-            else:
-                return Node(node_url=node_url, server_type='grpc'), f"grpc://{node_url}"
+        try:
+            async with Hub() as hub:
+                logger.info(f"Getting server connection for {server_id}")
+                server = await hub.get_server(server_id=server_id)
+                logger.info(f"Server: {server}")
+                return server['connection_string']
+        except Exception as e:
+            logger.error(f"Error getting server connection: {e}")
+            raise
         
     async def check_register_worker_nodes(self, agent_deployments: List):
         """
@@ -417,23 +405,26 @@ class OrchestratorEngine:
         """
         logger.info(f"Validating user {self.consumer} access for {len(agent_deployments)} worker nodes")
 
-        def extract_domain(url: str) -> str:
-            """Extract clean domain from URL, removing protocol and port"""
-            domain = url.split("://")[-1].split(":")[0]
-            return domain
-
-        async def process_worker_node(worker_node, node_url: str):
+        async def process_worker_node(connection_string: str):
             """Handle user validation and registration for a single worker node"""
-            async with worker_node as node:
+            if "ws://" in connection_string:
+                node = Node(connection_string=connection_string, server_type='ws')
+            elif "grpc://" in connection_string:
+                ip_address = connection_string.replace("grpc://", "")
+                node = Node(node_url=ip_address, server_type='grpc')
+            else:
+                node = Node(node_url=connection_string, server_type='http')
+
+            async with node as node:
                 consumer = await node.check_user(user_input=self.consumer)
                 
                 if consumer["is_registered"]:
-                    logger.info(f"User validated on worker node: {node_url}")
+                    logger.info(f"User validated on worker node: {connection_string}")
                     return
                 
-                logger.info(f"Registering new user on worker node: {node_url}")
+                logger.info(f"Registering new user on worker node: {connection_string}")
                 consumer = await node.register_user(user_input=consumer)
-                logger.info(f"User registration complete on worker node: {node_url}")
+                logger.info(f"User registration complete on worker node: {connection_string}")
 
         for deployment in agent_deployments:
             worker_url = deployment.worker_node_url
@@ -441,21 +432,18 @@ class OrchestratorEngine:
                 continue
 
             try:
-                # Check if worker node is on same domain as orchestrator
-                worker_domain = extract_domain(worker_url)
-                orchestrator_domain = extract_domain(self.orchestrator_node.node_url)
+                connection_string = await self.get_server_connection(deployment.worker_node_url)
+                deployment.worker_node_url = connection_string
+                logger.info(f"Worker node URL: {deployment.worker_node_url}")
 
-                # Process the worker node
-                worker_node, worker_node_url = await self.node_url_to_node(worker_url)
-                deployment.worker_node_url = worker_node_url
-
-                if worker_domain == orchestrator_domain:
-                    logger.info(f"Skipping validation for same-domain worker node: {worker_url}")
+                if 'localhost' in connection_string:
+                    logger.info(f"Skipping validation for localhost worker node: {deployment.worker_node_url}")
                     continue
-                await process_worker_node(worker_node, worker_url)
+
+                await process_worker_node(connection_string)
 
             except Exception as e:
-                logger.error(f"Error processing worker node {worker_url}: {e}")
+                logger.error(f"Error processing worker node {deployment.worker_node_url}: {e}")
                 raise
 
         return agent_deployments
