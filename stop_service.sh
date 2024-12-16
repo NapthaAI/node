@@ -109,6 +109,13 @@ else
         else
             sudo systemctl stop $service_name
             sleep 2
+
+            # force stop if still running
+            if systemctl is-active --quiet $service_name; then
+                echo "Server didn't stop gracefully, sending SIGKILL..."
+                sudo systemctl kill -s SIGKILL $service_name
+                sleep 2
+            fi
         fi
     }
 
