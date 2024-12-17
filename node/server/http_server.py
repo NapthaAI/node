@@ -49,7 +49,7 @@ from node.storage.storage import (
 from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_environment, run_orchestrator
+from node.worker.template_worker import run_agent, run_environment, run_orchestrator, run_kb
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -821,6 +821,9 @@ class HTTPServer:
             elif isinstance(module_run, EnvironmentRun):
                 module_type = "environment"
                 list_func = lambda db: db.list_environment_runs(module_run.id)
+            elif isinstance(module_run, KBRun):
+                module_type = "knowledge_base"
+                list_func = lambda db: db.list_kb_runs(module_run.id)
             else:
                 raise HTTPException(status_code=400, detail="Invalid module run type")
 
