@@ -528,6 +528,15 @@ async def load_module(run, module_type="agent"):
             data_generation_config_path=module_path / module_name / "configs/data_generation_config.json"
         )
         run.agent_deployment.data_generation_config = data_generation_config
+
+        # Load knowledge base
+        if run.kb_deployment:
+            deployment_name = run.kb_deployment.module["name"]
+            kb_deployment = await load_kb_deployments(
+                kb_deployments_path=f"{MODULES_SOURCE_DIR}/{deployment_name}/{deployment_name}/configs/knowledge_base_deployment.json",
+                module=run.kb_deployment.module
+            )
+            run.kb_deployment = kb_deployment[0]
         
     elif module_type == "environment":
         module_name = run.environment_deployment.module['name']
