@@ -33,7 +33,10 @@ from node.schemas import (
     ChatCompletionRequest,
     AgentDeployment, 
     OrchestratorDeployment, 
-    EnvironmentDeployment
+    EnvironmentDeployment,
+    KBDeployment,
+    KBRunInput,
+    KBRun
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -157,6 +160,33 @@ class HTTPServer:
             :return: Status
             """
             return await self.environment_check(environment_run)
+
+        @router.post("/knowledge_base/create")
+        async def kb_create_endpoint(kb_input: KBDeployment) -> KBDeployment:
+            """
+            Create a knowledge base
+            :param kb_input: KBDeployment
+            :return: KBDeployment
+            """
+            return await self.kb_create(kb_input)
+        
+        @router.post("/knowledge_base/run")
+        async def kb_run_endpoint(kb_run_input: KBRunInput) -> KBRun:
+            """
+            Run a knowledge base
+            :param kb_run_input: KBRunInput
+            :return: KBRun
+            """
+            return await self.kb_run(kb_run_input)
+
+        @router.post("/knowledge_base/check")
+        async def kb_check_endpoint(kb_run: KBRun) -> KBRun:
+            """
+            Check a knowledge base
+            :param kb_run: KBRun details
+            :return: Status
+            """
+            return await self.kb_check(kb_run)
 
         # Storage endpoints
         @router.post("/storage/write")
@@ -630,10 +660,50 @@ class HTTPServer:
             logger.error(f"Failed to create agent: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def kb_create(self, kb_input: KBDeployment) -> KBDeployment:
+        """
+        Create a knowledge base
+        :param kb_input: KBDeployment
+        :return: KBDeployment
+        """
+        try:
+            hub_username = os.getenv("HUB_USERNAME")
+            hub_password = os.getenv("HUB_PASSWORD")
+            if not hub_username or not hub_password:
+                raise HTTPException(status_code=400, detail="Missing Hub authentication credentials")
+
+            async with Hub() as hub:
+                _, _, _ = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
+                kb = await hub.list_knowledge_bases(kb_input.module['name'])
+                if not kb:
+                    raise HTTPException(status_code=404, detail=f"Knowledge base {kb_input.module['name']} not found")
+
+                install_params = {
+                    "name": kb.name,
+                    "url": kb.url,
+                    "version": f"v{kb.version}",
+                }
+
+                try:
+                    await ensure_module_installation_with_lock(install_params, f"v{kb.version}")
+                except Exception as e:
+                    logger.error(f"Failed to install knowledge base: {str(e)}")
+                    logger.debug(f"Full traceback: {traceback.format_exc()}")
+                    raise HTTPException(status_code=500, detail=str(e))
+                
+            return JSONResponse(content={"status": "success", "message": "Knowledge base created successfully"})
+    
+        except Exception as e:
+            logger.error(f"Failed to create knowledge base: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     async def run_module(
         self, 
-        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput]
+        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment]
     ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
         """
         Generic method to run either an agent, orchestrator, or environment
@@ -657,6 +727,11 @@ class HTTPServer:
                 deployment = run_input.environment_deployment
                 list_func = lambda hub: hub.list_environments(deployment.module['name'])
                 create_func = lambda db: db.create_environment_run(run_input)
+            elif isinstance(run_input, KBRunInput):
+                module_type = "knowledge_base"
+                deployment = run_input.kb_deployment
+                list_func = lambda hub: hub.list_knowledge_bases(deployment.module['name'])
+                create_func = lambda db: db.create_kb_run(run_input)
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
@@ -692,6 +767,8 @@ class HTTPServer:
                     _ = run_orchestrator.delay(run_data)
                 elif module_type == "environment":
                     _ = run_environment.delay(run_data)
+                elif module_type == "knowledge_base":
+                    _ = run_kb.delay(run_data)
             elif deployment.module.type == "docker" and module_type == "agent":
                 # validate docker params
                 try:
@@ -720,6 +797,9 @@ class HTTPServer:
 
     async def environment_run(self, environment_run_input: EnvironmentRunInput) -> EnvironmentRun:
         return await self.run_module(environment_run_input)
+
+    async def kb_run(self, kb_run_input: KBRunInput) -> KBRun:
+        return await self.run_module(kb_run_input)
 
     async def check_module(
         self, 
