@@ -52,7 +52,7 @@ class AgentModule(BaseModel):
     description: str
     author: str
     url: str
-    type: AgentModuleType
+    type: Optional[AgentModuleType] = None
     version: str
     url: str
     entrypoint: Optional[str] = "run.py"
@@ -91,6 +91,12 @@ class EnvironmentDeployment(BaseModel):
     module: Optional[Union[Dict, AgentModule]] = None
     environment_node_url: str
     environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
+
+class KBDeployment(BaseModel):
+    name: Optional[str] = "kb_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    kb_node_url: Optional[str] = "http://localhost:7001"
+    kb_config: Optional[Dict] = None
 
 class OrchestratorDeployment(BaseModel):
     name: Optional[str] = "orchestrator_deployment"
@@ -210,6 +216,23 @@ class EnvironmentRun(BaseModel):
     duration: Optional[float] = None
     input_schema_ipfs_hash: Optional[str] = None
 
+class KBRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    kb_deployment: KBDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
+
+class KBRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    kb_deployment: KBDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[str] = []
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
 
 class ChatMessage(BaseModel):
     role: str
