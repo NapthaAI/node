@@ -12,14 +12,16 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from typing import Dict, List, Optional, Union, Any
 
 from node.config import LOCAL_DB_URL
-from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User
+from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User, KBRun
 from node.schemas import (
     AgentRun as AgentRunSchema, 
     OrchestratorRun as OrchestratorRunSchema,
     EnvironmentRun as EnvironmentRunSchema,
     AgentRunInput,
     OrchestratorRunInput,
-    EnvironmentRunInput
+    EnvironmentRunInput,
+    KBRunInput,
+    KBRun as KBRunSchema
 )
 
 logger = logging.getLogger(__name__)
@@ -134,7 +136,8 @@ class DB:
         model_map = {
             'agent': (AgentRun, AgentRunSchema),
             'orchestrator': (OrchestratorRun, OrchestratorRunSchema),
-            'environment': (EnvironmentRun, EnvironmentRunSchema)
+            'environment': (EnvironmentRun, EnvironmentRunSchema),
+            'knowledge_base': (KBRun, KBRunSchema)
         }
         
         try:
@@ -162,11 +165,15 @@ class DB:
     async def create_environment_run(self, environment_run_input: Union[EnvironmentRunInput, Dict]) -> EnvironmentRunSchema:
         return await self.create_module_run(environment_run_input, 'environment')
 
+    async def create_kb_run(self, kb_run_input: Union[KBRunInput, Dict]) -> KBRunSchema:
+        return await self.create_module_run(kb_run_input, 'knowledge_base')
+
     async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema], run_type: str) -> bool:
         model_map = {
             'agent': AgentRun,
             'orchestrator': OrchestratorRun,
-            'environment': EnvironmentRun
+            'environment': EnvironmentRun,
+            'knowledge_base': KBRun
         }
         
         try:
@@ -193,12 +200,16 @@ class DB:
 
     async def update_environment_run(self, run_id: int, run_data: EnvironmentRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'environment')
+    
+    async def update_kb_run(self, run_id: int, run_data: KBRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'knowledge_base')
 
     async def list_module_runs(self, run_type: str, run_id: Optional[int] = None) -> Union[Dict, List[Dict], None]:
         model_map = {
             'agent': AgentRun,
             'orchestrator': OrchestratorRun,
-            'environment': EnvironmentRun
+            'environment': EnvironmentRun,
+            'knowledge_base': KBRun
         }
         
         max_retries = 3
@@ -310,12 +321,15 @@ class DB:
             columns = []
             
             for field_name, properties in schema.items():
-                field_type = self._get_sqlalchemy_type(properties['type'])
+                # Convert type to lowercase
+                field_type_str = properties['type'].lower()
+                field_type = self._get_sqlalchemy_type(field_type_str)
+                
                 if not field_type:
-                    raise ValueError(f"Unsupported type: {properties['type']}")
+                    raise ValueError(f"Unsupported type: {field_type_str}")
                     
                 # For non-array types, we need to call the type
-                if not properties['type'].endswith('[]'):
+                if not field_type_str.endswith('[]'):
                     field_type = field_type()
                     
                 column_args = {

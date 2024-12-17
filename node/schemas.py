@@ -233,6 +233,9 @@ class KBRun(BaseModel):
     results: list[str] = []
     error_message: Optional[str] = None
     created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
 
 class ChatMessage(BaseModel):
     role: str
