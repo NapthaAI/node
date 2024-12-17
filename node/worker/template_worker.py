@@ -72,7 +72,7 @@ def run_kb(self, kb_run):
         # Force cleanup of channels
         app.backend.cleanup()
 
-async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> None:
+async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> None:
     """Handles execution of agent, orchestrator, and environment runs.
     
     Args:
@@ -88,12 +88,13 @@ async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, Environ
             module_type = "orchestrator"
             module_deployment = module_run.orchestrator_deployment
             engine_class = OrchestratorEngine
-        elif isinstance(module_run, EnvironmentRun):  # EnvironmentRun
+        elif isinstance(module_run, EnvironmentRun):
             module_type = "environment"
             module_deployment = module_run.environment_deployment
             engine_class = EnvironmentEngine
         elif isinstance(module_run, KBRun):
-            module_type = "knowledge base"
+            logger.info(f"Received KB run: {module_run}")
+            module_type = "knowledge_base"
             module_deployment = module_run.kb_deployment
             engine_class = KBEngine
         else:
@@ -396,7 +397,7 @@ class KBEngine:
 
         await update_db_with_status_sync(module_run=self.kb_run)
 
-        self.kb_func, self.kb_run = await load_module(self.kb_run, module_type="knowledge base")
+        self.kb_func, self.kb_run = await load_module(self.kb_run, module_type="knowledge_base")
 
     async def start_run(self):
         """Executes the knowledge base run"""
