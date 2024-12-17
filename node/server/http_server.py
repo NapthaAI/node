@@ -759,6 +759,8 @@ class HTTPServer:
                     raise HTTPException(status_code=500, detail=f"Failed to create {module_type} run")
                 run_data = run.model_dump()
 
+                logger.info(f"Run data: {run_data}")
+
             # Execute the task based on module type
             if deployment.module.type == "package":
                 if module_type == "agent":
