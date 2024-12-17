@@ -379,7 +379,7 @@ class EnvironmentEngine:
 
 class KBEngine:
     def __init__(self, kb_run: KBRun):
-        self.kb_run = kb_run
+        self.knowledge_base_run = kb_run
         self.module = kb_run.kb_deployment.module
         self.kb_name = self.module["name"]
         self.kb_version = f"v{self.module['version']}"
@@ -392,23 +392,23 @@ class KBEngine:
 
     async def init_run(self):
         logger.info("Initializing knowledge base run")
-        self.kb_run.status = "processing"
-        self.kb_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
+        self.knowledge_base_run.status = "processing"
+        self.knowledge_base_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
 
-        await update_db_with_status_sync(module_run=self.kb_run)
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
 
-        self.kb_func, self.kb_run = await load_module(self.kb_run, module_type="knowledge_base")
+        self.kb_func, self.knowledge_base_run = await load_module(self.knowledge_base_run, module_type="knowledge_base")
 
     async def start_run(self):
         """Executes the knowledge base run"""
         logger.info("Starting knowledge base run")
-        self.kb_run.status = "running"
-        await update_db_with_status_sync(module_run=self.kb_run)
+        self.knowledge_base_run.status = "running"
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
 
         try:
             response = await maybe_async_call(
                 self.kb_func,
-                kb_run=self.kb_run,
+                kb_run=self.knowledge_base_run,
             )
         except Exception as e:
             logger.error(f"Error running knowledge base: {e}")
@@ -417,20 +417,20 @@ class KBEngine:
 
         logger.info(f"Knowledge base run response: {response}")
 
-        self.kb_run.results = [response]
-        self.kb_run.status = "completed"
+        self.knowledge_base_run.results = [response]
+        self.knowledge_base_run.status = "completed"
 
     async def complete(self):
         """Marks the knowledge base run as completed"""
-        self.kb_run.status = "completed"
-        self.kb_run.error = False
-        self.kb_run.error_message = ""
-        self.kb_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.kb_run.duration = (
-            datetime.fromisoformat(self.kb_run.completed_time)
-            - datetime.fromisoformat(self.kb_run.start_processing_time)
+        self.knowledge_base_run.status = "completed"
+        self.knowledge_base_run.error = False
+        self.knowledge_base_run.error_message = ""
+        self.knowledge_base_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.knowledge_base_run.duration = (
+            datetime.fromisoformat(self.knowledge_base_run.completed_time)
+            - datetime.fromisoformat(self.knowledge_base_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(module_run=self.kb_run)
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
         logger.info("Knowledge base run completed")
 
     async def fail(self):
@@ -438,15 +438,15 @@ class KBEngine:
         logger.error("Error running knowledge base")
         error_details = traceback.format_exc()
         logger.error(f"Traceback: {error_details}")
-        self.kb_run.status = "error"
-        self.kb_run.error = True
-        self.kb_run.error_message = error_details
-        self.kb_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.kb_run.duration = (
-            datetime.fromisoformat(self.kb_run.completed_time)
-            - datetime.fromisoformat(self.kb_run.start_processing_time)
+        self.knowledge_base_run.status = "error"
+        self.knowledge_base_run.error = True
+        self.knowledge_base_run.error_message = error_details
+        self.knowledge_base_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.knowledge_base_run.duration = (
+            datetime.fromisoformat(self.knowledge_base_run.completed_time)
+            - datetime.fromisoformat(self.knowledge_base_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(module_run=self.kb_run)
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
         logger.info("Knowledge base run completed")
 
 
