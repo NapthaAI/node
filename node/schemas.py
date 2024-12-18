@@ -232,7 +232,7 @@ class KBRun(BaseModel):
     status: str = "pending"
     error: bool = False
     id: Optional[str] = None
-    results: list[str] = []
+    results: list[Optional[str]] = []   
     error_message: Optional[str] = None
     created_time: Optional[str] = None
     start_processing_time: Optional[str] = None
