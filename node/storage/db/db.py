@@ -246,6 +246,9 @@ class DB:
     async def list_environment_runs(self, environment_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('environment', environment_run_id)
 
+    async def list_kb_runs(self, kb_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('knowledge_base', kb_run_id)
+
     async def delete_agent_run(self, agent_run_id: int) -> bool:
         try:
             with self.session() as db:
