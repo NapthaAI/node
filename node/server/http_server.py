@@ -838,7 +838,10 @@ class HTTPServer:
                 if isinstance(run_data, list):
                     run_data = run_data[0]
                 run_data.pop("_sa_instance_state", None)
-                
+
+                if 'results' in run_data and run_data['results']:
+                    run_data['results'] = [r for r in run_data['results'] if r is not None]
+    
                 # Convert datetime fields to ISO format
                 for time_field in ['created_time', 'start_processing_time', 'completed_time']:
                     if time_field in run_data and isinstance(run_data[time_field], datetime):
@@ -883,6 +886,9 @@ class HTTPServer:
 
     async def environment_check(self, environment_run: EnvironmentRun) -> EnvironmentRun:
         return await self.check_module(environment_run)
+
+    async def kb_check(self, kb_run: KBRun) -> KBRun:
+        return await self.check_module(kb_run)
 
     @retry(
         stop=stop_after_attempt(5),
