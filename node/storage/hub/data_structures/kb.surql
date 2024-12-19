@@ -5,6 +5,7 @@ DEFINE TABLE kb SCHEMAFULL
 
 DEFINE FIELD name ON TABLE kb TYPE string;
 DEFINE FIELD description ON TABLE kb TYPE string;
+DEFINE FIELD parameters ON TABLE kb TYPE string;
 DEFINE FIELD author ON TABLE kb TYPE record<user>;
 DEFINE FIELD module_url ON TABLE kb TYPE string;
 DEFINE FIELD module_type ON TABLE kb TYPE string;

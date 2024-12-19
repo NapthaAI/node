@@ -36,7 +36,8 @@ from node.schemas import (
     EnvironmentDeployment,
     KBDeployment,
     KBRunInput,
-    KBRun
+    KBRun,
+    AgentModuleType,
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -415,13 +416,13 @@ class HTTPServer:
 
             install_params = {
                 "name": orchestrator.name or "unknown",
-                "url": orchestrator.url or "",
-                "version": f"v{orchestrator.version}" if orchestrator.version else "v0",
-                "type": orchestrator.type or "default",
+                "module_url": orchestrator.module_url or "",
+                "module_version": f"v{orchestrator.module_version}" if orchestrator.module_version else "v0",
+                "module_type": orchestrator.module_type or "default",
             }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.version or '0'}")
+                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.module_version or '0'}")
             except Exception as install_error:
                 logger.error(f"Failed to install orchestrator: {str(install_error)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -491,21 +492,21 @@ class HTTPServer:
                 for agent_module in agent_modules:
                     install_params = {
                         "name": agent_module.name,
-                        "url": agent_module.url,
-                        "version": f"v{agent_module.version}",
-                        "type": agent_module.type,
+                        "module_url": agent_module.module_url,
+                        "module_version": f"v{agent_module.module_version}",
+                        "module_type": agent_module.module_type,
                     }
                     try:
-                        await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                        await ensure_module_installation_with_lock(install_params, f"v{agent_module.module_version}")
                         sub_agent_installation_status.append({
                             "name": agent_module.name,
-                            "version": agent_module.version,
+                            "module_version": agent_module.module_version,
                             "status": "success",
                         })
                     except Exception as e:
                         sub_agent_installation_status.append({
                             "name": agent_module.name,
-                            "version": agent_module.version,
+                            "module_version": agent_module.module_version,
                             "status": str(e),
                         })
             else:
@@ -542,22 +543,22 @@ class HTTPServer:
                 for environment_module in environment_modules:
                     install_params = {
                         "name": environment_module.name,
-                        "url": environment_module.url,
-                        "version": f"v{environment_module.version}",
-                        "type": environment_module.type,
+                        "module_url": environment_module.module_url,
+                        "module_version": f"v{environment_module.module_version}",
+                        "module_type": environment_module.module_type,
                     }
 
                 try:
-                    await ensure_module_installation_with_lock(install_params, f"v{environment_module.version}")
+                    await ensure_module_installation_with_lock(install_params, f"v{environment_module.module_version}")
                     environment_installation_status.append({
                         "name": environment_module.name,
-                        "version": environment_module.version,
+                        "module_version": environment_module.module_version,
                         "status": "success",
                     })
                 except Exception as e:
                     environment_installation_status.append({
                         "name": environment_module.name,
-                        "version": environment_module.version,
+                        "module_version": environment_module.module_version,
                         "status": str(e),
                     })
             else:
@@ -601,13 +602,13 @@ class HTTPServer:
             
             install_params = {
                 "name": environment.name,
-                "url": environment.url,
-                "version": f"v{environment.version}",
-                "type": environment.type,
+                "module_url": environment.module_url,
+                "module_version": f"v{environment.module_version}",
+                "module_type": environment.module_type,
             }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{environment.version}")
+                await ensure_module_installation_with_lock(install_params, f"v{environment.module_version}")
             except Exception as e:
                 logger.error(f"Failed to install environment: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -642,13 +643,13 @@ class HTTPServer:
             
             install_params = {
                 "name": agent.name,
-                "url": agent.url,
-                "version": f"v{agent.version}",
-                "type": agent.type,
+                "module_url": agent.module_url,
+                "module_version": f"v{agent.module_version}",
+                "module_type": agent.module_type,
             }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{agent.version}")
+                await ensure_module_installation_with_lock(install_params, f"v{agent.module_version}")
             except Exception as e:
                 logger.error(f"Failed to install agent: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -683,12 +684,13 @@ class HTTPServer:
 
                 install_params = {
                     "name": kb.name,
-                    "url": kb.url,
-                    "version": f"v{kb.version}",
+                    "module_url": kb.module_url,
+                    "module_version": f"v{kb.module_version}",
+                    "module_type": kb.module_type,
                 }
 
                 try:
-                    await ensure_module_installation_with_lock(install_params, f"v{kb.version}")
+                    await ensure_module_installation_with_lock(install_params, f"v{kb.module_version}")
                 except Exception as e:
                     logger.error(f"Failed to install knowledge base: {str(e)}")
                     logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -762,7 +764,7 @@ class HTTPServer:
                 logger.info(f"Run data: {run_data}")
 
             # Execute the task based on module type
-            if deployment.module.type == "package":
+            if deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(run_data)
                 elif module_type == "orchestrator":
@@ -771,7 +773,7 @@ class HTTPServer:
                     _ = run_environment.delay(run_data)
                 elif module_type == "kb":
                     _ = run_kb.delay(run_data)
-            elif deployment.module.type == "docker" and module_type == "agent":
+            elif deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
                 # validate docker params
                 try:
                     _ = DockerParams(**run_data["inputs"])

@@ -99,19 +99,19 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
 async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, dict], run_version: str):
     if isinstance(run, AgentRun):
         module_name = run.agent_deployment.module["name"]
-        url = run.agent_deployment.module["url"]    
+        url = run.agent_deployment.module["module_url"]    
     elif isinstance(run, OrchestratorRun):
         module_name = run.orchestrator_deployment.module["name"]
-        url = run.orchestrator_deployment.module["url"]
+        url = run.orchestrator_deployment.module["module_url"]
     elif isinstance(run, dict):
         module_name = run["name"]
-        url = run["url"]
+        url = run["module_url"]
     elif isinstance(run, EnvironmentRun):
         module_name = run.environment_deployment.module["name"]
-        url = run.environment_deployment.module["url"]
+        url = run.environment_deployment.module["module_url"]
     elif isinstance(run, KBRun):
         module_name = run.kb_deployment.module["name"]
-        url = run.kb_deployment.module["url"]
+        url = run.kb_deployment.module["module_url"]
     else:
         raise ValueError(f"Invalid module type: {type(run)}")
 
@@ -413,8 +413,8 @@ async def load_agent_deployments(agent_run, agent_deployments_path, module):
         merged_deployment = merge_configs(run_deployment, deployment)
 
         # Load persona if persona_module url exists
-        if "persona_module" in deployment["agent_config"] and "url" in deployment["agent_config"]["persona_module"]:
-            persona_dir = await install_persona(deployment["agent_config"]["persona_module"]["url"])
+        if "persona_module" in deployment["agent_config"] and "module_url" in deployment["agent_config"]["persona_module"]:
+            persona_dir = await install_persona(deployment["agent_config"]["persona_module"]["module_url"])
             logger.info(f"Persona directory: {persona_dir}")
             persona_data = load_persona(persona_dir)
             deployment["agent_config"]["persona_module"]["data"] = persona_data
@@ -585,7 +585,7 @@ async def load_module(run, module_type="agent"):
     
     # Load the module function
     module_name = module_name.replace("-", "_")
-    entrypoint = deployment.module["entrypoint"].split(".")[0]
+    entrypoint = deployment.module["module_entrypoint"].split(".")[0]
     main_module = importlib.import_module(f"{module_name}.run")
     main_module = importlib.reload(main_module)
     module_func = getattr(main_module, entrypoint)

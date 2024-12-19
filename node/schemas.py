@@ -51,11 +51,10 @@ class AgentModule(BaseModel):
     name: str
     description: str
     author: str
-    url: str
-    type: Optional[AgentModuleType] = None
-    version: str
-    url: str
-    entrypoint: Optional[str] = "run.py"
+    module_url: str
+    module_type: Optional[AgentModuleType] = AgentModuleType.package
+    module_version: Optional[str] = "0.1"
+    module_entrypoint: Optional[str] = "run.py"
     personas_urls: Optional[List[str]] = None
 
 class AgentConfig(BaseModel):

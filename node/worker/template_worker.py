@@ -100,7 +100,7 @@ async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, Environ
         else:
             raise ValueError(f"Invalid module type: {type(module_run)}")
         
-        module_version = f"v{module_deployment.module['version']}"
+        module_version = f"v{module_deployment.module['module_version']}"
         module_name = module_deployment.module["name"]
 
         logger.info(f"Received {module_type} run: {module_run}")
@@ -185,11 +185,11 @@ class AgentEngine:
         self.agent_run = agent_run
         self.module = agent_run.agent_deployment.module
         self.agent_name = self.module["name"]
-        self.agent_version = f"v{self.module['version']}"
+        self.agent_version = f"v{self.module['module_version']}"
         self.parameters = agent_run.inputs
 
         if self.agent_run.agent_deployment.agent_config.persona_module:
-            self.personas_url = self.agent_run.agent_deployment.agent_config.persona_module["url"]
+            self.personas_url = self.agent_run.agent_deployment.agent_config.persona_module["module_url"]
 
         self.consumer = {
             "public_key": agent_run.consumer_id.split(":")[1],
@@ -220,6 +220,8 @@ class AgentEngine:
         await update_db_with_status_sync(module_run=self.agent_run)
 
         logger.info(f"Agent deployment: {self.agent_run.agent_deployment}")
+
+        print("AAAAAAAA", self.agent_run)
 
         try:
             response = await maybe_async_call(
@@ -293,7 +295,7 @@ class EnvironmentEngine:
         self.environment_run = environment_run
         self.module = environment_run.environment_deployment.module
         self.environment_name = self.module["name"]
-        self.environment_version = f"v{self.module['version']}"
+        self.environment_version = f"v{self.module['module_version']}"
         self.parameters = environment_run.inputs
 
         self.consumer = {
@@ -382,7 +384,7 @@ class KBEngine:
         self.knowledge_base_run = kb_run
         self.module = kb_run.kb_deployment.module
         self.kb_name = self.module["name"]
-        self.kb_version = f"v{self.module['version']}"
+        self.kb_version = f"v{self.module['module_version']}"
         self.parameters = kb_run.inputs
 
         self.consumer = {
@@ -459,7 +461,7 @@ class OrchestratorEngine:
     def __init__(self, orchestrator_run: OrchestratorRun):
         self.orchestrator_run = orchestrator_run
         self.orchestrator_name = orchestrator_run.orchestrator_deployment.module["name"]
-        self.orchestrator_version = f"v{orchestrator_run.orchestrator_deployment.module['version']}"
+        self.orchestrator_version = f"v{orchestrator_run.orchestrator_deployment.module['module_version']}"
         self.parameters = orchestrator_run.inputs
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
