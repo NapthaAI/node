@@ -131,7 +131,7 @@ CREATE persona:twitter_personas SET name="twitter_personas", description="Person
 CREATE persona:one_million_personas SET name="one_million_personas", description="Personas generated from the paper Scaling Synthetic Data Creation with 1M Personas", author=user:naptha, url="https://huggingface.co/datasets/proj-persona/PersonaHub", version="0.1";
 
 -- KNOWLEDGE BASES
-CREATE knowledge_base:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for wikipedia", author=user:naptha, url="https://github.com/moarshy/wikipedia_kb", type="package", version="0.1", entrypoint="run.py";
+CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for wikipedia", author=user:naptha, url="https://github.com/moarshy/wikipedia_kb", type="package", version="0.1", entrypoint="run.py";
 
 -- NODES
 CREATE node:naptha0 SET
