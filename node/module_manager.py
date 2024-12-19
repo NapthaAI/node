@@ -463,51 +463,20 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     
     return module_run
 
-async def load_kb_deployments(kb_deployments_path, module, incoming_deployment=None):
+async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
     # Load default configurations from file
-    with open(kb_deployments_path, "r") as file:
-        default_deployments = json.loads(file.read())
+    with open(default_kb_deployments_path, "r") as file:
+        default_kb_deployments = json.loads(file.read())
 
-    if isinstance(default_deployments, dict):
-        default_deployments = [default_deployments]
+    # for now only consider one kb deployment
+    default_kb_deployment = default_kb_deployments[0] 
+    input_kb_deployment = input_kb_deployments[0]
 
-    final_deployments = []
-
-    for default_config in default_deployments:
-        # Always ensure module is set
-        default_config["module"] = module
-        
-        if incoming_deployment:
-            # Start with default config
-            merged_config = default_config.copy()
-            
-            # Override with non-None values from incoming deployment
-            if incoming_deployment.name is not None:
-                merged_config["name"] = incoming_deployment.name
-            
-            if incoming_deployment.kb_node_url is not None:
-                merged_config["kb_node_url"] = incoming_deployment.kb_node_url
-                
-            # Handle kb_config merging
-            if incoming_deployment.kb_config is not None:
-                if default_config.get("kb_config"):
-                    # Merge kb_config dictionaries
-                    merged_kb_config = default_config["kb_config"].copy()
-                    for key, value in incoming_deployment.kb_config.items():
-                        if value is not None:
-                            merged_kb_config[key] = value
-                    merged_config["kb_config"] = merged_kb_config
-                else:
-                    merged_config["kb_config"] = incoming_deployment.kb_config
-                    
-            deployment = KBDeployment(**merged_config)
-        else:
-            # If no incoming deployment, use default config as is
-            deployment = KBDeployment(**default_config)
-            
-        final_deployments.append(deployment)
-
-    return final_deployments
+    # Update defaults with non-None values from input
+    for key, value in input_kb_deployment.dict(exclude_unset=True).items():
+        if value is not None:
+            default_kb_deployment[key] = value  
+    return [KBDeployment(**default_kb_deployment)]
 
 async def load_module(run, module_type="agent"):
     # Load the module from the modules directory
@@ -533,13 +502,12 @@ async def load_module(run, module_type="agent"):
         run.agent_deployment.data_generation_config = data_generation_config
 
         # Load knowledge base
-        if run.kb_deployment:
-            deployment_name = run.kb_deployment.module["name"]
-            kb_deployment = await load_kb_deployments(
-                kb_deployments_path=f"{MODULES_SOURCE_DIR}/{deployment_name}/{deployment_name}/configs/knowledge_base_deployment.json",
-                module=run.kb_deployment.module
+        if run.agent_deployment.kb_deployments:
+            kb_deployments = await load_kb_deployments(
+                default_kb_deployments_path=f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}/configs/kb_deployments.json",
+                input_kb_deployments=run.agent_deployment.kb_deployments
             )
-            run.kb_deployment = kb_deployment[0]
+            run.agent_deployment.kb_deployments = kb_deployments
         
     elif module_type == "environment":
         module_name = run.environment_deployment.module['name']
@@ -556,16 +524,15 @@ async def load_module(run, module_type="agent"):
 
     elif module_type == "knowledge_base":
         module_name = run.kb_deployment.module['name']
-        deployment_attr = "kb_deployment"
         module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}")
 
         # Load configs
-        deployments = await load_kb_deployments(
-            kb_deployments_path=module_path / module_name / "configs/knowledge_base_deployment.json",
-            module=getattr(run, deployment_attr).module
+        kb_deployments = await load_kb_deployments(
+            default_kb_deployments_path=module_path / module_name / "configs/kb_deployments.json",
+            input_kb_deployments=[run.kb_deployment]
         )
-        deployment = deployments[0]
-        setattr(run, deployment_attr, deployment)
+        deployment = kb_deployments[0]
+        run.kb_deployment = deployment
 
     else:
         raise ValueError("module_type must be either 'agent' or 'environment'")
