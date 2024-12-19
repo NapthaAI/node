@@ -63,7 +63,7 @@ from node.worker.template_worker import run_agent, run_environment, run_orchestr
 
 
 ###### toolset stuff ###############
-from node.libs.toolset_manager import ToolsetManager
+from node.libs.toolset_manager.toolset_manager import ToolsetManager
 ######### end toolset stuff ########
 
 logger = logging.getLogger(__name__)
