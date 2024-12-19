@@ -417,6 +417,11 @@ class KBEngine:
 
         logger.info(f"Knowledge base run response: {response}")
 
+        if isinstance(response, (dict, list, tuple)):
+            response = json.dumps(response)
+        elif isinstance(response, BaseModel):
+            response = response.model_dump_json()
+
         self.knowledge_base_run.results = [response]
         self.knowledge_base_run.status = "completed"
 

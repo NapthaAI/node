@@ -440,15 +440,17 @@ def load_environment_deployments(environment_deployments_path, module):
             deployment["environment_config"] = ConfigClass(**deployment["environment_config"])
     return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
 
-async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]:
     if isinstance(module_run, AgentRun):
         module_name = module_run.agent_deployment.module['name']
     elif isinstance(module_run, OrchestratorRun):
         module_name = module_run.orchestrator_deployment.module['name']
     elif isinstance(module_run, EnvironmentRun):
         module_name = module_run.environment_deployment.module['name']
+    elif isinstance(module_run, KBRun):
+        module_name = module_run.kb_deployment.module['name']
     else:
-        raise ValueError("module_run must be either AgentRun, OrchestratorRun, or EnvironmentRun")
+        raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, or KBRun")
 
     # Replace hyphens with underscores in module name
     module_name = module_name.replace("-", "_")
@@ -456,6 +458,7 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     # Import and validate schema
     schemas_module = importlib.import_module(f"{module_name}.schemas")
     InputSchema = getattr(schemas_module, "InputSchema")
+
     module_run.inputs = InputSchema(**module_run.inputs)
     
     return module_run
@@ -578,8 +581,7 @@ async def load_module(run, module_type="agent"):
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
 
-    if not isinstance(run, KBRun):
-        run = await load_and_validate_input_schema(run)
+    run = await load_and_validate_input_schema(run)
     
     # Load the module function
     module_name = module_name.replace("-", "_")
