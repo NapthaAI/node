@@ -221,8 +221,6 @@ class AgentEngine:
 
         logger.info(f"Agent deployment: {self.agent_run.agent_deployment}")
 
-        print("AAAAAAAA", self.agent_run)
-
         try:
             response = await maybe_async_call(
                 self.agent_func,

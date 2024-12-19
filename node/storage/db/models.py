@@ -18,7 +18,6 @@ class AgentRun(Base):
     consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
     inputs = Column(JSON)
     agent_deployment = Column(JSON)
-    kb_deployment = Column(JSON, nullable=True)
     orchestrator_runs = Column(JSONB, default=[])
     status = Column(String, default="created")
     results = Column(ARRAY(JSON), default=[])

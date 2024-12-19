@@ -78,24 +78,25 @@ class DataGenerationConfig(BaseModel):
     save_inputs: Optional[bool] = None
     save_inputs_location: Optional[str] = None
 
+class KBDeployment(BaseModel):
+    name: Optional[str] = "kb_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    kb_node_url: Optional[str] = "http://localhost:7001"
+    kb_config: Optional[Dict] = None
+
 class AgentDeployment(BaseModel):
     name: Optional[str] = "agent_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     worker_node_url: Optional[str] = None
     agent_config: Optional[AgentConfig] = AgentConfig()
     data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
+    kb_deployments: Optional[List[KBDeployment]] = None
 
 class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     environment_node_url: str
     environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
-
-class KBDeployment(BaseModel):
-    name: Optional[str] = "kb_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    kb_node_url: Optional[str] = "http://localhost:7001"
-    kb_config: Optional[Dict] = None
 
 class OrchestratorDeployment(BaseModel):
     name: Optional[str] = "orchestrator_deployment"
@@ -134,7 +135,6 @@ class AgentRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     agent_deployment: AgentDeployment
-    kb_deployment: Optional[KBDeployment] = None
     orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
     error: bool = False
@@ -171,7 +171,6 @@ class AgentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     agent_deployment: AgentDeployment = AgentDeployment()
-    kb_deployment: Optional[KBDeployment] = None
     orchestrator_runs: List['OrchestratorRun'] = []
     
 class OrchestratorRunInput(BaseModel):
