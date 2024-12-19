@@ -111,7 +111,7 @@ CREATE agent:docker_hello_world SET name="docker_hello_world", description="A si
 CREATE agent:random_number_agent SET name="random_number_agent", description="A simple agent for taking part in Keynesian beauty contests", parameters="{agent_name: str}", author=user:naptha, url="https://github.com/NapthaAI/random_number_agent", type="package", version="0.5", entrypoint="run.py";
 CREATE agent:test_personas SET name="test_personas", description="A simple test agent for testing personas", parameters="{question: str, num_personas: int}", author=user:naptha, url="https://github.com/moarshy/test_personas", type="package", version="0.1", personas_urls=["https://huggingface.co/datasets/NapthaAI/market_agents_personas"], entrypoint="run.py";
 CREATE agent:tweets_to_character SET name="tweets_to_character", description="An agent for generating character personas from twitter data", parameters="{input_dir: str}", author=user:naptha, url="https://github.com/NapthaAI/tweets_to_character", type="package", version="0.1", entrypoint="run.py";
-CREATE agent:wikipedia_agent SET name="wikipedia_agent", description="An agent for querying wikipedia", parameters="{query: str}", author=user:naptha, url="https://github.com/moarshy/wikipedia_agent", type="package", version="0.1", entrypoint="run.py";
+CREATE agent:wikipedia_agent SET name="wikipedia_agent", description="An agent for querying wikipedia", parameters="{query: str}", author=user:naptha, url="https://github.com/NapthaAI/wikipedia_agent", type="package", version="0.1", entrypoint="run.py";
 
 -- ORCHESTRATORS
 CREATE orchestrator:multiagent_chat SET name="multiagent_chat", description="Multi-agent network for chat", parameters="{prompt: str}", author=user:naptha, url="https://github.com/NapthaAI/multiagent_chat", type="package", version="0.14", entrypoint="run.py";
@@ -131,7 +131,7 @@ CREATE persona:twitter_personas SET name="twitter_personas", description="Person
 CREATE persona:one_million_personas SET name="one_million_personas", description="Personas generated from the paper Scaling Synthetic Data Creation with 1M Personas", author=user:naptha, url="https://huggingface.co/datasets/proj-persona/PersonaHub", version="0.1";
 
 -- KNOWLEDGE BASES
-CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for wikipedia", author=user:naptha, url="https://github.com/moarshy/wikipedia_kb", type="package", version="0.1", entrypoint="run.py";
+CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for Wikipedia content", author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
 
 -- NODES
 CREATE node:naptha0 SET
