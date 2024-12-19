@@ -161,7 +161,7 @@ class HTTPServer:
             """
             return await self.environment_check(environment_run)
 
-        @router.post("/knowledge_base/create")
+        @router.post("/kb/create")
         async def kb_create_endpoint(kb_input: KBDeployment) -> KBDeployment:
             """
             Create a knowledge base
@@ -170,7 +170,7 @@ class HTTPServer:
             """
             return await self.kb_create(kb_input)
         
-        @router.post("/knowledge_base/run")
+        @router.post("/kb/run")
         async def kb_run_endpoint(kb_run_input: KBRunInput) -> KBRun:
             """
             Run a knowledge base
@@ -179,7 +179,7 @@ class HTTPServer:
             """
             return await self.kb_run(kb_run_input)
 
-        @router.post("/knowledge_base/check")
+        @router.post("/kb/check")
         async def kb_check_endpoint(kb_run: KBRun) -> KBRun:
             """
             Check a knowledge base
@@ -728,7 +728,7 @@ class HTTPServer:
                 list_func = lambda hub: hub.list_environments(deployment.module['name'])
                 create_func = lambda db: db.create_environment_run(run_input)
             elif isinstance(run_input, KBRunInput):
-                module_type = "knowledge_base"
+                module_type = "kb"
                 deployment = run_input.kb_deployment
                 list_func = lambda hub: hub.list_knowledge_bases(deployment.module['name'])
                 create_func = lambda db: db.create_kb_run(run_input)
@@ -769,7 +769,7 @@ class HTTPServer:
                     _ = run_orchestrator.delay(run_data)
                 elif module_type == "environment":
                     _ = run_environment.delay(run_data)
-                elif module_type == "knowledge_base":
+                elif module_type == "kb":
                     _ = run_kb.delay(run_data)
             elif deployment.module.type == "docker" and module_type == "agent":
                 # validate docker params
@@ -824,7 +824,7 @@ class HTTPServer:
                 module_type = "environment"
                 list_func = lambda db: db.list_environment_runs(module_run.id)
             elif isinstance(module_run, KBRun):
-                module_type = "knowledge_base"
+                module_type = "kb"
                 list_func = lambda db: db.list_kb_runs(module_run.id)
             else:
                 raise HTTPException(status_code=400, detail="Invalid module run type")
