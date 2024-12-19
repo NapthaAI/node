@@ -27,6 +27,7 @@ class AgentRun(Base):
     start_processing_time = Column(DateTime)
     completed_time = Column(DateTime)
     duration = Column(Integer)
+    signature = Column(String)
 
     consumer = relationship("User", back_populates="agent_runs")
 

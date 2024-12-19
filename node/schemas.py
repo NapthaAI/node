@@ -248,6 +248,7 @@ class AgentRunInput(BaseModel):
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     deployment: AgentDeployment = None
     orchestrator_runs: List['OrchestratorRun'] = []
+    signature: str
 
     def model_dict(self):
         model_dict = self.dict()
