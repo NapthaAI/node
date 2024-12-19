@@ -195,7 +195,7 @@ class Node:
         while True:
             agent_run = await self.check_agent_run_http(agent_run)
             output = (
-                f"{agent_run.status} {agent_run.agent_deployment.module['type']} {agent_run.agent_deployment.module['name']}"
+                f"{agent_run.status} {agent_run.agent_deployment.module['module_type']} {agent_run.agent_deployment.module['name']}"
             )
 
             if len(agent_run.results) > current_results_len:

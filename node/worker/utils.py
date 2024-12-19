@@ -4,7 +4,7 @@ from functools import wraps
 import ipfshttpclient
 import logging
 from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
-from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun
+from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.storage.db.db import DB
 import os
 from pathlib import Path
@@ -102,7 +102,7 @@ def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
 
 
 @with_retry()
-async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> None:
+async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> None:
     """
     Update the DB with the module run status synchronously
     param module_run: AgentRun, OrchestratorRun, or EnvironmentRun data to update
@@ -120,8 +120,11 @@ async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun
             elif isinstance(module_run, EnvironmentRun):
                 updated_run = await db.update_environment_run(module_run.id, module_run)
                 logger.info(f"Updated environment run: {updated_run}")
+            elif isinstance(module_run, KBRun):
+                updated_run = await db.update_kb_run(module_run.id, module_run)
+                logger.info(f"Updated KB run: {updated_run}")
             else:
-                raise ValueError("module_run must be either AgentRun, OrchestratorRun, or EnvironmentRun")
+                raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, or KBRun")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
         raise
