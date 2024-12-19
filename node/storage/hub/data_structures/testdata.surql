@@ -133,6 +133,10 @@ CREATE persona:one_million_personas SET name="one_million_personas", description
 -- KNOWLEDGE BASES
 CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for Wikipedia content", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
 
+-- TOOLSETS
+CREATE toolset:test_toolset SET source_url="https://github.com/C0deMunk33/test_toolset", name="test_toolset", description="A simple toolset for testing", author="sacrificial pancakes", type="package", version="0.1", license="MIT";
+
+
 -- NODES
 CREATE node:naptha0 SET
     public_key="18837f9faec9a02744d308f935f1b05e8ff2fc355172e875c24366491625d932f36b34a4fa80bac58db635d5eddc87659c2b3fa700a1775eb4c43da6b0ec270d",
