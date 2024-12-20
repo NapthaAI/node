@@ -464,11 +464,14 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     return module_run
 
 async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
-    # Load default configurations from file
-    with open(default_kb_deployments_path, "r") as file:
-        default_kb_deployments = json.loads(file.read())
+    # check if the default_kb_deployments_path exists
+    if os.path.exists(default_kb_deployments_path):
+        # Load default configurations from file
+        with open(default_kb_deployments_path, "r") as file:
+            default_kb_deployments = json.loads(file.read())
+    else:
+        default_kb_deployments = [KBDeployment().model_dump()]
 
-    # for now only consider one kb deployment
     default_kb_deployment = default_kb_deployments[0] 
     input_kb_deployment = input_kb_deployments[0]
 
