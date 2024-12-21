@@ -1273,10 +1273,21 @@ linux_setup_local_db() {
         # Update package lists
         sudo apt-get update
         
-        # Install PostgreSQL 16
+        # Install PostgreSQL 16 and pgvector
         sudo apt-get install -y postgresql-16 postgresql-contrib-16
         
-        echo "PostgreSQL 16 installed successfully." | log_with_service_name "PostgreSQL" $BLUE
+        echo "PostgreSQL 16 and pgvector installed successfully." | log_with_service_name "PostgreSQL" $BLUE
+    fi
+
+    # Check and install pgvector
+    echo "Checking pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
+    if dpkg -l | grep -q "postgresql-16-pgvector"; then
+        echo "pgvector extension is already installed." | log_with_service_name "PostgreSQL" $BLUE
+    else
+        echo "Installing pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
+        sudo apt-get update
+        sudo apt-get install -y postgresql-16-pgvector
+        echo "pgvector extension installed successfully." | log_with_service_name "PostgreSQL" $BLUE
     fi
 
     echo "Configuring PostgreSQL..." | log_with_service_name "PostgreSQL" $BLUE
@@ -1334,6 +1345,10 @@ EOF
     GRANT ALL ON ALL TABLES IN SCHEMA public TO $LOCAL_DB_USER;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_USER;
 EOF
+
+    # Create pgvector extension
+    echo "Creating pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME -c "CREATE EXTENSION IF NOT EXISTS vector;"
     
     echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $BLUE
 }
@@ -1376,6 +1391,15 @@ darwin_setup_local_db() {
         echo "Installing PostgreSQL 16..." | log_with_service_name "PostgreSQL" $BLUE
         brew install postgresql@16
         echo "PostgreSQL 16 installed successfully." | log_with_service_name "PostgreSQL" $BLUE
+    fi
+
+    # Install pgvector if not already installed
+    echo "Installing pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
+    if ! brew list pgvector &>/dev/null; then
+        brew install pgvector
+        echo "pgvector extension installed successfully." | log_with_service_name "PostgreSQL" $BLUE
+    else
+        echo "pgvector extension already installed." | log_with_service_name "PostgreSQL" $BLUE
     fi
 
     # Ensure PostgreSQL 16 is linked and in PATH
@@ -1475,6 +1499,10 @@ EOF
     GRANT ALL ON ALL TABLES IN SCHEMA public TO $LOCAL_DB_USER;
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_USER;
 EOF
+
+    # Create pgvector extension
+    echo "Creating pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
+    psql -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME -c "CREATE EXTENSION IF NOT EXISTS vector;"
     
     echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $BLUE
 }
