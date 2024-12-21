@@ -1384,127 +1384,114 @@ linux_start_local_db() {
 darwin_setup_local_db() {
     echo "Starting PostgreSQL 16 setup..." | log_with_service_name "PostgreSQL" $BLUE
 
-    # Check if PostgreSQL 16 is installed
-    if brew list postgresql@16 &>/dev/null; then
-        echo "PostgreSQL 16 is already installed." | log_with_service_name "PostgreSQL" $BLUE
+    # uninstall PostgreSQL 16
+    brew uninstall postgresql@16
+
+    # Install PostgreSQL 17
+    if ! brew list postgresql@17 &>/dev/null; then
+        echo "Installing PostgreSQL 17..." | log_with_service_name "PostgreSQL" $BLUE
+        brew install postgresql@17
     else
-        echo "Installing PostgreSQL 16..." | log_with_service_name "PostgreSQL" $BLUE
-        brew install postgresql@16
-        echo "PostgreSQL 16 installed successfully." | log_with_service_name "PostgreSQL" $BLUE
+        echo "PostgreSQL 17 is already installed." | log_with_service_name "PostgreSQL" $BLUE
     fi
 
-    # Install pgvector if not already installed
-    echo "Installing pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
+    # Install pgvector
     if ! brew list pgvector &>/dev/null; then
+        echo "Installing pgvector..." | log_with_service_name "PostgreSQL" $BLUE
         brew install pgvector
-        echo "pgvector extension installed successfully." | log_with_service_name "PostgreSQL" $BLUE
-    else
-        echo "pgvector extension already installed." | log_with_service_name "PostgreSQL" $BLUE
+        brew link pgvector
     fi
 
-    # Ensure PostgreSQL 16 is linked and in PATH
-    if ! command -v psql &>/dev/null; then
-        echo "Adding PostgreSQL 16 to PATH..." | log_with_service_name "PostgreSQL" $BLUE
-        brew link --force postgresql@16
-        echo 'export PATH="/usr/local/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
-        source ~/.zshrc
-        echo "PostgreSQL 16 added to PATH." | log_with_service_name "PostgreSQL" $BLUE
+    # Link PostgreSQL 17
+    brew link --force postgresql@17
+    export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+
+    POSTGRESQL_CONF="/opt/homebrew/var/postgresql@17/postgresql.conf"
+    PG_HBA_CONF="/opt/homebrew/var/postgresql@17/pg_hba.conf"
+
+    # Stop PostgreSQL
+    echo "Stopping PostgreSQL services..." | log_with_service_name "PostgreSQL" $BLUE
+    brew services stop postgresql@17
+    sleep 3
+
+    # Backup and update configuration
+    if [ -f "$POSTGRESQL_CONF" ]; then
+        cp "$POSTGRESQL_CONF" "${POSTGRESQL_CONF}.bak"
+        sed -i '' "s/^#port = .*/port = $LOCAL_DB_PORT/" "$POSTGRESQL_CONF"
+        sed -i '' "s/^#listen_addresses = .*/listen_addresses = '*'/" "$POSTGRESQL_CONF"
+        sed -i '' "s/^#max_connections = .*/max_connections = 2000/" "$POSTGRESQL_CONF"
     fi
 
-    # Add PostgreSQL 16 to PATH for this session
-    export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+    if [ -f "$PG_HBA_CONF" ]; then
+        cp "$PG_HBA_CONF" "${PG_HBA_CONF}.bak"
+        echo "host    all             all             0.0.0.0/0               md5" >> "$PG_HBA_CONF"
+    fi
 
-    echo "Configuring PostgreSQL 16..." | log_with_service_name "PostgreSQL" $BLUE
-    
-    POSTGRESQL_CONF="/opt/homebrew/var/postgresql@16/postgresql.conf"
-    PG_HBA_CONF="/opt/homebrew/var/postgresql@16/pg_hba.conf"
-    
-    # Backup original configuration files
-    cp $POSTGRESQL_CONF ${POSTGRESQL_CONF}.bak
-    cp $PG_HBA_CONF ${PG_HBA_CONF}.bak
-    
-    echo "Setting port to $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $BLUE
-    sed -i '' "s/^#port = .*/port = $LOCAL_DB_PORT/" $POSTGRESQL_CONF
-    
-    echo "Setting listen_addresses to '*'" | log_with_service_name "PostgreSQL" $BLUE
-    sed -i '' "s/^#listen_addresses = .*/listen_addresses = '*'/" $POSTGRESQL_CONF
+    # Link pgvector files
+    PGVECTOR_LIB="/opt/homebrew/opt/pgvector/lib/postgresql"
+    PG17_LIB="/opt/homebrew/opt/postgresql@17/lib/postgresql"
+    PGVECTOR_EXT="/opt/homebrew/opt/pgvector/share/postgresql/extension"
+    PG17_EXT="/opt/homebrew/opt/postgresql@17/share/postgresql@17/extension"
 
-    echo "Setting max_connections to 2000" | log_with_service_name "PostgreSQL" $BLUE
-    sed -i '' "s/^#max_connections = .*/max_connections = 2000/" $POSTGRESQL_CONF
-    
-    echo "Updating pg_hba.conf" | log_with_service_name "PostgreSQL" $BLUE
-    echo "host    all             all             0.0.0.0/0               md5" >> $PG_HBA_CONF
+    # Create links for pgvector
+    mkdir -p "$PG17_LIB"
+    mkdir -p "$PG17_EXT"
+    ln -sf "$PGVECTOR_LIB/vector.so" "$PG17_LIB/"
+    ln -sf "$PGVECTOR_EXT/vector.control" "$PG17_EXT/"
+    ln -sf "$PGVECTOR_EXT/vector--*.sql" "$PG17_EXT/"
 
-    echo "PostgreSQL 16 configured to listen on port $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $BLUE
-
-    echo "Stopping PostgreSQL 16 service..." | log_with_service_name "PostgreSQL" $BLUE
-    brew services stop postgresql@16
+    # Start PostgreSQL
+    echo "Starting PostgreSQL..." | log_with_service_name "PostgreSQL" $BLUE
+    brew services start postgresql@17
     sleep 5
 
-    echo "Starting PostgreSQL 16 service..." | log_with_service_name "PostgreSQL" $BLUE
-    brew services start postgresql@16
-    sleep 10  # Increased sleep time to allow PostgreSQL to fully start
-
-    echo "Verifying PostgreSQL 16 is running..." | log_with_service_name "PostgreSQL" $BLUE
-    max_attempts=5
+    # Wait for PostgreSQL to be ready
+    max_attempts=10
     attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if pg_isready -p $LOCAL_DB_PORT; then
-            echo "PostgreSQL 16 service is ready on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $BLUE
-            if psql -p $LOCAL_DB_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
-                echo "Successfully connected to PostgreSQL 16 on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $BLUE
-                break
-            else
-                echo "pg_isready successful, but psql connection failed. Checking logs..." | log_with_service_name "PostgreSQL" $BLUE
-                tail -n 50 /opt/homebrew/var/log/postgresql@16.log
-            fi
-        else
-            echo "Attempt $attempt: PostgreSQL 16 is not ready on port $LOCAL_DB_PORT. Retrying..." | log_with_service_name "PostgreSQL" $BLUE
-            sleep 5
-            attempt=$((attempt+1))
+        if pg_isready -p "$LOCAL_DB_PORT"; then
+            echo "PostgreSQL is ready." | log_with_service_name "PostgreSQL" $BLUE
+            break
         fi
+        echo "Waiting for PostgreSQL to start (attempt $attempt/$max_attempts)..." | log_with_service_name "PostgreSQL" $BLUE
+        sleep 2
+        attempt=$((attempt + 1))
     done
 
     if [ $attempt -gt $max_attempts ]; then
-        echo "Failed to connect to PostgreSQL 16 after $max_attempts attempts. Checking logs..." | log_with_service_name "PostgreSQL" $RED
-        tail -n 50 /opt/homebrew/var/log/postgresql@16.log
-        echo "Current PostgreSQL processes:" | log_with_service_name "PostgreSQL" $RED
-        ps aux | grep postgres
-        echo "Current PostgreSQL configuration:" | log_with_service_name "PostgreSQL" $RED
-        grep "port\|listen_addresses" $POSTGRESQL_CONF
+        echo "Failed to start PostgreSQL. Check logs at /opt/homebrew/var/log/postgresql@17.log" | log_with_service_name "PostgreSQL" $RED
         exit 1
     fi
 
-    echo "Creating database and user..." | log_with_service_name "PostgreSQL" $BLUE
-    
-    # Create user
-    psql -p $LOCAL_DB_PORT postgres <<EOF
+    # Create user and database
+    echo "Creating database user and database..." | log_with_service_name "PostgreSQL" $BLUE
+    psql postgres -p "$LOCAL_DB_PORT" <<EOF
     DO \$\$
     BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$LOCAL_DB_USER') THEN
-            CREATE USER $LOCAL_DB_USER WITH ENCRYPTED PASSWORD '$LOCAL_DB_PASSWORD';
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$LOCAL_DB_USER') THEN
+            CREATE USER $LOCAL_DB_USER WITH PASSWORD '$LOCAL_DB_PASSWORD';
         END IF;
-    END
-    \$\$;
+    END \$\$;
+    CREATE DATABASE $LOCAL_DB_NAME WITH OWNER $LOCAL_DB_USER;
 EOF
 
-    # Create database
-    psql -p $LOCAL_DB_PORT postgres -c "CREATE DATABASE $LOCAL_DB_NAME WITH OWNER $LOCAL_DB_USER;"
-
     # Set permissions
-    psql -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME <<EOF
+    psql -d "$LOCAL_DB_NAME" -p "$LOCAL_DB_PORT" <<EOF
     GRANT ALL PRIVILEGES ON DATABASE $LOCAL_DB_NAME TO $LOCAL_DB_USER;
     GRANT ALL ON SCHEMA public TO $LOCAL_DB_USER;
     ALTER SCHEMA public OWNER TO $LOCAL_DB_USER;
-    GRANT ALL ON ALL TABLES IN SCHEMA public TO $LOCAL_DB_USER;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_USER;
 EOF
 
     # Create pgvector extension
     echo "Creating pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
-    psql -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME -c "CREATE EXTENSION IF NOT EXISTS vector;"
+    psql -d "$LOCAL_DB_NAME" -p "$LOCAL_DB_PORT" -c "CREATE EXTENSION IF NOT EXISTS vector;"
     
-    echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $BLUE
+    if [ $? -eq 0 ]; then
+        echo "PostgreSQL setup completed successfully." | log_with_service_name "PostgreSQL" $GREEN
+    else
+        echo "Failed to create vector extension. Please check PostgreSQL logs." | log_with_service_name "PostgreSQL" $RED
+        exit 1
+    fi
 }
 
 darwin_start_local_db() {
