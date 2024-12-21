@@ -384,7 +384,25 @@ class HTTPServer:
             return await self.query_local_table(
                 table_name, columns, condition, order_by, limit
             )
-    
+
+        @router.post("/local-db/vector_search")
+        async def local_db_vector_search_endpoint(
+            table_name: str = Body(...),
+            vector_column: str = Body(...),
+            query_vector: list[float] = Body(...),
+            columns: Optional[list[str]] = Body(None),
+            top_k: int = Body(5),
+            include_similarity: bool = Body(True),
+        ):
+            return await self.local_db_vector_search(
+                table_name,
+                vector_column,
+                query_vector,
+                columns or ["text"],
+                top_k,
+                include_similarity,
+            )
+
         ####### Inference endpoints #######
         @router.post("/inference/chat")
         async def chat_endpoint(request: ChatCompletionRequest):
@@ -1102,6 +1120,26 @@ class HTTPServer:
         except Exception as e:
             logger.error(f"Failed to query table: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def local_db_vector_search(
+        self,
+        table_name: str,
+        vector_column: str,
+        query_vector: list[float],
+        columns: list[str],
+        top_k: int,
+        include_similarity: bool,
+    ) -> Dict[str, Any]:
+        async with DB() as db:
+            results = await db.vector_similarity_search(
+                table_name=table_name,
+                vector_column=vector_column,
+                query_vector=query_vector,
+                columns=columns,
+                top_k=top_k,
+                include_similarity=include_similarity,
+            )
+        return {"success": True, "results": results}
         
     async def stop(self):
         """Handle graceful server shutdown"""

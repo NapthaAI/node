@@ -300,33 +300,65 @@ class DB:
             logger.error(f"Failed to execute query: {str(e)}")
             raise
 
-    def _get_sqlalchemy_type(self, pg_type: str):
+    def _get_sqlalchemy_type(self, pg_type: str, dimension: Optional[int] = None):
         """Convert PostgreSQL type to SQLAlchemy type"""
         from sqlalchemy import String, Integer, Float, Boolean, ARRAY, TIMESTAMP, JSON
         from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy.types import TypeDecorator, UserDefinedType
+        
+        # Custom Vector type for PostgreSQL
+        class Vector(UserDefinedType):
+            def __init__(self, dimension=None):
+                self.dimension = dimension
+
+            def get_col_spec(self, **kw):
+                if self.dimension is None:
+                    raise ValueError("Vector dimension must be specified")
+                return f"vector({self.dimension})"
+
+            def bind_processor(self, dialect):
+                def process(value):
+                    if value is None:
+                        return None
+                    if not isinstance(value, list):
+                        raise ValueError("Vector value must be a list of floats")
+                    if len(value) != self.dimension:
+                        raise ValueError(f"Vector must have exactly {self.dimension} dimensions")
+                    return value
+                return process
+
+            def result_processor(self, dialect, coltype):
+                def process(value):
+                    if value is None:
+                        return None
+                    return value
+                return process
         
         type_map = {
             'text': String,
             'integer': Integer,
             'float': Float,
             'boolean': Boolean,
-            'jsonb': JSONB,  # Use PostgreSQL-specific JSONB
-            'timestamp': TIMESTAMP
+            'jsonb': JSONB,
+            'timestamp': TIMESTAMP,
+            'vector': Vector
         }
         
-        # Handle array types
-        if pg_type.endswith('[]'):
-            base_type = pg_type[:-2]
-            if base_type == 'text':
-                return ARRAY(String)
-            elif base_type == 'integer':
-                return ARRAY(Integer)
-            elif base_type == 'float':
-                return ARRAY(Float)
+        def create_type(type_str: str):
+            """Helper function to create the appropriate SQLAlchemy type"""
+            if type_str == 'vector':
+                if dimension is None:
+                    raise ValueError("Dimension must be specified for vector type")
+                return Vector(dimension)
+            elif type_str.endswith('[]'):
+                base_type = type_str[:-2]
+                if base_type not in type_map:
+                    raise ValueError(f"Unsupported array type: {base_type}")
+                return ARRAY(type_map[base_type]())
             else:
-                raise ValueError(f"Unsupported array type: {base_type}")
-                
-        return type_map.get(pg_type)
+                return type_map[type_str]()
+
+        return create_type(pg_type)
 
     async def create_dynamic_table(self, table_name: str, schema: Dict[str, Dict[str, Any]]) -> bool:
         """Create table dynamically using SQLAlchemy"""
@@ -335,18 +367,24 @@ class DB:
             metadata = MetaData()
             columns = []
             
+            # Create pgvector extension if not exists
+            with self.session() as db:
+                db.execute(text('CREATE EXTENSION IF NOT EXISTS vector;'))
+                db.commit()
+            
             for field_name, properties in schema.items():
                 # Convert type to lowercase
                 field_type_str = properties['type'].lower()
-                field_type = self._get_sqlalchemy_type(field_type_str)
                 
-                if not field_type:
-                    raise ValueError(f"Unsupported type: {field_type_str}")
-                    
-                # For non-array types, we need to call the type
-                if not field_type_str.endswith('[]'):
-                    field_type = field_type()
-                    
+                # Get the SQL type
+                if field_type_str == 'vector':
+                    dimension = properties.get('dimension')
+                    if dimension is None:
+                        raise ValueError(f"Dimension must be specified for vector field {field_name}")
+                    field_type = self._get_sqlalchemy_type(field_type_str, dimension)
+                else:
+                    field_type = self._get_sqlalchemy_type(field_type_str)
+                
                 column_args = {
                     'primary_key': properties.get('primary_key', False),
                     'nullable': not properties.get('required', False)
@@ -357,10 +395,11 @@ class DB:
                     
                 columns.append(Column(field_name, field_type, **column_args))
 
+            # Create the table
             Table(table_name, metadata, *columns)
             metadata.create_all(self.pool.engine)
             return True
-            
+                
         except Exception as e:
             logger.error(f"Failed to create table: {str(e)}")
             raise
@@ -372,31 +411,30 @@ class DB:
             with self.session() as db:
                 # First, get the column types from the database
                 type_query = text("""
-                    SELECT column_name, data_type 
+                    SELECT column_name, data_type, udt_name 
                     FROM information_schema.columns 
                     WHERE table_name = :table_name
                 """)
                 result = db.execute(type_query, {"table_name": table_name})
-                column_types = {row[0]: row[1] for row in result}
+                column_types = {row[0]: (row[1], row[2]) for row in result}
 
                 # Process the data based on column types
                 processed_data = {}
                 for key, value in data.items():
                     if key in column_types:
-                        col_type = column_types[key].lower()
+                        data_type, udt_name = column_types[key]
                         
-                        # Handle different types
-                        if col_type == 'jsonb':
-                            # Convert dict/list to JSON string
-                            processed_data[key] = json.dumps(value)
-                        elif col_type.startswith('_float'):
-                            # Handle float array
+                        if udt_name == 'vector':
+                            # Handle vector type - ensure it's a list of floats
+                            if not isinstance(value, list):
+                                raise ValueError(f"Vector field {key} must be a list")
                             processed_data[key] = value
-                        elif col_type.startswith('_'):
-                            # Other arrays
+                        elif data_type == 'jsonb':
+                            processed_data[key] = json.dumps(value)
+                        elif data_type.startswith('_'):
+                            # Array types
                             processed_data[key] = value
                         else:
-                            # Regular values
                             processed_data[key] = value
 
                 # Construct and execute query
@@ -410,11 +448,10 @@ class DB:
                     ({', '.join(placeholders)})
                 """)
 
-                # Execute with processed data
                 db.execute(query, processed_data)
                 return True
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to add row: {str(e)}")
             logger.error(f"Data: {data}")
             logger.error(f"Processed data: {processed_data if 'processed_data' in locals() else 'Not processed'}")
@@ -427,39 +464,41 @@ class DB:
             with self.session() as db:
                 # Get schema information
                 schema_query = text("""
-                    SELECT column_name, data_type
+                    SELECT column_name, data_type, udt_name
                     FROM information_schema.columns
                     WHERE table_name = :table_name
                 """)
                 result = db.execute(schema_query, {"table_name": table_name})
-                schema = {row[0]: {"type": row[1]} for row in result}
+                column_types = {row[0]: (row[1], row[2]) for row in result}
 
-                # Prepare data based on column types
-                prepared_data = {}
+                # Process the data based on column types
+                processed_data = {}
                 for key, value in data.items():
-                    if key in schema:
-                        col_type = schema[key].get('type', '').lower()
-                        if col_type == 'jsonb' and isinstance(value, (dict, list)):
-                            prepared_data[key] = json.dumps(value)
-                        elif col_type.endswith('[]') and isinstance(value, list):
-                            if col_type == 'text[]':
-                                prepared_data[key] = value
-                            else:
-                                # Convert list elements to appropriate type
-                                prepared_data[key] = value
+                    if key in column_types:
+                        data_type, udt_name = column_types[key]
+                        
+                        if udt_name == 'vector':
+                            if not isinstance(value, list):
+                                raise ValueError(f"Vector field {key} must be a list")
+                            processed_data[key] = value
+                        elif data_type == 'jsonb':
+                            processed_data[key] = json.dumps(value)
+                        elif data_type.startswith('_'):
+                            processed_data[key] = value
                         else:
-                            prepared_data[key] = value
+                            processed_data[key] = value
 
-                set_clause = ", ".join([f"{k} = :{k}" for k in prepared_data.keys()])
+                set_clause = ", ".join([f"{k} = :{k}" for k in processed_data.keys()])
                 where_clause = " AND ".join([f"{k} = :condition_{k}" for k in condition.keys()])
                 
-                # Merge prepared data and condition with prefixed condition keys
-                params = {**prepared_data, **{f"condition_{k}": v for k, v in condition.items()}}
+                # Merge processed data and condition with prefixed condition keys
+                params = {**processed_data, **{f"condition_{k}": v for k, v in condition.items()}}
                 
-                query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
-                result = db.execute(text(query), params)
+                query = text(f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}")
+                result = db.execute(query, params)
                 return result.rowcount
-        except SQLAlchemyError as e:
+
+        except Exception as e:
             logger.error(f"Failed to update row: {str(e)}")
             raise
 
@@ -468,10 +507,10 @@ class DB:
         try:
             with self.session() as db:
                 where_clause = " AND ".join([f"{k} = :{k}" for k in condition.keys()])
-                query = f"DELETE FROM {table_name} WHERE {where_clause}"
-                result = db.execute(text(query), condition)
+                query = text(f"DELETE FROM {table_name} WHERE {where_clause}")
+                result = db.execute(query, condition)
                 return result.rowcount
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to delete row: {str(e)}")
             raise
 
@@ -483,7 +522,7 @@ class DB:
         order_by: Optional[str] = None,
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Query dynamically created table"""
+        """Query rows from a table"""
         try:
             with self.session() as db:
                 select_clause = "*" if not columns else ", ".join(columns)
@@ -502,14 +541,42 @@ class DB:
                     query += f" LIMIT {limit}"
                 
                 result = db.execute(text(query), params)
-                # Convert results to dictionaries properly
                 return [dict(row._mapping) for row in result]
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to query table: {str(e)}")
             raise
 
+    async def vector_similarity_search(
+        self,
+        table_name: str,
+        vector_column: str,
+        query_vector: List[float],
+        columns: List[str] = ["text"],
+        top_k: int = 5,
+        include_similarity: bool = True
+    ) -> List[Dict[str, Any]]:
+        vector_str = "[" + ",".join(str(x) for x in query_vector) + "]"
+        # Inline the vector literal in the query to avoid ':qvec::vector' syntax issues
+        vector_literal = f"'{vector_str}'::vector"
+
+        select_items = columns[:]
+        if include_similarity:
+            select_items.append(f"{vector_column} <-> {vector_literal} AS distance")
+        select_clause = ", ".join(select_items)
+
+        query_str = f"""
+            SELECT {select_clause}
+            FROM {table_name}
+            ORDER BY {vector_column} <-> {vector_literal}
+            LIMIT :limit
+        """
+
+        with self.session() as db:
+            result = db.execute(text(query_str), {"limit": top_k})
+            return [dict(row._mapping) for row in result]
+
     async def list_dynamic_tables(self) -> List[str]:
-        """Get list of all tables using SQLAlchemy"""
+        """Get list of all tables"""
         try:
             with self.session() as db:
                 query = text("""
@@ -520,32 +587,44 @@ class DB:
                 """)
                 result = db.execute(query)
                 return [row[0] for row in result]
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to list tables: {str(e)}")
             raise
 
     async def get_dynamic_table_schema(self, table_name: str) -> Dict[str, Dict[str, Any]]:
-        """Get schema information for a specific table using SQLAlchemy"""
+        """Get schema information for a specific table without casting 'vector[]' to int."""
         try:
             with self.session() as db:
                 query = text("""
-                    SELECT column_name, data_type, is_nullable, column_default
+                    SELECT 
+                        column_name, 
+                        data_type,
+                        udt_name,
+                        is_nullable,
+                        column_default
                     FROM information_schema.columns
                     WHERE table_name = :table_name
                 """)
+
                 result = db.execute(query, {"table_name": table_name})
-                
+
                 schema = {}
                 for row in result:
-                    schema[row[0]] = {
-                        "type": row[1],
-                        "required": row[2] == 'NO',
-                        "default": row[3]
+                    # For a pgvector column, just store 'vector' as the type (no dimension parsing).
+                    # 'udt_name' will often just be 'vector'.
+                    col_type = row.udt_name if row.udt_name == 'vector' else row.data_type
+
+                    schema[row.column_name] = {
+                        "type": col_type,
+                        "required": (row.is_nullable == 'NO'),
+                        "default": row.column_default
                     }
+
                 return schema
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to get table schema: {str(e)}")
             raise
+
 
     async def check_connection_health(self) -> bool:
         try:
