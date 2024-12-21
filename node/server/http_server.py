@@ -61,11 +61,6 @@ from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_environment, run_orchestrator, run_kb
 
-
-###### toolset stuff ###############
-from node.libs.toolset_manager.toolset_manager import ToolsetManager
-######### end toolset stuff ########
-
 logger = logging.getLogger(__name__)
 load_dotenv()
 
