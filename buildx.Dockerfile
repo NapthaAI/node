@@ -64,11 +64,11 @@ RUN curl -1sLf "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/setup.d
     curl -1sLf "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-server/setup.deb.sh" | bash && \
     apt-get update && \
     apt-get install -y erlang-base \
-                       erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \
-                       erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \
-                       erlang-runtime-tools erlang-snmp erlang-ssl \
-                       erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl \
-                       rabbitmq-server
+       erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \
+       erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \
+       erlang-runtime-tools erlang-snmp erlang-ssl \
+       erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl \
+       rabbitmq-server;
 
-RUN echo "Running on $PLATFORM (image: $BASE_IMAGE)"
+CMD echo "Running on $PLATFORM (image: $BASE_IMAGE)"
 
