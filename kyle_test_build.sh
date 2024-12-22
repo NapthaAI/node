@@ -11,9 +11,9 @@ echo "Building standard CPU images..."
 docker buildx build \
   --platform linux/arm64,linux/amd64 \
   -t $ACCOUNT/$REPOSITORY:latest \
-  -t $ACCOUNT/$REPOSITORY:COMMIT_HASH \
+  -t $ACCOUNT/$REPOSITORY:$COMMIT_HASH \
   -t $ACCOUNT/$REPOSITORY:cpu-latest \
-  -t $ACCOUNT/$REPOSITORY:cpu-COMMIT_HASH \
+  -t $ACCOUNT/$REPOSITORY:cpu-$COMMIT_HASH \
   -f buildx.Dockerfile \
   --push .
 
@@ -23,6 +23,6 @@ docker buildx build \
 #  --platform linux/arm64,linux/amd64 \
 #  --build-arg BASE_IMAGE=$CUDA_BASE_IMAGE \
 #  -t $ACCOUNT/$REPOSITORY:cuda-latest \
-#  -t $ACCOUNT/$REPOSITORY:cuda-COMMIT_HASH \
+#  -t $ACCOUNT/$REPOSITORY:cuda-$COMMIT_HASH \
 #  -f buildx.Dockerfile \
 #  --push .
