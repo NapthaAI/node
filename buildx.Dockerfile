@@ -55,5 +55,20 @@ RUN if [ "$PLATFORM" = "linux/amd64" ]; then \
     bash miniforge.sh -b -p $HOME/miniforge3 && \
     rm miniforge.sh
 
+# Add conda to PATH
+RUN echo "source $HOME/miniforge3/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    echo "conda activate base" >> ~/.bashrc
+
+# install RabbitMQ - no conditional needed here unlike the host containe
+RUN curl -1sLf "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/setup.deb.sh" | bash && \
+    curl -1sLf "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-server/setup.deb.sh" | bash && \
+    apt-get update && \
+    apt-get install -y erlang-base \
+                       erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \
+                       erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \
+                       erlang-runtime-tools erlang-snmp erlang-ssl \
+                       erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl \
+                       rabbitmq-server
+
 RUN echo "Running on $PLATFORM (image: $BASE_IMAGE)"
 
