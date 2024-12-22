@@ -63,6 +63,9 @@ class AgentConfig(BaseModel):
     persona_module: Optional[Union[Dict, BaseModel]] = None
     system_prompt: Optional[Union[Dict, BaseModel]] = None
 
+class ToolConfig(BaseModel):
+    config_name: Optional[str] = None
+
 class OrchestratorConfig(BaseModel):
     config_name: Optional[str] = "orchestrator_config"
     max_rounds: Optional[int] = 5
@@ -91,6 +94,13 @@ class AgentDeployment(BaseModel):
     agent_config: Optional[AgentConfig] = AgentConfig()
     data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
     kb_deployments: Optional[List[KBDeployment]] = None
+
+class ToolDeployment(BaseModel):
+    name: Optional[str] = "tool_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    worker_node_url: Optional[str] = None
+    tool_config: Optional[ToolConfig] = ToolConfig()
+    data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
 
 class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
@@ -172,7 +182,28 @@ class AgentRunInput(BaseModel):
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     agent_deployment: AgentDeployment = AgentDeployment()
     orchestrator_runs: List['OrchestratorRun'] = []
-    
+
+class ToolRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    tool_deployment: ToolDeployment
+    agent_run: AgentRun = None
+
+class ToolRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    tool_deployment: ToolDeployment
+    agent_run: AgentRun = None
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[str] = []
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
+
 class OrchestratorRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -231,52 +262,6 @@ class KBRun(BaseModel):
     error: bool = False
     id: Optional[str] = None
     results: list[Optional[str]] = []   
-    
-################# Toolset stuff####################
-class ToolDetails(BaseModel):
-    id: str
-    name: str
-    description: str
-    source_url: str
-
-class ToolsetDetails(BaseModel):
-    id: str
-    name: str
-    description: str
-    tools: List[ToolDetails]
-
-class ToolsetRequest(BaseModel):
-    agent_id: str
-
-class SetToolsetRequest(BaseModel):
-    agent_id: str
-    toolset_name: str
-
-class ToolsetListRequest(BaseModel):
-    agent_id: str
-
-class ToolsetLoadRepoRequest(BaseModel):
-    agent_id: str
-    repo_url: str
-    toolset_name: str
-
-class ToolsetList(BaseModel):
-    toolsets: List[ToolsetDetails]
-
-class ToolRunRequest(BaseModel):
-    tool_run_id: str
-    agent_id: str
-    toolset_id: str
-    tool_id: str
-    params: Optional[Dict] = None
-
-class ToolRunResult(BaseModel):
-    agent_id: str
-    toolset_id: str
-    tool_run_id: str
-    tool_id: str
-    params: Optional[Dict] = None
-    result: str
 
 class ChatMessage(BaseModel):
     role: str
