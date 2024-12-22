@@ -256,8 +256,8 @@ class ModuleRunEngine:
 
         self.module_run.results = [response]
         
-        # Handle output for agent and tool runs
-        if self.module_type in ["agent", "tool"]:
+        # Handle output for agent runs
+        if self.module_type == "agent":
             await self.handle_output(self.deployment, response)
             
         self.module_run.status = "completed"
