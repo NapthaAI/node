@@ -353,9 +353,9 @@ class WebSocketServer:
                 agent_run_data = agent_run.model_dump()
 
             # Execute the task
-            if agent_run.agent_deployment.module["type"] == "package":
+            if agent_run.agent_deployment.module["module_type"] == "package":
                 task = run_agent.delay(agent_run_data)
-            elif agent_run.agent_deployment.module["type"] == "docker":
+            elif agent_run.agent_deployment.module["module_type"] == "docker":
                 task = execute_docker_agent.delay(agent_run_data)
             else:
                 raise HTTPException(status_code=400, detail="Invalid agent run type")
@@ -415,9 +415,9 @@ class WebSocketServer:
                     raise ValueError("Failed to create orchestrator run")
                 orchestrator_run_data = orchestrator_run.model_dump()
 
-            if orchestrator_run.orchestrator_deployment.module["type"] == "package":
+            if orchestrator_run.orchestrator_deployment.module["module_type"] == "package":
                 task = run_orchestrator.delay(orchestrator_run_data)
-            elif orchestrator_run.orchestrator_deployment.module["type"] == "docker":
+            elif orchestrator_run.orchestrator_deployment.module["module_type"] == "docker":
                 raise ValueError("Docker orchestrators are not supported")
             else:
                 raise ValueError("Invalid module type")
@@ -1061,47 +1061,53 @@ class WebSocketServer:
             await self.send_response(json.dumps(response))
 
     async def graceful_shutdown(self):
-        """Handle graceful shutdown of the WebSocket server"""
+        """Fast and efficient WebSocket server shutdown"""
         try:
             logger.info("WebSocket server shutting down...")
-
-            # Close all active connections
+            
+            # 1. Close all active connections concurrently with timeout
+            close_tasks = []
             for client_id in list(self.manager.active_connections.keys()):
                 for task in list(self.manager.active_connections[client_id].keys()):
-                    try:
-                        websocket = self.manager.active_connections[client_id][task]
-                        await websocket.close()
-                        self.manager.disconnect(client_id, task)
-                    except Exception as e:
-                        logger.error(f"Error closing connection for {client_id}_{task}: {e}")
-
-            # Stop the server if it exists
-            if self.server and self._started:
-                logger.info("Stopping WebSocket server...")
+                    websocket = self.manager.active_connections[client_id][task]
+                    close_tasks.append(
+                        asyncio.create_task(websocket.close())
+                    )
+                    self.manager.disconnect(client_id, task)
+                    
+            if close_tasks:
                 try:
-                    await asyncio.wait_for(self.server.shutdown(), timeout=10.0)
-                    logger.info("WebSocket server stopped successfully")
+                    # 2. Wait max 2 seconds for connections to close
+                    await asyncio.wait_for(
+                        asyncio.gather(*close_tasks, return_exceptions=True),
+                        timeout=2.0
+                    )
                 except asyncio.TimeoutError:
-                    logger.error("WebSocket server stop timed out")
-                except Exception as e:
-                    logger.error(f"Error stopping WebSocket server: {e}")
+                    logger.warning("Some connections failed to close gracefully")
+
+            # 3. Stop server quickly
+            if self.server and self._started:
+                try:
+                    await asyncio.wait_for(self.server.shutdown(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Server shutdown timed out")
                 finally:
                     self._started = False
 
-            # Clean up temp files
-            for filepath in list(self.temp_files.values()):
-                try:
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
-                except Exception as e:
-                    logger.error(f"Error removing temp file {filepath}: {e}")
-            self.temp_files.clear()
-
-            logger.info("WebSocket server shutdown complete")
+            # 4. Clean up temp files without waiting
+            if self.temp_files:
+                for filepath in list(self.temp_files.values()):
+                    try:
+                        if os.path.exists(filepath):
+                            os.remove(filepath)
+                    except Exception as e:
+                        logger.error(f"Failed to remove temp file {filepath}: {e}")
+                self.temp_files.clear()
 
         except Exception as e:
-            logger.error(f"Error during WebSocket server shutdown: {e}")
-            raise
+            logger.error(f"Error during WebSocket shutdown: {e}")
+        finally:
+            logger.info("WebSocket server shutdown complete")
 
     async def launch_server(self):
         """Start the WebSocket server"""
@@ -1133,7 +1139,7 @@ class WebSocketServer:
                 timeout_keep_alive=300,
                 limit_concurrency=2000,
                 backlog=4096,
-                timeout_graceful_shutdown=30,
+                timeout_graceful_shutdown=5,
                 reload=False
             )
             self.server = uvicorn.Server(config)

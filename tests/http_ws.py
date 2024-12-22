@@ -388,13 +388,13 @@ class TestHTTPServer(unittest.TestCase):
                 "orchestrator_deployment": {
                     'name': 'multiagent_chat',
                     'module': {'name': 'multiagent_chat'},
-                    'orchestrator_node_url': self.base_url
+                    'orchestrator_node_url': self.base_url,
+                    'agent_deployments': [
+                        {'worker_node_url': 'ws://localhost:7002'},
+                        {'worker_node_url': 'ws://localhost:7002'}
+                    ],
+                    'environment_deployments': [{'environment_node_url': 'http://localhost:7001'}]
                 },
-                "agent_deployments": [
-                    {'worker_node_url': 'ws://localhost:7002'},
-                    {'worker_node_url': 'ws://localhost:7002'}
-                ],
-                "environment_deployments": [{'environment_node_url': 'http://localhost:7001'}]
             }
 
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:
@@ -479,10 +479,10 @@ class TestHTTPServer(unittest.TestCase):
                 "orchestrator_deployment": {
                     'name': 'keynesian_beauty_contest',
                     'module': {'name': 'keynesian_beauty_contest'},
-                    'orchestrator_node_url': self.base_url
+                    'orchestrator_node_url': self.base_url,
+                    'agent_deployments': [{'worker_node_url': 'ws://localhost:7002'} for _ in range(2)],
+                    'environment_deployments': [{'environment_node_url': 'http://localhost:7001'}]
                 },
-                "agent_deployments": [{'worker_node_url': 'ws://localhost:7002'} for _ in range(2)],
-                "environment_deployments": [{'environment_node_url': 'http://localhost:7001'}]
             }
 
             async with httpx.AsyncClient(timeout=HTTPX_TIMEOUT) as client:

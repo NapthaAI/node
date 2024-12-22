@@ -20,7 +20,9 @@ from node.schemas import (
     OrchestratorRun, 
     LLMConfig, 
     AgentConfig,
-    DataGenerationConfig
+    DataGenerationConfig,
+    KBRun,
+    KBDeployment
 )
 from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -94,19 +96,24 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, dict], run_version: str):
+async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, dict], run_version: str):
     if isinstance(run, AgentRun):
         module_name = run.agent_deployment.module["name"]
-        url = run.agent_deployment.module["url"]    
+        url = run.agent_deployment.module["module_url"]    
     elif isinstance(run, OrchestratorRun):
         module_name = run.orchestrator_deployment.module["name"]
-        url = run.orchestrator_deployment.module["url"]
+        url = run.orchestrator_deployment.module["module_url"]
     elif isinstance(run, dict):
         module_name = run["name"]
-        url = run["url"]
-    else:  # EnvironmentRun
+        url = run["module_url"]
+    elif isinstance(run, EnvironmentRun):
         module_name = run.environment_deployment.module["name"]
-        url = run.environment_deployment.module["url"]
+        url = run.environment_deployment.module["module_url"]
+    elif isinstance(run, KBRun):
+        module_name = run.kb_deployment.module["name"]
+        url = run.kb_deployment.module["module_url"]
+    else:
+        raise ValueError(f"Invalid module type: {type(run)}")
 
     if module_name in INSTALLED_MODULES:
         installed_version = INSTALLED_MODULES[module_name]
@@ -406,8 +413,8 @@ async def load_agent_deployments(agent_run, agent_deployments_path, module):
         merged_deployment = merge_configs(run_deployment, deployment)
 
         # Load persona if persona_module url exists
-        if "persona_module" in deployment["agent_config"] and "url" in deployment["agent_config"]["persona_module"]:
-            persona_dir = await install_persona(deployment["agent_config"]["persona_module"]["url"])
+        if "persona_module" in deployment["agent_config"] and "module_url" in deployment["agent_config"]["persona_module"]:
+            persona_dir = await install_persona(deployment["agent_config"]["persona_module"]["module_url"])
             logger.info(f"Persona directory: {persona_dir}")
             persona_data = load_persona(persona_dir)
             deployment["agent_config"]["persona_module"]["data"] = persona_data
@@ -433,15 +440,17 @@ def load_environment_deployments(environment_deployments_path, module):
             deployment["environment_config"] = ConfigClass(**deployment["environment_config"])
     return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
 
-async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]:
     if isinstance(module_run, AgentRun):
         module_name = module_run.agent_deployment.module['name']
     elif isinstance(module_run, OrchestratorRun):
         module_name = module_run.orchestrator_deployment.module['name']
     elif isinstance(module_run, EnvironmentRun):
         module_name = module_run.environment_deployment.module['name']
+    elif isinstance(module_run, KBRun):
+        module_name = module_run.kb_deployment.module['name']
     else:
-        raise ValueError("module_run must be either AgentRun, OrchestratorRun, or EnvironmentRun")
+        raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, or KBRun")
 
     # Replace hyphens with underscores in module name
     module_name = module_name.replace("-", "_")
@@ -449,9 +458,28 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     # Import and validate schema
     schemas_module = importlib.import_module(f"{module_name}.schemas")
     InputSchema = getattr(schemas_module, "InputSchema")
+
     module_run.inputs = InputSchema(**module_run.inputs)
     
     return module_run
+
+async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
+    # check if the default_kb_deployments_path exists
+    if os.path.exists(default_kb_deployments_path):
+        # Load default configurations from file
+        with open(default_kb_deployments_path, "r") as file:
+            default_kb_deployments = json.loads(file.read())
+    else:
+        default_kb_deployments = [KBDeployment().model_dump()]
+
+    default_kb_deployment = default_kb_deployments[0] 
+    input_kb_deployment = input_kb_deployments[0]
+
+    # Update defaults with non-None values from input
+    for key, value in input_kb_deployment.dict(exclude_unset=True).items():
+        if value is not None:
+            default_kb_deployment[key] = value  
+    return [KBDeployment(**default_kb_deployment)]
 
 async def load_module(run, module_type="agent"):
     # Load the module from the modules directory
@@ -475,6 +503,14 @@ async def load_module(run, module_type="agent"):
             data_generation_config_path=module_path / module_name / "configs/data_generation_config.json"
         )
         run.agent_deployment.data_generation_config = data_generation_config
+
+        # Load knowledge base
+        if run.agent_deployment.kb_deployments:
+            kb_deployments = await load_kb_deployments(
+                default_kb_deployments_path=f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}/configs/kb_deployments.json",
+                input_kb_deployments=run.agent_deployment.kb_deployments
+            )
+            run.agent_deployment.kb_deployments = kb_deployments
         
     elif module_type == "environment":
         module_name = run.environment_deployment.module['name']
@@ -488,6 +524,18 @@ async def load_module(run, module_type="agent"):
         )
         deployment = deployments[0]
         setattr(run, deployment_attr, deployment)
+
+    elif module_type == "knowledge_base":
+        module_name = run.kb_deployment.module['name']
+        module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}")
+
+        # Load configs
+        kb_deployments = await load_kb_deployments(
+            default_kb_deployments_path=module_path / module_name / "configs/kb_deployments.json",
+            input_kb_deployments=[run.kb_deployment]
+        )
+        deployment = kb_deployments[0]
+        run.kb_deployment = deployment
 
     else:
         raise ValueError("module_type must be either 'agent' or 'environment'")
@@ -507,7 +555,7 @@ async def load_module(run, module_type="agent"):
     
     # Load the module function
     module_name = module_name.replace("-", "_")
-    entrypoint = deployment.module["entrypoint"].split(".")[0]
+    entrypoint = deployment.module["module_entrypoint"].split(".")[0]
     main_module = importlib.import_module(f"{module_name}.run")
     main_module = importlib.reload(main_module)
     module_func = getattr(main_module, entrypoint)

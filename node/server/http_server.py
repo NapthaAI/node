@@ -33,7 +33,11 @@ from node.schemas import (
     ChatCompletionRequest,
     AgentDeployment, 
     OrchestratorDeployment, 
-    EnvironmentDeployment
+    EnvironmentDeployment,
+    KBDeployment,
+    KBRunInput,
+    KBRun,
+    AgentModuleType,
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -46,7 +50,7 @@ from node.storage.storage import (
 from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_environment, run_orchestrator
+from node.worker.template_worker import run_agent, run_environment, run_orchestrator, run_kb
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -157,6 +161,33 @@ class HTTPServer:
             :return: Status
             """
             return await self.environment_check(environment_run)
+
+        @router.post("/kb/create")
+        async def kb_create_endpoint(kb_input: KBDeployment) -> KBDeployment:
+            """
+            Create a knowledge base
+            :param kb_input: KBDeployment
+            :return: KBDeployment
+            """
+            return await self.kb_create(kb_input)
+        
+        @router.post("/kb/run")
+        async def kb_run_endpoint(kb_run_input: KBRunInput) -> KBRun:
+            """
+            Run a knowledge base
+            :param kb_run_input: KBRunInput
+            :return: KBRun
+            """
+            return await self.kb_run(kb_run_input)
+
+        @router.post("/kb/check")
+        async def kb_check_endpoint(kb_run: KBRun) -> KBRun:
+            """
+            Check a knowledge base
+            :param kb_run: KBRun details
+            :return: Status
+            """
+            return await self.kb_check(kb_run)
 
         # Storage endpoints
         @router.post("/storage/write")
@@ -385,13 +416,13 @@ class HTTPServer:
 
             install_params = {
                 "name": orchestrator.name or "unknown",
-                "url": orchestrator.url or "",
-                "version": f"v{orchestrator.version}" if orchestrator.version else "v0",
-                "type": orchestrator.type or "default",
+                "module_url": orchestrator.module_url or "",
+                "module_version": f"v{orchestrator.module_version}" if orchestrator.module_version else "v0",
+                "module_type": orchestrator.module_type or "default",
             }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.version or '0'}")
+                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.module_version or '0'}")
             except Exception as install_error:
                 logger.error(f"Failed to install orchestrator: {str(install_error)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -461,21 +492,21 @@ class HTTPServer:
                 for agent_module in agent_modules:
                     install_params = {
                         "name": agent_module.name,
-                        "url": agent_module.url,
-                        "version": f"v{agent_module.version}",
-                        "type": agent_module.type,
+                        "module_url": agent_module.module_url,
+                        "module_version": f"v{agent_module.module_version}",
+                        "module_type": agent_module.module_type,
                     }
                     try:
-                        await ensure_module_installation_with_lock(install_params, f"v{agent_module.version}")
+                        await ensure_module_installation_with_lock(install_params, f"v{agent_module.module_version}")
                         sub_agent_installation_status.append({
                             "name": agent_module.name,
-                            "version": agent_module.version,
+                            "module_version": agent_module.module_version,
                             "status": "success",
                         })
                     except Exception as e:
                         sub_agent_installation_status.append({
                             "name": agent_module.name,
-                            "version": agent_module.version,
+                            "module_version": agent_module.module_version,
                             "status": str(e),
                         })
             else:
@@ -512,22 +543,22 @@ class HTTPServer:
                 for environment_module in environment_modules:
                     install_params = {
                         "name": environment_module.name,
-                        "url": environment_module.url,
-                        "version": f"v{environment_module.version}",
-                        "type": environment_module.type,
+                        "module_url": environment_module.module_url,
+                        "module_version": f"v{environment_module.module_version}",
+                        "module_type": environment_module.module_type,
                     }
 
                 try:
-                    await ensure_module_installation_with_lock(install_params, f"v{environment_module.version}")
+                    await ensure_module_installation_with_lock(install_params, f"v{environment_module.module_version}")
                     environment_installation_status.append({
                         "name": environment_module.name,
-                        "version": environment_module.version,
+                        "module_version": environment_module.module_version,
                         "status": "success",
                     })
                 except Exception as e:
                     environment_installation_status.append({
                         "name": environment_module.name,
-                        "version": environment_module.version,
+                        "module_version": environment_module.module_version,
                         "status": str(e),
                     })
             else:
@@ -571,13 +602,13 @@ class HTTPServer:
             
             install_params = {
                 "name": environment.name,
-                "url": environment.url,
-                "version": f"v{environment.version}",
-                "type": environment.type,
+                "module_url": environment.module_url,
+                "module_version": f"v{environment.module_version}",
+                "module_type": environment.module_type,
             }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{environment.version}")
+                await ensure_module_installation_with_lock(install_params, f"v{environment.module_version}")
             except Exception as e:
                 logger.error(f"Failed to install environment: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -612,13 +643,13 @@ class HTTPServer:
             
             install_params = {
                 "name": agent.name,
-                "url": agent.url,
-                "version": f"v{agent.version}",
-                "type": agent.type,
+                "module_url": agent.module_url,
+                "module_version": f"v{agent.module_version}",
+                "module_type": agent.module_type,
             }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{agent.version}")
+                await ensure_module_installation_with_lock(install_params, f"v{agent.module_version}")
             except Exception as e:
                 logger.error(f"Failed to install agent: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -630,10 +661,51 @@ class HTTPServer:
             logger.error(f"Failed to create agent: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def kb_create(self, kb_input: KBDeployment) -> KBDeployment:
+        """
+        Create a knowledge base
+        :param kb_input: KBDeployment
+        :return: KBDeployment
+        """
+        try:
+            hub_username = os.getenv("HUB_USERNAME")
+            hub_password = os.getenv("HUB_PASSWORD")
+            if not hub_username or not hub_password:
+                raise HTTPException(status_code=400, detail="Missing Hub authentication credentials")
+
+            async with Hub() as hub:
+                _, _, _ = await hub.signin(
+                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                )
+                kb = await hub.list_knowledge_bases(kb_input.module['name'])
+                if not kb:
+                    raise HTTPException(status_code=404, detail=f"Knowledge base {kb_input.module['name']} not found")
+
+                install_params = {
+                    "name": kb.name,
+                    "module_url": kb.module_url,
+                    "module_version": f"v{kb.module_version}",
+                    "module_type": kb.module_type,
+                }
+
+                try:
+                    await ensure_module_installation_with_lock(install_params, f"v{kb.module_version}")
+                except Exception as e:
+                    logger.error(f"Failed to install knowledge base: {str(e)}")
+                    logger.debug(f"Full traceback: {traceback.format_exc()}")
+                    raise HTTPException(status_code=500, detail=str(e))
+                
+            return JSONResponse(content={"status": "success", "message": "Knowledge base created successfully"})
+    
+        except Exception as e:
+            logger.error(f"Failed to create knowledge base: {str(e)}")
+            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
     
     async def run_module(
         self, 
-        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput]
+        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment]
     ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
         """
         Generic method to run either an agent, orchestrator, or environment
@@ -657,6 +729,11 @@ class HTTPServer:
                 deployment = run_input.environment_deployment
                 list_func = lambda hub: hub.list_environments(deployment.module['name'])
                 create_func = lambda db: db.create_environment_run(run_input)
+            elif isinstance(run_input, KBRunInput):
+                module_type = "kb"
+                deployment = run_input.kb_deployment
+                list_func = lambda hub: hub.list_knowledge_bases(deployment.module['name'])
+                create_func = lambda db: db.create_kb_run(run_input)
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
@@ -684,15 +761,19 @@ class HTTPServer:
                     raise HTTPException(status_code=500, detail=f"Failed to create {module_type} run")
                 run_data = run.model_dump()
 
+                logger.info(f"Run data: {run_data}")
+
             # Execute the task based on module type
-            if deployment.module.type == "package":
+            if deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(run_data)
                 elif module_type == "orchestrator":
                     _ = run_orchestrator.delay(run_data)
                 elif module_type == "environment":
                     _ = run_environment.delay(run_data)
-            elif deployment.module.type == "docker" and module_type == "agent":
+                elif module_type == "kb":
+                    _ = run_kb.delay(run_data)
+            elif deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
                 # validate docker params
                 try:
                     _ = DockerParams(**run_data["inputs"])
@@ -721,6 +802,9 @@ class HTTPServer:
     async def environment_run(self, environment_run_input: EnvironmentRunInput) -> EnvironmentRun:
         return await self.run_module(environment_run_input)
 
+    async def kb_run(self, kb_run_input: KBRunInput) -> KBRun:
+        return await self.run_module(kb_run_input)
+
     async def check_module(
         self, 
         module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]
@@ -741,6 +825,9 @@ class HTTPServer:
             elif isinstance(module_run, EnvironmentRun):
                 module_type = "environment"
                 list_func = lambda db: db.list_environment_runs(module_run.id)
+            elif isinstance(module_run, KBRun):
+                module_type = "kb"
+                list_func = lambda db: db.list_kb_runs(module_run.id)
             else:
                 raise HTTPException(status_code=400, detail="Invalid module run type")
 
@@ -753,7 +840,10 @@ class HTTPServer:
                 if isinstance(run_data, list):
                     run_data = run_data[0]
                 run_data.pop("_sa_instance_state", None)
-                
+
+                if 'results' in run_data and run_data['results']:
+                    run_data['results'] = [r for r in run_data['results'] if r is not None]
+    
                 # Convert datetime fields to ISO format
                 for time_field in ['created_time', 'start_processing_time', 'completed_time']:
                     if time_field in run_data and isinstance(run_data[time_field], datetime):
@@ -798,6 +888,9 @@ class HTTPServer:
 
     async def environment_check(self, environment_run: EnvironmentRun) -> EnvironmentRun:
         return await self.check_module(environment_run)
+
+    async def kb_check(self, kb_run: KBRun) -> KBRun:
+        return await self.check_module(kb_run)
 
     @retry(
         stop=stop_after_attempt(5),

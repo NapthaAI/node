@@ -33,6 +33,7 @@ def import_surql():
         f"{surql_path}/auth.surql",
         f"{surql_path}/node.surql",
         f"{surql_path}/auction.surql",
+        f"{surql_path}/kb.surql",
         f"{surql_path}/testdata.surql",
     ]
 

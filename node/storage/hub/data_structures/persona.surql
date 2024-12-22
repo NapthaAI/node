@@ -5,5 +5,5 @@ DEFINE TABLE persona SCHEMAFULL
 DEFINE FIELD name ON TABLE persona TYPE string;
 DEFINE FIELD description ON TABLE persona TYPE string;
 DEFINE FIELD author ON TABLE persona TYPE record<user>;
-DEFINE FIELD url ON TABLE persona TYPE string;
-DEFINE FIELD version ON TABLE persona TYPE string;
+DEFINE FIELD module_url ON TABLE persona TYPE string;
+DEFINE FIELD module_version ON TABLE persona TYPE string;

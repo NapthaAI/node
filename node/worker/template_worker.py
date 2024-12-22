@@ -16,7 +16,7 @@ from typing import List, Union
 from node.client import Node
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
 from node.module_manager import ensure_module_installation_with_lock, load_module, load_orchestrator
-from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun
+from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.task_engine import TaskEngine
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs, upload_json_string_to_ipfs
@@ -62,7 +62,17 @@ def run_environment(self, environment_run):
         # Force cleanup of channels
         app.backend.cleanup()
 
-async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]) -> None:
+@app.task(bind=True, acks_late=True)
+def run_kb(self, kb_run):
+    try:
+        kb_run = KBRun(**kb_run)
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(_run_module_async(kb_run))
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
+
+async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> None:
     """Handles execution of agent, orchestrator, and environment runs.
     
     Args:
@@ -78,12 +88,19 @@ async def _run_module_async(module_run: Union[AgentRun, OrchestratorRun, Environ
             module_type = "orchestrator"
             module_deployment = module_run.orchestrator_deployment
             engine_class = OrchestratorEngine
-        else:  # EnvironmentRun
+        elif isinstance(module_run, EnvironmentRun):
             module_type = "environment"
             module_deployment = module_run.environment_deployment
             engine_class = EnvironmentEngine
+        elif isinstance(module_run, KBRun):
+            logger.info(f"Received KB run: {module_run}")
+            module_type = "knowledge_base"
+            module_deployment = module_run.kb_deployment
+            engine_class = KBEngine
+        else:
+            raise ValueError(f"Invalid module type: {type(module_run)}")
         
-        module_version = f"v{module_deployment.module['version']}"
+        module_version = f"v{module_deployment.module['module_version']}"
         module_name = module_deployment.module["name"]
 
         logger.info(f"Received {module_type} run: {module_run}")
@@ -168,11 +185,11 @@ class AgentEngine:
         self.agent_run = agent_run
         self.module = agent_run.agent_deployment.module
         self.agent_name = self.module["name"]
-        self.agent_version = f"v{self.module['version']}"
+        self.agent_version = f"v{self.module['module_version']}"
         self.parameters = agent_run.inputs
 
         if self.agent_run.agent_deployment.agent_config.persona_module:
-            self.personas_url = self.agent_run.agent_deployment.agent_config.persona_module["url"]
+            self.personas_url = self.agent_run.agent_deployment.agent_config.persona_module["module_url"]
 
         self.consumer = {
             "public_key": agent_run.consumer_id.split(":")[1],
@@ -276,7 +293,7 @@ class EnvironmentEngine:
         self.environment_run = environment_run
         self.module = environment_run.environment_deployment.module
         self.environment_name = self.module["name"]
-        self.environment_version = f"v{self.module['version']}"
+        self.environment_version = f"v{self.module['module_version']}"
         self.parameters = environment_run.inputs
 
         self.consumer = {
@@ -360,11 +377,89 @@ class EnvironmentEngine:
         await update_db_with_status_sync(module_run=self.environment_run)
 
 
+class KBEngine:
+    def __init__(self, kb_run: KBRun):
+        self.knowledge_base_run = kb_run
+        self.module = kb_run.kb_deployment.module
+        self.kb_name = self.module["name"]
+        self.kb_version = f"v{self.module['module_version']}"
+        self.parameters = kb_run.inputs
+
+        self.consumer = {
+            "public_key": kb_run.consumer_id.split(":")[1],
+            "id": kb_run.consumer_id,
+        }
+
+    async def init_run(self):
+        logger.info("Initializing knowledge base run")
+        self.knowledge_base_run.status = "processing"
+        self.knowledge_base_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
+
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
+
+        self.kb_func, self.knowledge_base_run = await load_module(self.knowledge_base_run, module_type="knowledge_base")
+
+    async def start_run(self):
+        """Executes the knowledge base run"""
+        logger.info("Starting knowledge base run")
+        self.knowledge_base_run.status = "running"
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
+
+        try:
+            response = await maybe_async_call(
+                self.kb_func,
+                kb_run=self.knowledge_base_run,
+            )
+        except Exception as e:
+            logger.error(f"Error running knowledge base: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+
+        logger.info(f"Knowledge base run response: {response}")
+
+        if isinstance(response, (dict, list, tuple)):
+            response = json.dumps(response)
+        elif isinstance(response, BaseModel):
+            response = response.model_dump_json()
+
+        self.knowledge_base_run.results = [response]
+        self.knowledge_base_run.status = "completed"
+
+    async def complete(self):
+        """Marks the knowledge base run as completed"""
+        self.knowledge_base_run.status = "completed"
+        self.knowledge_base_run.error = False
+        self.knowledge_base_run.error_message = ""
+        self.knowledge_base_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.knowledge_base_run.duration = (
+            datetime.fromisoformat(self.knowledge_base_run.completed_time)
+            - datetime.fromisoformat(self.knowledge_base_run.start_processing_time)
+        ).total_seconds()
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
+        logger.info("Knowledge base run completed")
+
+    async def fail(self):
+        """Marks the knowledge base run as failed"""
+        logger.error("Error running knowledge base")
+        error_details = traceback.format_exc()
+        logger.error(f"Traceback: {error_details}")
+        self.knowledge_base_run.status = "error"
+        self.knowledge_base_run.error = True
+        self.knowledge_base_run.error_message = error_details
+        self.knowledge_base_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.knowledge_base_run.duration = (
+            datetime.fromisoformat(self.knowledge_base_run.completed_time)
+            - datetime.fromisoformat(self.knowledge_base_run.start_processing_time)
+        ).total_seconds()
+        await update_db_with_status_sync(module_run=self.knowledge_base_run)
+        logger.info("Knowledge base run completed")
+
+
 class OrchestratorEngine:
     def __init__(self, orchestrator_run: OrchestratorRun):
         self.orchestrator_run = orchestrator_run
         self.orchestrator_name = orchestrator_run.orchestrator_deployment.module["name"]
-        self.orchestrator_version = f"v{orchestrator_run.orchestrator_deployment.module['version']}"
+        self.orchestrator_version = f"v{orchestrator_run.orchestrator_deployment.module['module_version']}"
         self.parameters = orchestrator_run.inputs
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE

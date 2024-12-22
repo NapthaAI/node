@@ -69,6 +69,26 @@ class EnvironmentRun(Base):
 
     consumer = relationship("User", back_populates="environment_runs")
 
+class KBRun(Base):
+    __tablename__ = 'kb_runs'
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    consumer_id = Column(String, ForeignKey('users.id'), nullable=False)
+    inputs = Column(JSON)
+    kb_deployment = Column(JSON, nullable=False)
+    orchestrator_runs = Column(JSONB, default=[])
+    status = Column(String, default="pending")
+    error = Column(Boolean, default=False)
+    results = Column(ARRAY(String), default=[])
+    error_message = Column(String)
+    created_time = Column(DateTime)
+    start_processing_time = Column(DateTime)
+    completed_time = Column(DateTime)
+    duration = Column(Integer)
+
+    consumer = relationship("User", back_populates="kb_runs")
+
 User.agent_runs = relationship("AgentRun", order_by=AgentRun.id, back_populates="consumer")
 User.orchestrator_runs = relationship("OrchestratorRun", back_populates="consumer")
 User.environment_runs = relationship("EnvironmentRun", back_populates="consumer")
+User.kb_runs = relationship("KBRun", back_populates="consumer")

@@ -76,10 +76,10 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                     'name': agent_module.name,
                     'description': agent_module.description,
                     'author': agent_module.author,
-                    'url': agent_module.url,
-                    'type': agent_module.type.value if hasattr(agent_module.type, 'value') else agent_module.type,
-                    'version': agent_module.version,
-                    'entrypoint': agent_module.entrypoint,
+                    'module_url': agent_module.module_url,
+                    'module_type': agent_module.module_type.value if hasattr(agent_module.module_type, 'value') else agent_module.module_type,
+                    'module_version': agent_module.module_version,
+                    'module_entrypoint': agent_module.module_entrypoint,
                     'personas_urls': agent_module.personas_urls
                 }
 
@@ -116,7 +116,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             logger.info(f"Agent run: {agent_run}")
 
             # Execute the task
-            module_type = module_dict['type']
+            module_type = module_dict['module_type']
             if module_type == "package":
                 task = run_agent.delay(agent_run)
             elif module_type == "docker":
@@ -258,10 +258,10 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                         'name': orchestrator_module.name,
                         'description': orchestrator_module.description,
                         'author': orchestrator_module.author,
-                        'url': orchestrator_module.url,
-                        'type': orchestrator_module.type.value if hasattr(orchestrator_module.type, 'value') else orchestrator_module.type,
-                        'version': orchestrator_module.version,
-                        'entrypoint': orchestrator_module.entrypoint,
+                        'module_url': orchestrator_module.module_url,
+                        'module_type': orchestrator_module.module_type.value if hasattr(orchestrator_module.module_type, 'value') else orchestrator_module.module_type,
+                        'module_version': orchestrator_module.module_version,
+                        'module_entrypoint': orchestrator_module.module_entrypoint,
                     }
 
             # Create run input dictionary
@@ -310,7 +310,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                 orchestrator_run.pop("_sa_instance_state", None)
 
             # Execute the task
-            module_type = orchestrator_module['type']
+            module_type = orchestrator_module['module_type']
             if module_type == "package":
                 task = run_orchestrator.delay(orchestrator_run)
             else:
@@ -449,7 +449,7 @@ class GrpcServer:
         self.listen_addr = f"0.0.0.0:{self.port}"
         self.server.add_insecure_port(self.listen_addr)
 
-    async def graceful_shutdown(self, timeout: float = 30.0):
+    async def graceful_shutdown(self, timeout: float = 3.0):
         logger.info("Starting graceful shutdown...")
 
         await self.server.stop(timeout)
