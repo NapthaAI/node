@@ -187,13 +187,13 @@ class ToolRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     tool_deployment: ToolDeployment
-    agent_run: AgentRun = None
+    agent_run: Optional[AgentRun] = None
 
 class ToolRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     tool_deployment: ToolDeployment
-    agent_run: AgentRun = None
+    agent_run: Optional[AgentRun] = None
     status: str = "pending"
     error: bool = False
     id: Optional[str] = None
