@@ -33,6 +33,7 @@ class LLMClientType(str, Enum):
     VLLM = "vllm"
     LITELLM = "litellm"
     OLLAMA = "ollama"
+    STABILITY = "stability"
 
 class LLMConfig(BaseModel):
     config_name: Optional[str] = None
@@ -65,6 +66,7 @@ class AgentConfig(BaseModel):
 
 class ToolConfig(BaseModel):
     config_name: Optional[str] = None
+    llm_config: Optional[LLMConfig] = None
 
 class OrchestratorConfig(BaseModel):
     config_name: Optional[str] = "orchestrator_config"
@@ -80,6 +82,7 @@ class DataGenerationConfig(BaseModel):
     save_outputs_path: Optional[str] = None
     save_inputs: Optional[bool] = None
     save_inputs_location: Optional[str] = None
+    default_filename: Optional[str] = None
 
 class KBDeployment(BaseModel):
     name: Optional[str] = "kb_deployment"
@@ -98,9 +101,9 @@ class AgentDeployment(BaseModel):
 class ToolDeployment(BaseModel):
     name: Optional[str] = "tool_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    worker_node_url: Optional[str] = None
-    tool_config: Optional[ToolConfig] = ToolConfig()
-    data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
+    tool_node_url: Optional[str] = None
+    tool_config: Optional[ToolConfig] = None
+    data_generation_config: Optional[DataGenerationConfig] = None
 
 class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
