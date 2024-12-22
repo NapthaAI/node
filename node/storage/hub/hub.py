@@ -154,6 +154,27 @@ class Hub(AsyncMixin):
             logger.error(f"Error querying agents from database: {e}")
             return [] if not agent_name else None
 
+    async def list_tools(self, tool_name=None) -> List:
+        try:
+            if not tool_name:
+                result = await self.surrealdb.query("SELECT * FROM tool;")
+                if not result or not result[0].get("result"):
+                    return []
+                return [AgentModule(**tool) for tool in result[0]["result"]]
+            else:
+                if ':' in tool_name:
+                    tool_name = tool_name.split(':')[1]
+                result = await self.surrealdb.query(
+                    "SELECT * FROM tool WHERE name = $tool_name;",
+                    {"tool_name": tool_name}
+                )
+                if not result or not result[0].get("result") or not result[0]["result"]:
+                    return None
+                return AgentModule(**result[0]["result"][0])
+        except Exception as e:
+            logger.error(f"Error querying tools from database: {e}")
+            return [] if not tool_name else None
+
     async def list_orchestrators(self, orchestrator_name=None) -> List:
         if not orchestrator_name:
             orchestrators = await self.surrealdb.query("SELECT * FROM orchestrator;")
