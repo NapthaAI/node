@@ -262,6 +262,11 @@ class KBRun(BaseModel):
     error: bool = False
     id: Optional[str] = None
     results: list[Optional[str]] = []   
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
 
 class ChatMessage(BaseModel):
     role: str
