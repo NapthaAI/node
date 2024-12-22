@@ -22,7 +22,8 @@ from node.schemas import (
     AgentConfig,
     DataGenerationConfig,
     KBRun,
-    KBDeployment
+    KBDeployment,
+    ToolRun,
 )
 from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -96,22 +97,25 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, dict], run_version: str):
+async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, ToolRun, dict], run_version: str):
     if isinstance(run, AgentRun):
         module_name = run.agent_deployment.module["name"]
         url = run.agent_deployment.module["module_url"]    
+    elif isinstance(run, ToolRun):
+        module_name = run.tool_deployment.module["name"]
+        url = run.tool_deployment.module["module_url"]
     elif isinstance(run, OrchestratorRun):
         module_name = run.orchestrator_deployment.module["name"]
         url = run.orchestrator_deployment.module["module_url"]
-    elif isinstance(run, dict):
-        module_name = run["name"]
-        url = run["module_url"]
     elif isinstance(run, EnvironmentRun):
         module_name = run.environment_deployment.module["name"]
         url = run.environment_deployment.module["module_url"]
     elif isinstance(run, KBRun):
         module_name = run.kb_deployment.module["name"]
         url = run.kb_deployment.module["module_url"]
+    elif isinstance(run, dict):
+        module_name = run["name"]
+        url = run["module_url"]
     else:
         raise ValueError(f"Invalid module type: {type(run)}")
 
