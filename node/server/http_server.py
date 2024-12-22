@@ -25,6 +25,8 @@ from node.module_manager import ensure_module_installation_with_lock
 from node.schemas import (
     AgentRun,
     AgentRunInput,
+    ToolRun,
+    ToolRunInput,
     OrchestratorRun,
     OrchestratorRunInput,
     EnvironmentRun,
@@ -38,15 +40,6 @@ from node.schemas import (
     KBRunInput,
     KBRun,
     AgentModuleType,
-    ToolsetList,
-    ToolsetListRequest,
-    ToolsetDetails,
-    ToolDetails,
-    ToolsetLoadRepoRequest,
-    ToolsetRequest,
-    SetToolsetRequest,
-    ToolRunRequest,
-    ToolRunResult 
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
@@ -59,7 +52,7 @@ from node.storage.storage import (
 from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_environment, run_orchestrator, run_kb
+from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -74,8 +67,6 @@ class HTTPServer:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
-
-        self.toolset_manager = ToolsetManager()
 
         self.app = FastAPI()
         router = APIRouter()
@@ -111,7 +102,7 @@ class HTTPServer:
             """
             return await self.agent_run(agent_run_input)
 
-        @router.post("/agent/check")
+        @router.post("/agent/check") 
         async def agent_check_endpoint(agent_run: AgentRun) -> AgentRun:
             """
             Check an agent
@@ -119,6 +110,24 @@ class HTTPServer:
             :return: Status
             """
             return await self.agent_check(agent_run)
+
+        @router.post("/tool/run")
+        async def tool_run_endpoint(tool_run_input: ToolRunInput) -> ToolRun:
+            """
+            Run a tool
+            :param tool_run_input: Tool run specifications
+            :return: Status
+            """
+            return await self.tool_run(tool_run_input)
+
+        @router.post("/tool/check")
+        async def tool_check_endpoint(tool_run: ToolRun) -> ToolRun:
+            """
+            Check a tool
+            :param tool_run: ToolRun details
+            :return: Status
+            """
+            return await self.tool_check(tool_run)
 
         @router.post("/orchestrator/create")
         async def orchestrator_create_endpoint(orchestrator_input: OrchestratorDeployment) -> OrchestratorDeployment:
@@ -383,67 +392,6 @@ class HTTPServer:
                 logger.error(f"Error in chat endpoint: {str(e)}")
                 logger.error(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
-            
-        ##################### Tool Endpoints #########################################
-        @router.post("/tool/get_toolset_list")
-        async def get_toolset_list_endpoint(request: ToolsetListRequest) -> ToolsetList:
-            """Get the list of available toolsets for a given agent run."""
-            # TODO: isolate tool calls from the node, maybe make a server?            
-            toolset_list = ToolsetList(toolsets=[])
-            toolset_names = self.toolset_manager.get_toolset_names()
-
-            
-            for toolset_name in toolset_names:
-                toolset = ToolsetDetails(
-                    id=toolset_name, 
-                    name=toolset_name, 
-                    description="Toolset description", 
-                    tools=[])
-                toolset_list.toolsets.append(toolset)
-            return toolset_list
-        
-        @router.post("/tool/add_tool_repo_to_toolset")
-        async def add_tool_repo_endpoint(toolset_repo_request: ToolsetLoadRepoRequest):
-            """Add tool repository to toolset."""
-            await self.toolset_manager.create_or_add_function_toolset_from_github(toolset_repo_request.toolset_name, toolset_repo_request.repo_url)
-
-        @router.post("/tool/set_toolset")
-        async def set_toolset_endpoint(load_toolset_resquest: SetToolsetRequest) -> ToolsetDetails:
-            """Sets a toolset."""
-            self.toolset_manager.set_current_toolset(load_toolset_resquest.toolset_name)
-            toolset = self.toolset_manager.get_current_toolset()
-            return ToolsetDetails(
-                id=toolset.toolset_name, 
-                name=toolset.toolset_name, 
-                description= toolset.get_function_list_text(), 
-                tools=[])
-        
-        @router.post("/tool/get_current_toolset")
-        async def get_tool_list_endpoint(tool_list_request: ToolsetRequest) -> ToolsetDetails:
-            """Get the list of available tools for a given toolset."""
-            toolset = self.toolset_manager.get_current_toolset()
-            return ToolsetDetails(
-                        id=toolset.toolset_name, 
-                        name=toolset.toolset_name, 
-                        description= toolset.get_function_list_text(), 
-                        tools=[])
-            
-        @router.post("/tool/run_tool")
-        async def run_tool_endpoint(tool_run_request: ToolRunRequest):
-            """Run a tool."""
-            result = await self.toolset_manager.run_function( func_name=tool_run_request.tool_id, 
-                                                       file_path=None,
-                                                       **tool_run_request.params)
-            return ToolRunResult(agent_id=tool_run_request.agent_id,
-                                toolset_id=tool_run_request.toolset_id,
-                                tool_run_id=tool_run_request.tool_run_id,
-                                tool_id=tool_run_request.tool_id,
-                                params=tool_run_request.params,
-                                # cast to string for now TODO
-                                result=str(result))
-            
-        
-        
 
         # Include the router
         self.app.include_router(router)
@@ -778,11 +726,11 @@ class HTTPServer:
     
     async def run_module(
         self, 
-        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment]
-    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
+    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, ToolRun]:
         """
-        Generic method to run either an agent, orchestrator, or environment
-        :param run_input: Run specifications (AgentRunInput, OrchestratorRunInput, or EnvironmentRunInput)
+        Generic method to run either an agent, orchestrator, environment, tool or kb
+        :param run_input: Run specifications (AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, ToolRunInput or KBRunInput)
         :return: Status
         """
         try:
@@ -792,6 +740,11 @@ class HTTPServer:
                 deployment = run_input.agent_deployment
                 list_func = lambda hub: hub.list_agents(deployment.module['name'])
                 create_func = lambda db: db.create_agent_run(run_input)
+            elif isinstance(run_input, ToolRunInput):
+                module_type = "tool"
+                deployment = run_input.tool_deployment
+                list_func = lambda hub: hub.list_tools(deployment.module['name'])
+                create_func = lambda db: db.create_tool_run(run_input)
             elif isinstance(run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
                 deployment = run_input.orchestrator_deployment
@@ -840,6 +793,8 @@ class HTTPServer:
             if deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(run_data)
+                elif module_type == "tool":
+                    _ = run_tool.delay(run_data)
                 elif module_type == "orchestrator":
                     _ = run_orchestrator.delay(run_data)
                 elif module_type == "environment":
@@ -869,6 +824,9 @@ class HTTPServer:
     async def agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         return await self.run_module(agent_run_input)
 
+    async def tool_run(self, tool_run_input: ToolRunInput) -> ToolRun:
+        return await self.run_module(tool_run_input)
+
     async def orchestrator_run(self, orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRun:
         return await self.run_module(orchestrator_run_input)
 
@@ -880,11 +838,11 @@ class HTTPServer:
 
     async def check_module(
         self, 
-        module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]
-    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+        module_run: Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun]
+    ) -> Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun]:
         """
-        Check a module run (agent, orchestrator, or environment)
-        :param module_run: Run details (AgentRun, OrchestratorRun, or EnvironmentRun)
+        Check a module run (agent, tool, orchestrator, or environment)
+        :param module_run: Run details (AgentRun, ToolRun, OrchestratorRun, or EnvironmentRun)
         :return: Status
         """
         try:
@@ -892,6 +850,9 @@ class HTTPServer:
             if isinstance(module_run, AgentRun):
                 module_type = "agent"
                 list_func = lambda db: db.list_agent_runs(module_run.id)
+            elif isinstance(module_run, ToolRun):
+                module_type = "tool"
+                list_func = lambda db: db.list_tool_runs(module_run.id)
             elif isinstance(module_run, OrchestratorRun):
                 module_type = "orchestrator"
                 list_func = lambda db: db.list_orchestrator_runs(module_run.id)
@@ -952,9 +913,11 @@ class HTTPServer:
                 detail=f"Internal server error occurred while checking {module_type} run"
             )
 
-    # Replace existing methods with wrappers that call check_module
     async def agent_check(self, agent_run: AgentRun) -> AgentRun:
         return await self.check_module(agent_run)
+
+    async def tool_check(self, tool_run: ToolRun) -> ToolRun:
+        return await self.check_module(tool_run)
 
     async def orchestrator_check(self, orchestrator_run: OrchestratorRun) -> OrchestratorRun:
         return await self.check_module(orchestrator_run)
