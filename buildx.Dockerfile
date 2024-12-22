@@ -16,8 +16,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV RABBITMQ_LOG_BASE=/var/log/rabbitmq
 ENV PATH="/root/miniforge3/bin:${PATH}"
 
-# for configuring installations based on CPU and if cuda should be enabled
+# this will be the base image either the ubuntu or the cuda one
 ENV BASE_IMAGE=${BASE_IMAGE}
+
+# this will be the value / one of the values of the `--platform` argument
 ENV PLATFORM=${TARGETPLATFORM}
 
 # Set work directory
@@ -43,4 +45,15 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install miniforge based on the target platform \
-CMD echo $PLATFORM running on $BASE_IMAGE
+RUN if [ "$PLATFORM" = "linux/amd64" ]; then \
+        wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O miniforge.sh; \
+    elif [ "$PLATFORM" = "linux/arm64" ]; then \
+        wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh -O miniforge.sh; \
+    else \
+        echo "Unsupported platform: $PLATFORM. Only linux/amd64 and linux/arm64 are supported." && exit 1; \
+    fi && \
+    bash miniforge.sh -b -p $HOME/miniforge3 && \
+    rm miniforge.sh
+
+RUN echo "Running on $PLATFORM (image: $BASE_IMAGE)"
+
