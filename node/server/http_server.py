@@ -10,9 +10,10 @@ from typing import Optional, Union, Any, Dict
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -84,6 +85,20 @@ class HTTPServer:
         async def health_check():
             return {"status": "ok", "server_type": "http"}
         
+        # Handle validation errors when request data doesn't match the expected Pydantic models
+        # Logs the validation error details and request body, then returns a 422 response with the error info
+        @self.app.exception_handler(RequestValidationError)
+        async def validation_exception_handler(request: Request, exc: RequestValidationError):
+            logger.error(f"Request validation error: {exc.errors()}")
+            logger.error(f"Request body: {await request.json()}")
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": exc.errors(),
+                    "body": await request.json()
+                }
+            )
+
         @router.post("/agent/create")
         async def agent_create_endpoint(agent_input: AgentDeployment) -> AgentDeployment:
             """
