@@ -60,6 +60,8 @@ RUN echo "source $HOME/miniforge3/etc/profile.d/conda.sh" >> ~/.bashrc && \
     echo "conda activate base" >> ~/.bashrc
 
 # install RabbitMQ - no conditional needed here unlike the host containe
+# TODO need to fix this; follow RMQ install steps since erlang 1:26 (required for new RMQ version) is
+#   incompatible with ubuntu 22 and ubuntu 24.
 RUN curl -1sLf "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/setup.deb.sh" | bash && \
     curl -1sLf "https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-server/setup.deb.sh" | bash && \
     apt-get update && \
