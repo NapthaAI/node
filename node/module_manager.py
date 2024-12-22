@@ -495,8 +495,6 @@ async def load_tool_deployments(default_tool_deployments_path, input_tool_deploy
 
     module_path = default_tool_deployments_path.parent.parent
 
-    print("AAAAAAA", input_tool_deployments)
-
     for deployment in default_tool_deployments:
         # Load LLM config if present
         if "tool_config" in deployment and "llm_config" in deployment["tool_config"]:
@@ -506,8 +504,6 @@ async def load_tool_deployments(default_tool_deployments_path, input_tool_deploy
             llm_config = next(config for config in llm_configs if config.config_name == config_name)
             deployment["tool_config"]["llm_config"] = llm_config
 
-    print("BBBBBBB", default_tool_deployments)
-
     default_tool_deployment = default_tool_deployments[0]
     input_tool_deployment = input_tool_deployments[0]
 
@@ -515,8 +511,6 @@ async def load_tool_deployments(default_tool_deployments_path, input_tool_deploy
     for key, value in input_tool_deployment.dict(exclude_unset=True).items():           
         if value is not None:
             default_tool_deployment[key] = value
-
-    print("CCCCCCC", default_tool_deployments)
 
     return [ToolDeployment(**default_tool_deployment)]
 

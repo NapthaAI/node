@@ -99,8 +99,6 @@ RELATE user:seller1->is_associated_with->organization:naptha;
 -- AGENTS
 CREATE agent:hello_world_agent SET name="hello_world_agent", description="A simple hello world agent", parameters="{firstname: str, surname: str}", author=user:naptha, module_url="https://github.com/NapthaAI/hello_world_agent", module_type="package", module_version="0.14", module_entrypoint="run.py";
 CREATE agent:simple_chat_agent SET name="simple_chat_agent", description="A simple chat agent", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/simple_chat_agent", module_type="package", module_version="0.13", module_entrypoint="run.py";
-CREATE agent:generate_image SET name="generate_image", description="A simple agent for generating an image from text with Stable Diffusion", parameters="{prompt: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image", module_type="package", module_version="0.10", module_entrypoint="run.py";
-CREATE agent:image_to_image SET name="image_to_image", description="A simple agent for generating an image from another image with Stable Diffusion", parameters="{prompt: str}", author=user:naptha, module_url="https://github.com/NapthaAI/image2image", module_type="package", module_version="0.9", module_entrypoint="run.py";
 CREATE agent:babyagi_task_initiator SET name="babyagi_task_initiator", description="A simple agent for initiating tasks in BabyAGI", parameters="{objective: str}", author=user:naptha, module_url="https://github.com/NapthaAI/babyagi_task_initiator", module_type="package", module_version="0.2", module_entrypoint="run.py";
 CREATE agent:babyagi_task_executor SET name="babyagi_task_executor", description="A simple agent for executing tasks in BabyAGI", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/babyagi_task_executor", module_type="package", module_version="0.2", module_entrypoint="run.py";
 CREATE agent:babyagi_task_finalizer SET name="babyagi_task_finalizer", description="A simple agent for finalizing tasks in BabyAGI", parameters="{task: str, objective: str}", author=user:naptha, module_url="https://github.com/NapthaAI/babyagi_task_finalizer", module_type="package", module_version="0.2", module_entrypoint="run.py";
@@ -112,6 +110,11 @@ CREATE agent:random_number_agent SET name="random_number_agent", description="A 
 CREATE agent:test_personas SET name="test_personas", description="A simple test agent for testing personas", parameters="{question: str, num_personas: int}", author=user:naptha, module_url="https://github.com/moarshy/test_personas", module_type="package", module_version="0.1", personas_urls=["https://huggingface.co/datasets/NapthaAI/market_agents_personas"], module_entrypoint="run.py";
 CREATE agent:tweets_to_character SET name="tweets_to_character", description="An agent for generating character personas from twitter data", parameters="{input_dir: str}", author=user:naptha, module_url="https://github.com/NapthaAI/tweets_to_character", module_type="package", module_version="0.1", module_entrypoint="run.py";
 CREATE agent:wikipedia_agent SET name="wikipedia_agent", description="An agent for querying wikipedia", parameters="{query: str}", author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_agent", module_type="package", module_version="0.1", module_entrypoint="run.py";
+CREATE agent:generate_image_agent SET name="generate_image_agent", description="An agent for generating images", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image_agent", module_type="package", module_version="0.1", module_entrypoint="run.py";
+
+-- TOOLS
+CREATE tool:generate_image_tool SET name="generate_image_tool", description="A simple tool for generating an image from text with Stable Diffusion", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image_tool", module_type="package", module_version="0.11", module_entrypoint="run.py";
+CREATE tool:image_to_image SET name="image_to_image", description="A simple tool for generating an image from another image with Stable Diffusion", parameters="{prompt: str}", author=user:naptha, module_url="https://github.com/NapthaAI/image2image", module_type="package", module_version="0.9", module_entrypoint="run.py";
 
 -- ORCHESTRATORS
 CREATE orchestrator:multiagent_chat SET name="multiagent_chat", description="Multi-agent network for chat", parameters="{prompt: str}", author=user:naptha, module_url="https://github.com/NapthaAI/multiagent_chat", module_type="package", module_version="0.14", module_entrypoint="run.py";
@@ -133,8 +136,6 @@ CREATE persona:one_million_personas SET name="one_million_personas", description
 -- KNOWLEDGE BASES
 CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for Wikipedia content", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
 
--- TOOLS
-CREATE tool:test_tool SET name="test_tool", description="A simple tool for testing", parameters="{param1: str, param2: str}", author=user:naptha, module_url="https://github.com/C0deMunk33/test_toolset", module_type="package", module_version="0.1", module_entrypoint="run.py";
 
 
 -- NODES
