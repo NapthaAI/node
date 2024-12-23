@@ -123,7 +123,7 @@ restart-hub:
 	@rm -f .hub_setting
 
 # Updated restart-node target
-restart-node: check-local-hub
+restart-node:
 	@echo "Restarting all components in parallel..."
 	@$(MAKE) remove
 	@echo ".venv removed"
@@ -131,6 +131,7 @@ restart-node: check-local-hub
 	@poetry lock
 	@poetry install
 	@echo "poetry install done"
+	@$(MAKE) check-local-hub
 	@$(MAKE) restart-hub
 	@$(MAKE) restart-servers & $(MAKE) restart-celery
 	@wait
