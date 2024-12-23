@@ -468,15 +468,8 @@ class HTTPServer:
                     raise HTTPException(status_code=404,
                                         detail=f"Orchestrator {orchestrator_input.module.name} not found")
 
-            install_params = {
-                "name": orchestrator.name or "unknown",
-                "module_url": orchestrator.module_url or "",
-                "module_version": f"v{orchestrator.module_version}" if orchestrator.module_version else "v0",
-                "module_type": orchestrator.module_type or "default",
-            }
-
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{orchestrator.module_version or '0'}")
+                await ensure_module_installation_with_lock(orchestrator)
             except Exception as install_error:
                 logger.error(f"Failed to install orchestrator: {str(install_error)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -544,14 +537,8 @@ class HTTPServer:
 
                 sub_agent_installation_status = []
                 for agent_module in agent_modules:
-                    install_params = {
-                        "name": agent_module.name,
-                        "module_url": agent_module.module_url,
-                        "module_version": f"v{agent_module.module_version}",
-                        "module_type": agent_module.module_type,
-                    }
                     try:
-                        await ensure_module_installation_with_lock(install_params, f"v{agent_module.module_version}")
+                        await ensure_module_installation_with_lock(agent_module)
                         sub_agent_installation_status.append({
                             "name": agent_module.name,
                             "module_version": agent_module.module_version,
@@ -594,16 +581,9 @@ class HTTPServer:
                             environment_modules.append(environment_module)
 
                 environment_installation_status = []
-                for environment_module in environment_modules:
-                    install_params = {
-                        "name": environment_module.name,
-                        "module_url": environment_module.module_url,
-                        "module_version": f"v{environment_module.module_version}",
-                        "module_type": environment_module.module_type,
-                    }
 
                 try:
-                    await ensure_module_installation_with_lock(install_params, f"v{environment_module.module_version}")
+                    await ensure_module_installation_with_lock(environment_modules[0])
                     environment_installation_status.append({
                         "name": environment_module.name,
                         "module_version": environment_module.module_version,
@@ -654,15 +634,8 @@ class HTTPServer:
                 if not environment:
                     raise HTTPException(status_code=404, detail=f"Environment {environment_input.name} not found")
             
-            install_params = {
-                "name": environment.name,
-                "module_url": environment.module_url,
-                "module_version": f"v{environment.module_version}",
-                "module_type": environment.module_type,
-            }
-
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{environment.module_version}")
+                await ensure_module_installation_with_lock(environment)
             except Exception as e:
                 logger.error(f"Failed to install environment: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -694,16 +667,9 @@ class HTTPServer:
                 agent = await hub.list_agents(agent_input.name)
                 if not agent:
                     raise HTTPException(status_code=404, detail=f"Agent {agent_input.name} not found")
-            
-            install_params = {
-                "name": agent.name,
-                "module_url": agent.module_url,
-                "module_version": f"v{agent.module_version}",
-                "module_type": agent.module_type,
-            }
 
             try:
-                await ensure_module_installation_with_lock(install_params, f"v{agent.module_version}")
+                await ensure_module_installation_with_lock(agent)
             except Exception as e:
                 logger.error(f"Failed to install agent: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -736,15 +702,8 @@ class HTTPServer:
                 if not kb:
                     raise HTTPException(status_code=404, detail=f"Knowledge base {kb_input.module['name']} not found")
 
-                install_params = {
-                    "name": kb.name,
-                    "module_url": kb.module_url,
-                    "module_version": f"v{kb.module_version}",
-                    "module_type": kb.module_type,
-                }
-
                 try:
-                    await ensure_module_installation_with_lock(install_params, f"v{kb.module_version}")
+                    await ensure_module_installation_with_lock(kb)
                 except Exception as e:
                     logger.error(f"Failed to install knowledge base: {str(e)}")
                     logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -756,7 +715,7 @@ class HTTPServer:
             logger.error(f"Failed to create knowledge base: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=str(e))
-    
+        
     async def run_module(
         self, 
         run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]

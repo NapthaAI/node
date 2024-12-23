@@ -47,7 +47,7 @@ class AgentModuleType(str, Enum):
     package = "package"
     docker = "docker"
 
-class AgentModule(BaseModel):
+class Module(BaseModel):
     id: str
     name: str
     description: str
@@ -56,6 +56,8 @@ class AgentModule(BaseModel):
     module_type: Optional[AgentModuleType] = AgentModuleType.package
     module_version: Optional[str] = "0.1"
     module_entrypoint: Optional[str] = "run.py"
+
+class AgentModule(Module):
     personas_urls: Optional[List[str]] = None
 
 class AgentConfig(BaseModel):

@@ -99,8 +99,19 @@ async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun
         logger.info(f"Received {module_run_engine.module_type} run: {module_run}")
         logger.info(f"Checking if {module_run_engine.module_type} {module_name} version {module_version} is installed")
 
+        if module_run_engine.module_type == "agent":
+            module = module_run.agent_deployment.module
+        elif module_run_engine.module_type == "tool":
+            module = module_run.tool_deployment.module
+        elif module_run_engine.module_type == "orchestrator":
+            module = module_run.orchestrator_deployment.module
+        elif module_run_engine.module_type == "environment":
+            module = module_run.environment_deployment.module
+        elif module_run_engine.module_type == "knowledge_base":
+            module = module_run.kb_deployment.module
+
         try:
-            await ensure_module_installation_with_lock(module_run, module_version)
+            await ensure_module_installation_with_lock(module)
         except Exception as e:
             error_msg = (f"Failed to install or verify {module_run_engine.module_type} {module_name}: {str(e)}")
             logger.error(error_msg)

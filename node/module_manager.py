@@ -25,8 +25,10 @@ from node.schemas import (
     KBDeployment,
     ToolRun,
     ToolDeployment,
+    Module,
+    AgentModule
 )
-from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
+from node.worker.utils import download_from_ipfs, unzip_file
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
 
 logger = logging.getLogger(__name__)
@@ -98,27 +100,10 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, ToolRun, dict], run_version: str):
-    if isinstance(run, AgentRun):
-        module_name = run.agent_deployment.module["name"]
-        url = run.agent_deployment.module["module_url"]    
-    elif isinstance(run, ToolRun):
-        module_name = run.tool_deployment.module["name"]
-        url = run.tool_deployment.module["module_url"]
-    elif isinstance(run, OrchestratorRun):
-        module_name = run.orchestrator_deployment.module["name"]
-        url = run.orchestrator_deployment.module["module_url"]
-    elif isinstance(run, EnvironmentRun):
-        module_name = run.environment_deployment.module["name"]
-        url = run.environment_deployment.module["module_url"]
-    elif isinstance(run, KBRun):
-        module_name = run.kb_deployment.module["name"]
-        url = run.kb_deployment.module["module_url"]
-    elif isinstance(run, dict):
-        module_name = run["name"]
-        url = run["module_url"]
-    else:
-        raise ValueError(f"Invalid module type: {type(run)}")
+async def ensure_module_installation_with_lock(module: Union[AgentModule, Module]):
+    module_name = module["name"]
+    url = module["module_url"]
+    run_version = module["module_version"]
 
     if module_name in INSTALLED_MODULES:
         installed_version = INSTALLED_MODULES[module_name]
@@ -143,10 +128,10 @@ async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentR
                 raise RuntimeError(f"Module {module_name} failed verification after installation")
 
             # Install personas if they exist in module run
-            if isinstance(run, AgentRun):
-                if hasattr(run, 'personas_urls') and run.agent_deployment.module["personas_urls"]:
+            if isinstance(module, AgentModule):
+                if hasattr(module, 'personas_urls') and module.personas_urls:
                     logger.info(f"Installing personas for agent {module_name}")
-                    await install_persona(run.agent_deployment.module["personas_urls"])
+                    await install_persona(module.personas_urls)
 
             logger.info(f"Module {module_name} version {run_version} is installed and verified")
             INSTALLED_MODULES[module_name] = run_version
