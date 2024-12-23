@@ -105,8 +105,25 @@ restart-celery:
 		sudo systemctl status --no-pager celeryworker.service) & \
 	fi
 
-# Target to restart all node components in parallel
-restart-node:
+# Helper target to check LOCAL_HUB value from config.py
+check-local-hub:
+	@echo "Checking LOCAL_HUB setting..."
+	@$(PYTHON) -c 'import sys; sys.path.append("."); from node.config import LOCAL_HUB; print("true" if LOCAL_HUB else "false")' > .hub_setting
+
+# Target to restart hub if LOCAL_HUB is True
+restart-hub:
+	@if [ "$$(cat .hub_setting)" = "true" ]; then \
+		echo "LOCAL_HUB is True, restarting hub..."; \
+		PYTHONPATH=$$(pwd) poetry run python node/storage/hub/init_hub.py; \
+		PYTHONPATH=$$(pwd) poetry run python node/storage/hub/init_hub.py --user; \
+		echo "Hub restarted successfully."; \
+	else \
+		echo "LOCAL_HUB is False, skipping hub restart."; \
+	fi
+	@rm -f .hub_setting
+
+# Updated restart-node target
+restart-node: check-local-hub
 	@echo "Restarting all components in parallel..."
 	@$(MAKE) remove
 	@echo ".venv removed"
@@ -114,6 +131,7 @@ restart-node:
 	@poetry lock
 	@poetry install
 	@echo "poetry install done"
+	@$(MAKE) restart-hub
 	@$(MAKE) restart-servers & $(MAKE) restart-celery
 	@wait
 	@echo "All node components have been restarted."
