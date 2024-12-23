@@ -15,7 +15,7 @@ from typing import List, Union
 
 from node.client import Node
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
-from node.module_manager import ensure_module_installation_with_lock, load_module, load_orchestrator
+from node.module_manager import install_module_with_lock, load_module, load_orchestrator_deployments
 from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
@@ -111,7 +111,7 @@ async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun
             module = module_run.kb_deployment.module
 
         try:
-            await ensure_module_installation_with_lock(module)
+            await install_module_with_lock(module)
         except Exception as e:
             error_msg = (f"Failed to install or verify {module_run_engine.module_type} {module_name}: {str(e)}")
             logger.error(error_msg)

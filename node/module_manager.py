@@ -100,7 +100,7 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(module: Union[AgentModule, Module]):
+async def install_module_with_lock(module: Union[AgentModule, Module]):
     module_name = module["name"]
     url = module["module_url"]
     run_version = module["module_version"]

@@ -22,7 +22,7 @@ from tenacity import (
 )
 
 from node.config import MODULES_SOURCE_DIR
-from node.module_manager import ensure_module_installation_with_lock
+from node.module_manager import install_module_with_lock
 from node.schemas import (
     AgentRun,
     AgentRunInput,
@@ -469,7 +469,7 @@ class HTTPServer:
                                         detail=f"Orchestrator {orchestrator_input.module.name} not found")
 
             try:
-                await ensure_module_installation_with_lock(orchestrator)
+                await install_module(orchestrator)
             except Exception as install_error:
                 logger.error(f"Failed to install orchestrator: {str(install_error)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -538,7 +538,7 @@ class HTTPServer:
                 sub_agent_installation_status = []
                 for agent_module in agent_modules:
                     try:
-                        await ensure_module_installation_with_lock(agent_module)
+                        await install_module(agent_module)
                         sub_agent_installation_status.append({
                             "name": agent_module.name,
                             "module_version": agent_module.module_version,
@@ -583,7 +583,7 @@ class HTTPServer:
                 environment_installation_status = []
 
                 try:
-                    await ensure_module_installation_with_lock(environment_modules[0])
+                    await install_module(environment_modules[0])
                     environment_installation_status.append({
                         "name": environment_module.name,
                         "module_version": environment_module.module_version,
@@ -635,7 +635,7 @@ class HTTPServer:
                     raise HTTPException(status_code=404, detail=f"Environment {environment_input.name} not found")
             
             try:
-                await ensure_module_installation_with_lock(environment)
+                await install_module(environment)
             except Exception as e:
                 logger.error(f"Failed to install environment: {str(e)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -669,9 +669,9 @@ class HTTPServer:
                     raise HTTPException(status_code=404, detail=f"Agent {agent_input.name} not found")
 
             try:
-                await ensure_module_installation_with_lock(agent)
-            except Exception as e:
-                logger.error(f"Failed to install agent: {str(e)}")
+                await install_module_with_lock(module)
+            except Exception as install_error:
+                logger.error(f"Failed to install {module_type}: {str(install_error)}")
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=str(e))
             
@@ -703,7 +703,7 @@ class HTTPServer:
                     raise HTTPException(status_code=404, detail=f"Knowledge base {kb_input.module['name']} not found")
 
                 try:
-                    await ensure_module_installation_with_lock(kb)
+                    await install_module(kb)
                 except Exception as e:
                     logger.error(f"Failed to install knowledge base: {str(e)}")
                     logger.debug(f"Full traceback: {traceback.format_exc()}")
@@ -715,7 +715,7 @@ class HTTPServer:
             logger.error(f"Failed to create knowledge base: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=str(e))
-        
+
     async def run_module(
         self, 
         run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
