@@ -493,7 +493,7 @@ async def load_tool_deployments(default_tool_deployments_path, input_tool_deploy
     with open(default_tool_deployments_path, "r") as file:
         default_tool_deployments = json.loads(file.read())
 
-    module_path = default_tool_deployments_path.parent.parent
+    module_path = Path(default_tool_deployments_path).parent.parent
 
     for deployment in default_tool_deployments:
         # Load LLM config if present
@@ -544,6 +544,16 @@ async def load_module(run, module_type="agent"):
                 input_kb_deployments=run.agent_deployment.kb_deployments
             )
             run.agent_deployment.kb_deployments = kb_deployments
+
+        print("AAAAAA", run.agent_deployment.tool_deployments)
+
+        # Load tool deployments
+        if run.agent_deployment.tool_deployments:
+            tool_deployments = await load_tool_deployments(
+                default_tool_deployments_path=f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}/configs/tool_deployments.json",
+                input_tool_deployments=run.agent_deployment.tool_deployments
+            )
+            run.agent_deployment.tool_deployments = tool_deployments
 
     elif module_type == "tool":
         module_name = run.tool_deployment.module['name']
