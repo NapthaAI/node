@@ -84,6 +84,13 @@ class DataGenerationConfig(BaseModel):
     save_inputs_location: Optional[str] = None
     default_filename: Optional[str] = None
 
+class ToolDeployment(BaseModel):
+    name: Optional[str] = "tool_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    tool_node_url: Optional[str] = None
+    tool_config: Optional[ToolConfig] = None
+    data_generation_config: Optional[DataGenerationConfig] = None
+
 class KBDeployment(BaseModel):
     name: Optional[str] = "kb_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
@@ -96,14 +103,8 @@ class AgentDeployment(BaseModel):
     worker_node_url: Optional[str] = None
     agent_config: Optional[AgentConfig] = AgentConfig()
     data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
+    tool_deployments: Optional[List[ToolDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
-
-class ToolDeployment(BaseModel):
-    name: Optional[str] = "tool_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    tool_node_url: Optional[str] = None
-    tool_config: Optional[ToolConfig] = None
-    data_generation_config: Optional[DataGenerationConfig] = None
 
 class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
