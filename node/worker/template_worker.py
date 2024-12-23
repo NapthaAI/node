@@ -88,7 +88,10 @@ async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun
         module_run: Either an AgentRun, OrchestratorRun, or EnvironmentRun object
     """
     try:
-        module_run_engine = ModuleRunEngine(module_run)
+        if isinstance(module_run, OrchestratorRun):
+            module_run_engine = OrchestratorEngine(module_run)
+        else:
+            module_run_engine = ModuleRunEngine(module_run)
 
         module_version = f"v{module_run_engine.module['module_version']}"
         module_name = module_run_engine.module["name"]
@@ -307,9 +310,12 @@ class ModuleRunEngine:
 
 class OrchestratorEngine:
     def __init__(self, orchestrator_run: OrchestratorRun):
-        self.orchestrator_run = orchestrator_run
-        self.orchestrator_name = orchestrator_run.orchestrator_deployment.module["name"]
-        self.orchestrator_version = f"v{orchestrator_run.orchestrator_deployment.module['module_version']}"
+        self.module_run = orchestrator_run
+        self.deployment = orchestrator_run.orchestrator_deployment
+        self.module = self.deployment.module
+        self.module_type = "orchestrator"
+        self.orchestrator_name = self.module["name"]
+        self.orchestrator_version = f"v{self.module['module_version']}"
         self.parameters = orchestrator_run.inputs
         self.node_type = NODE_TYPE
         self.server_type = SERVER_TYPE
@@ -333,17 +339,17 @@ class OrchestratorEngine:
             raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
 
         self.consumer = {
-            "public_key": self.orchestrator_run.consumer_id.split(":")[1],
-            "id": self.orchestrator_run.consumer_id,
+            "public_key": self.module_run.consumer_id.split(":")[1],
+            "id": self.module_run.consumer_id,
         }
 
 
     async def init_run(self):
         logger.info("Initializing orchestrator run")
-        self.orchestrator_run.status = "processing"
-        self.orchestrator_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
+        self.module_run.status = "processing"
+        self.module_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
 
-        await update_db_with_status_sync(module_run=self.orchestrator_run)
+        await update_db_with_status_sync(module_run=self.module_run)
 
         if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
             self.parameters = prepare_input_dir(
@@ -360,18 +366,18 @@ class OrchestratorEngine:
                 **{k: (type(v), v) for k, v in self.parameters.items()}
             )
             parameters = DynamicParams(**self.parameters)
-            self.orchestrator_run.inputs = parameters
+            self.module_run.inputs = parameters
 
         # TODO: in the new version of the node, is this still needed?
-        await self.check_register_worker_nodes(self.orchestrator_run.orchestrator_deployment.agent_deployments)
+        await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
 
         # Load the orchestrator
         (
             self.orchestrator_func, 
-            self.orchestrator_run, 
+            self.module_run, 
             self.validated_data, 
         ) = await load_orchestrator(
-            orchestrator_run=self.orchestrator_run,
+            orchestrator_run=self.module_run,
             agent_source_dir=MODULES_SOURCE_DIR
         )
         
@@ -437,13 +443,13 @@ class OrchestratorEngine:
 
     async def start_run(self):
         logger.info("Starting orchestrator run")
-        self.orchestrator_run.status = "running"
-        await update_db_with_status_sync(module_run=self.orchestrator_run)
+        self.module_run.status = "running"
+        await update_db_with_status_sync(module_run=self.module_run)
 
         try:
             response = await maybe_async_call(
                 self.orchestrator_func,
-                orchestrator_run=self.orchestrator_run,
+                orchestrator_run=self.module_run,
                 db_url=LOCAL_DB_URL,
                 agents_dir=MODULES_SOURCE_DIR,
             )
@@ -462,31 +468,31 @@ class OrchestratorEngine:
         if not isinstance(response, str):
             raise ValueError(f"Agent/orchestrator response is not a string: {response}. Current response type: {type(response)}")
 
-        self.orchestrator_run.results = [response]
-        self.orchestrator_run.status = "completed"
+        self.module_run.results = [response]
+        self.module_run.status = "completed"
 
     async def complete(self):
-        self.orchestrator_run.status = "completed"
-        self.orchestrator_run.error = False
-        self.orchestrator_run.error_message = ""
-        self.orchestrator_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.orchestrator_run.duration = (
-            datetime.fromisoformat(self.orchestrator_run.completed_time)
-            - datetime.fromisoformat(self.orchestrator_run.start_processing_time)
+        self.module_run.status = "completed"
+        self.module_run.error = False
+        self.module_run.error_message = ""
+        self.module_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.module_run.duration = (
+            datetime.fromisoformat(self.module_run.completed_time)
+            - datetime.fromisoformat(self.module_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(module_run=self.orchestrator_run)
+        await update_db_with_status_sync(module_run=self.module_run)
         logger.info("Orchestrator run completed")
 
     async def fail(self):
         logger.error("Error running flow")
         error_details = traceback.format_exc()
         logger.error(f"Traceback: {error_details}")
-        self.orchestrator_run.status = "error"
-        self.orchestrator_run.error = True
-        self.orchestrator_run.error_message = error_details
-        self.orchestrator_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.orchestrator_run.duration = (
-            datetime.fromisoformat(self.orchestrator_run.completed_time)
-            - datetime.fromisoformat(self.orchestrator_run.start_processing_time)
+        self.module_run.status = "error"
+        self.module_run.error = True
+        self.module_run.error_message = error_details
+        self.module_run.completed_time = datetime.now(pytz.utc).isoformat()
+        self.module_run.duration = (
+            datetime.fromisoformat(self.module_run.completed_time)
+            - datetime.fromisoformat(self.module_run.start_processing_time)
         ).total_seconds()
-        await update_db_with_status_sync(orchestrator_run=self.orchestrator_run)
+        await update_db_with_status_sync(orchestrator_run=self.module_run)
