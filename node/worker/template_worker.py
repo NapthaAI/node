@@ -370,9 +370,8 @@ class OrchestratorEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
-        
-        updated_agent_deployments = await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
-        self.orchestrator_run.agent_deployments = updated_agent_deployments
+        # TODO: in the new version of the node, is this still needed?
+        await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
 
         # Load the orchestrator
         (
