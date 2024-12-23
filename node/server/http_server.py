@@ -730,47 +730,29 @@ class HTTPServer:
             if isinstance(run_input, AgentRunInput):
                 module_type = "agent"
                 deployment = run_input.agent_deployment
-                list_func = lambda hub: hub.list_agents(deployment.module['name'])
                 create_func = lambda db: db.create_agent_run(run_input)
             elif isinstance(run_input, ToolRunInput):
                 module_type = "tool"
                 deployment = run_input.tool_deployment
-                list_func = lambda hub: hub.list_tools(deployment.module['name'])
                 create_func = lambda db: db.create_tool_run(run_input)
             elif isinstance(run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
                 deployment = run_input.orchestrator_deployment
-                list_func = lambda hub: hub.list_orchestrators(deployment.module['name'])
                 create_func = lambda db: db.create_orchestrator_run(run_input)
             elif isinstance(run_input, EnvironmentRunInput):
                 module_type = "environment"
                 deployment = run_input.environment_deployment
-                list_func = lambda hub: hub.list_environments(deployment.module['name'])
                 create_func = lambda db: db.create_environment_run(run_input)
             elif isinstance(run_input, KBRunInput):
                 module_type = "kb"
                 deployment = run_input.kb_deployment
-                list_func = lambda hub: hub.list_knowledge_bases(deployment.module['name'])
                 create_func = lambda db: db.create_kb_run(run_input)
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
             logger.info(f"Received request to run {module_type}: {run_input}")
 
-            # Get module from hub
-            async with Hub() as hub:
-                _, _, _ = await hub.signin(
-                    os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
-                )
-                
-                module = await list_func(hub)
-                logger.info(f"Found {module_type.capitalize()}: {module}")
-
-                if not module:
-                    raise HTTPException(status_code=404, detail=f"{module_type.capitalize()} not found")
-
-                # Update module info
-                deployment.module = module
+            deployment.module = await list_modules(module_type, deployment.module["name"])
 
             # Create run record in DB
             async with DB() as db:
