@@ -135,8 +135,7 @@ CREATE persona:one_million_personas SET name="one_million_personas", description
 
 -- KNOWLEDGE BASES
 CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for Wikipedia content", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
-
-
+CREATE kb:test_embedding_kb SET name="test_embedding_kb", description="Knowledge base for testing embedding", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/moarshy/test_embedding_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
 
 -- NODES
 CREATE node:naptha0 SET
