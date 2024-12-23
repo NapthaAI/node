@@ -303,6 +303,8 @@ def install_module(module_name: str, module_version: str, module_source_url: str
             raise RuntimeError(f"Module {module_name} failed verification after installation")
 
         logger.info(f"Successfully installed and verified {module_name} version {module_version}")
+        return {"name": module_name, "module_version": module_version, "status": "success"}
+
     except Exception as e:
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
@@ -529,9 +531,6 @@ async def load_module(run, module_type="agent"):
                 input_kb_deployments=run.agent_deployment.kb_deployments
             )
             run.agent_deployment.kb_deployments = kb_deployments
-
-        print("AAAAAA", run.agent_deployment.tool_deployments)
-
         # Load tool deployments
         if run.agent_deployment.tool_deployments:
             tool_deployments = await load_tool_deployments(
@@ -603,7 +602,7 @@ async def load_module(run, module_type="agent"):
     return module_func, run
 
 
-async def load_orchestrator(orchestrator_run, agent_source_dir):
+async def load_orchestrator_deployments(orchestrator_run, agent_source_dir):
     """Loads the orchestrator and returns the orchestrator function"""
     workflow_name = orchestrator_run.orchestrator_deployment.module['name']
     workflow_path = f"{agent_source_dir}/{workflow_name}"
