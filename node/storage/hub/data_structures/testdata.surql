@@ -137,6 +137,9 @@ CREATE persona:one_million_personas SET name="one_million_personas", description
 CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for Wikipedia content", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
 CREATE kb:test_embedding_kb SET name="test_embedding_kb", description="Knowledge base for testing embedding", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/moarshy/test_embedding_kb", module_type="package", module_version="0.1", module_entrypoint="run.py";
 
+-- MEMORIES
+CREATE memory:test_memory SET name="test_memory", description="Test memory", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/NapthaAI/test_memory", module_type="package", module_version="0.1", module_entrypoint="run.py";
+
 -- NODES
 CREATE node:naptha0 SET
     public_key="18837f9faec9a02744d308f935f1b05e8ff2fc355172e875c24366491625d932f36b34a4fa80bac58db635d5eddc87659c2b3fa700a1775eb4c43da6b0ec270d",
