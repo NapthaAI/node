@@ -22,7 +22,9 @@ from node.schemas import (
     AgentConfig,
     DataGenerationConfig,
     KBRun,
-    KBDeployment
+    KBDeployment,
+    ToolRun,
+    ToolDeployment,
 )
 from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -96,22 +98,25 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, dict], run_version: str):
+async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, ToolRun, dict], run_version: str):
     if isinstance(run, AgentRun):
         module_name = run.agent_deployment.module["name"]
         url = run.agent_deployment.module["module_url"]    
+    elif isinstance(run, ToolRun):
+        module_name = run.tool_deployment.module["name"]
+        url = run.tool_deployment.module["module_url"]
     elif isinstance(run, OrchestratorRun):
         module_name = run.orchestrator_deployment.module["name"]
         url = run.orchestrator_deployment.module["module_url"]
-    elif isinstance(run, dict):
-        module_name = run["name"]
-        url = run["module_url"]
     elif isinstance(run, EnvironmentRun):
         module_name = run.environment_deployment.module["name"]
         url = run.environment_deployment.module["module_url"]
     elif isinstance(run, KBRun):
         module_name = run.kb_deployment.module["name"]
         url = run.kb_deployment.module["module_url"]
+    elif isinstance(run, dict):
+        module_name = run["name"]
+        url = run["module_url"]
     else:
         raise ValueError(f"Invalid module type: {type(run)}")
 
@@ -440,9 +445,11 @@ def load_environment_deployments(environment_deployments_path, module):
             deployment["environment_config"] = ConfigClass(**deployment["environment_config"])
     return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
 
-async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]:
+async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]:
     if isinstance(module_run, AgentRun):
         module_name = module_run.agent_deployment.module['name']
+    elif isinstance(module_run, ToolRun):
+        module_name = module_run.tool_deployment.module['name']
     elif isinstance(module_run, OrchestratorRun):
         module_name = module_run.orchestrator_deployment.module['name']
     elif isinstance(module_run, EnvironmentRun):
@@ -450,7 +457,7 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     elif isinstance(module_run, KBRun):
         module_name = module_run.kb_deployment.module['name']
     else:
-        raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, or KBRun")
+        raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, KBRun, or ToolRun")
 
     # Replace hyphens with underscores in module name
     module_name = module_name.replace("-", "_")
@@ -480,6 +487,32 @@ async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments)
         if value is not None:
             default_kb_deployment[key] = value  
     return [KBDeployment(**default_kb_deployment)]
+
+async def load_tool_deployments(default_tool_deployments_path, input_tool_deployments):
+    # Load default configurations from file
+    with open(default_tool_deployments_path, "r") as file:
+        default_tool_deployments = json.loads(file.read())
+
+    module_path = Path(default_tool_deployments_path).parent.parent
+
+    for deployment in default_tool_deployments:
+        # Load LLM config if present
+        if "tool_config" in deployment and "llm_config" in deployment["tool_config"]:
+            config_name = deployment["tool_config"]["llm_config"]["config_name"]
+            config_path = f"{module_path}/configs/llm_configs.json"
+            llm_configs = load_llm_configs(config_path)
+            llm_config = next(config for config in llm_configs if config.config_name == config_name)
+            deployment["tool_config"]["llm_config"] = llm_config
+
+    default_tool_deployment = default_tool_deployments[0]
+    input_tool_deployment = input_tool_deployments[0]
+
+    # Update defaults with non-None values from input
+    for key, value in input_tool_deployment.dict(exclude_unset=True).items():           
+        if value is not None:
+            default_tool_deployment[key] = value
+
+    return [ToolDeployment(**default_tool_deployment)]
 
 async def load_module(run, module_type="agent"):
     # Load the module from the modules directory
@@ -511,6 +544,28 @@ async def load_module(run, module_type="agent"):
                 input_kb_deployments=run.agent_deployment.kb_deployments
             )
             run.agent_deployment.kb_deployments = kb_deployments
+
+        print("AAAAAA", run.agent_deployment.tool_deployments)
+
+        # Load tool deployments
+        if run.agent_deployment.tool_deployments:
+            tool_deployments = await load_tool_deployments(
+                default_tool_deployments_path=f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}/configs/tool_deployments.json",
+                input_tool_deployments=run.agent_deployment.tool_deployments
+            )
+            run.agent_deployment.tool_deployments = tool_deployments
+
+    elif module_type == "tool":
+        module_name = run.tool_deployment.module['name']
+        module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}")
+        
+        # Load configs
+        tool_deployments = await load_tool_deployments(
+            default_tool_deployments_path=module_path / module_name / "configs/tool_deployments.json",
+            input_tool_deployments=[run.tool_deployment]
+        )
+        deployment = tool_deployments[0]
+        run.tool_deployment = deployment
         
     elif module_type == "environment":
         module_name = run.environment_deployment.module['name']
@@ -538,7 +593,7 @@ async def load_module(run, module_type="agent"):
         run.kb_deployment = deployment
 
     else:
-        raise ValueError("module_type must be either 'agent' or 'environment'")
+        raise ValueError("module_type must be either 'agent', 'tool', 'environment' or 'knowledge_base'")
 
     if module_type == "agent" and deployment.data_generation_config:
         # Handle output configuration

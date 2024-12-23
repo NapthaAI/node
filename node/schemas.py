@@ -33,6 +33,7 @@ class LLMClientType(str, Enum):
     VLLM = "vllm"
     LITELLM = "litellm"
     OLLAMA = "ollama"
+    STABILITY = "stability"
 
 class LLMConfig(BaseModel):
     config_name: Optional[str] = None
@@ -63,6 +64,10 @@ class AgentConfig(BaseModel):
     persona_module: Optional[Union[Dict, BaseModel]] = None
     system_prompt: Optional[Union[Dict, BaseModel]] = None
 
+class ToolConfig(BaseModel):
+    config_name: Optional[str] = None
+    llm_config: Optional[LLMConfig] = None
+
 class OrchestratorConfig(BaseModel):
     config_name: Optional[str] = "orchestrator_config"
     max_rounds: Optional[int] = 5
@@ -77,6 +82,14 @@ class DataGenerationConfig(BaseModel):
     save_outputs_path: Optional[str] = None
     save_inputs: Optional[bool] = None
     save_inputs_location: Optional[str] = None
+    default_filename: Optional[str] = None
+
+class ToolDeployment(BaseModel):
+    name: Optional[str] = "tool_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    tool_node_url: Optional[str] = None
+    tool_config: Optional[ToolConfig] = None
+    data_generation_config: Optional[DataGenerationConfig] = None
 
 class KBDeployment(BaseModel):
     name: Optional[str] = "kb_deployment"
@@ -90,6 +103,7 @@ class AgentDeployment(BaseModel):
     worker_node_url: Optional[str] = None
     agent_config: Optional[AgentConfig] = AgentConfig()
     data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
+    tool_deployments: Optional[List[ToolDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
 
 class EnvironmentDeployment(BaseModel):
@@ -172,7 +186,28 @@ class AgentRunInput(BaseModel):
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     agent_deployment: AgentDeployment = AgentDeployment()
     orchestrator_runs: List['OrchestratorRun'] = []
-    
+
+class ToolRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    tool_deployment: ToolDeployment
+    agent_run: Optional[AgentRun] = None
+
+class ToolRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    tool_deployment: ToolDeployment
+    agent_run: Optional[AgentRun] = None
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[str] = []
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
+
 class OrchestratorRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -251,3 +286,4 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
     stream: Optional[bool] = None
+

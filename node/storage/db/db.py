@@ -12,7 +12,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from typing import Dict, List, Optional, Union, Any
 
 from node.config import LOCAL_DB_URL
-from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User, KBRun
+from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User, KBRun, ToolRun
 from node.schemas import (
     AgentRun as AgentRunSchema, 
     OrchestratorRun as OrchestratorRunSchema,
@@ -21,7 +21,9 @@ from node.schemas import (
     OrchestratorRunInput,
     EnvironmentRunInput,
     KBRunInput,
-    KBRun as KBRunSchema
+    KBRun as KBRunSchema,
+    ToolRunInput,
+    ToolRun as ToolRunSchema
 )
 
 logger = logging.getLogger(__name__)
@@ -132,12 +134,13 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
-    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema]:
+    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema]:
         model_map = {
             'agent': (AgentRun, AgentRunSchema),
-            'orchestrator': (OrchestratorRun, OrchestratorRunSchema),
+            'orchestrator': (OrchestratorRun, OrchestratorRunSchema), 
             'environment': (EnvironmentRun, EnvironmentRunSchema),
-            'knowledge_base': (KBRun, KBRunSchema)
+            'knowledge_base': (KBRun, KBRunSchema),
+            'tool': (ToolRun, ToolRunSchema)
         }
         
         try:
@@ -159,6 +162,9 @@ class DB:
     async def create_agent_run(self, agent_run_input: Union[AgentRunInput, Dict]) -> AgentRunSchema:
         return await self.create_module_run(agent_run_input, 'agent')
 
+    async def create_tool_run(self, tool_run_input: Union[ToolRunInput, Dict]) -> ToolRunSchema:
+        return await self.create_module_run(tool_run_input, 'tool')
+
     async def create_orchestrator_run(self, orchestrator_run_input: Union[OrchestratorRunInput, Dict]) -> OrchestratorRunSchema:
         return await self.create_module_run(orchestrator_run_input, 'orchestrator')
 
@@ -168,12 +174,13 @@ class DB:
     async def create_kb_run(self, kb_run_input: Union[KBRunInput, Dict]) -> KBRunSchema:
         return await self.create_module_run(kb_run_input, 'knowledge_base')
 
-    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema], run_type: str) -> bool:
+    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema], run_type: str) -> bool:
         model_map = {
             'agent': AgentRun,
             'orchestrator': OrchestratorRun,
             'environment': EnvironmentRun,
-            'knowledge_base': KBRun
+            'knowledge_base': KBRun,
+            'tool': ToolRun
         }
         
         try:
@@ -195,6 +202,9 @@ class DB:
     async def update_agent_run(self, run_id: int, run_data: AgentRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'agent')
 
+    async def update_tool_run(self, run_id: int, run_data: ToolRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'tool')
+
     async def update_orchestrator_run(self, run_id: int, run_data: OrchestratorRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'orchestrator')
 
@@ -209,7 +219,8 @@ class DB:
             'agent': AgentRun,
             'orchestrator': OrchestratorRun,
             'environment': EnvironmentRun,
-            'knowledge_base': KBRun
+            'knowledge_base': KBRun,
+            'tool': ToolRun
         }
         
         max_retries = 3
@@ -235,14 +246,15 @@ class DB:
                     raise
                 await asyncio.sleep(retry_delay)
 
-    # Replace existing list functions with these wrapper methods
     async def list_agent_runs(self, agent_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('agent', agent_run_id)
+
+    async def list_tool_runs(self, tool_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('tool', tool_run_id)
 
     async def list_orchestrator_runs(self, orchestrator_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('orchestrator', orchestrator_run_id)
 
-    # Optional: Add environment runs support
     async def list_environment_runs(self, environment_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('environment', environment_run_id)
 

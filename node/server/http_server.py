@@ -10,9 +10,10 @@ from typing import Optional, Union, Any, Dict
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -25,6 +26,8 @@ from node.module_manager import ensure_module_installation_with_lock
 from node.schemas import (
     AgentRun,
     AgentRunInput,
+    ToolRun,
+    ToolRunInput,
     OrchestratorRun,
     OrchestratorRunInput,
     EnvironmentRun,
@@ -50,7 +53,7 @@ from node.storage.storage import (
 from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_environment, run_orchestrator, run_kb
+from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -65,6 +68,7 @@ class HTTPServer:
     def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
+
         self.app = FastAPI()
         router = APIRouter()
         self.server = None
@@ -81,6 +85,20 @@ class HTTPServer:
         async def health_check():
             return {"status": "ok", "server_type": "http"}
         
+        # Handle validation errors when request data doesn't match the expected Pydantic models
+        # Logs the validation error details and request body, then returns a 422 response with the error info
+        @self.app.exception_handler(RequestValidationError)
+        async def validation_exception_handler(request: Request, exc: RequestValidationError):
+            logger.error(f"Request validation error: {exc.errors()}")
+            logger.error(f"Request body: {await request.json()}")
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "detail": exc.errors(),
+                    "body": await request.json()
+                }
+            )
+
         @router.post("/agent/create")
         async def agent_create_endpoint(agent_input: AgentDeployment) -> AgentDeployment:
             """
@@ -99,7 +117,7 @@ class HTTPServer:
             """
             return await self.agent_run(agent_run_input)
 
-        @router.post("/agent/check")
+        @router.post("/agent/check") 
         async def agent_check_endpoint(agent_run: AgentRun) -> AgentRun:
             """
             Check an agent
@@ -107,6 +125,24 @@ class HTTPServer:
             :return: Status
             """
             return await self.agent_check(agent_run)
+
+        @router.post("/tool/run")
+        async def tool_run_endpoint(tool_run_input: ToolRunInput) -> ToolRun:
+            """
+            Run a tool
+            :param tool_run_input: Tool run specifications
+            :return: Status
+            """
+            return await self.tool_run(tool_run_input)
+
+        @router.post("/tool/check")
+        async def tool_check_endpoint(tool_run: ToolRun) -> ToolRun:
+            """
+            Check a tool
+            :param tool_run: ToolRun details
+            :return: Status
+            """
+            return await self.tool_check(tool_run)
 
         @router.post("/orchestrator/create")
         async def orchestrator_create_endpoint(orchestrator_input: OrchestratorDeployment) -> OrchestratorDeployment:
@@ -705,11 +741,11 @@ class HTTPServer:
     
     async def run_module(
         self, 
-        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment]
-    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
+    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, ToolRun]:
         """
-        Generic method to run either an agent, orchestrator, or environment
-        :param run_input: Run specifications (AgentRunInput, OrchestratorRunInput, or EnvironmentRunInput)
+        Generic method to run either an agent, orchestrator, environment, tool or kb
+        :param run_input: Run specifications (AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, ToolRunInput or KBRunInput)
         :return: Status
         """
         try:
@@ -719,6 +755,11 @@ class HTTPServer:
                 deployment = run_input.agent_deployment
                 list_func = lambda hub: hub.list_agents(deployment.module['name'])
                 create_func = lambda db: db.create_agent_run(run_input)
+            elif isinstance(run_input, ToolRunInput):
+                module_type = "tool"
+                deployment = run_input.tool_deployment
+                list_func = lambda hub: hub.list_tools(deployment.module['name'])
+                create_func = lambda db: db.create_tool_run(run_input)
             elif isinstance(run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
                 deployment = run_input.orchestrator_deployment
@@ -767,6 +808,8 @@ class HTTPServer:
             if deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(run_data)
+                elif module_type == "tool":
+                    _ = run_tool.delay(run_data)
                 elif module_type == "orchestrator":
                     _ = run_orchestrator.delay(run_data)
                 elif module_type == "environment":
@@ -796,6 +839,9 @@ class HTTPServer:
     async def agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         return await self.run_module(agent_run_input)
 
+    async def tool_run(self, tool_run_input: ToolRunInput) -> ToolRun:
+        return await self.run_module(tool_run_input)
+
     async def orchestrator_run(self, orchestrator_run_input: OrchestratorRunInput) -> OrchestratorRun:
         return await self.run_module(orchestrator_run_input)
 
@@ -807,11 +853,11 @@ class HTTPServer:
 
     async def check_module(
         self, 
-        module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun]
-    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun]:
+        module_run: Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun]
+    ) -> Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun]:
         """
-        Check a module run (agent, orchestrator, or environment)
-        :param module_run: Run details (AgentRun, OrchestratorRun, or EnvironmentRun)
+        Check a module run (agent, tool, orchestrator, or environment)
+        :param module_run: Run details (AgentRun, ToolRun, OrchestratorRun, or EnvironmentRun)
         :return: Status
         """
         try:
@@ -819,6 +865,9 @@ class HTTPServer:
             if isinstance(module_run, AgentRun):
                 module_type = "agent"
                 list_func = lambda db: db.list_agent_runs(module_run.id)
+            elif isinstance(module_run, ToolRun):
+                module_type = "tool"
+                list_func = lambda db: db.list_tool_runs(module_run.id)
             elif isinstance(module_run, OrchestratorRun):
                 module_type = "orchestrator"
                 list_func = lambda db: db.list_orchestrator_runs(module_run.id)
@@ -879,9 +928,11 @@ class HTTPServer:
                 detail=f"Internal server error occurred while checking {module_type} run"
             )
 
-    # Replace existing methods with wrappers that call check_module
     async def agent_check(self, agent_run: AgentRun) -> AgentRun:
         return await self.check_module(agent_run)
+
+    async def tool_check(self, tool_run: ToolRun) -> ToolRun:
+        return await self.check_module(tool_run)
 
     async def orchestrator_check(self, orchestrator_run: OrchestratorRun) -> OrchestratorRun:
         return await self.check_module(orchestrator_run)
@@ -1079,3 +1130,9 @@ class HTTPServer:
             await self.server.serve()
         finally:
             self._started = False
+
+    ###### toolset stuff ###############
+    async def get_toolset_list(self, agent_run_id: str):
+        pass
+        
+    ######### end toolset stuff ########
