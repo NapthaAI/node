@@ -135,6 +135,15 @@ class HTTPServer:
             """
             return await self.agent_check(agent_run)
 
+        @router.post("/tool/create")
+        async def tool_create_endpoint(tool_input: ToolDeployment) -> ToolDeployment:
+            """
+            Create a tool
+            :param tool_input: ToolDeployment 
+            :return: ToolDeployment
+            """
+            return await self.create_module(tool_input)
+
         @router.post("/tool/run")
         async def tool_run_endpoint(tool_run_input: ToolRunInput) -> ToolRun:
             """
@@ -718,7 +727,7 @@ class HTTPServer:
     #         logger.debug(f"Full traceback: {traceback.format_exc()}")
     #         raise HTTPException(status_code=500, detail=str(e))
     
-    async def create_module(self, module_deployment: Union[AgentDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment]) -> Dict[str, Any]:
+    async def create_module(self, module_deployment: Union[AgentDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
         """
         Unified method to create and install any type of module and its sub-modules
         """
@@ -735,6 +744,9 @@ class HTTPServer:
                 module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             elif isinstance(module_deployment, KBDeployment):
                 module_type = "kb"
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
+            elif isinstance(module_deployment, ToolDeployment):
+                module_type = "tool"
                 module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             else:
                 raise HTTPException(status_code=400, detail="Invalid module deployment type")
@@ -838,7 +850,7 @@ class HTTPServer:
 
         except Exception as e:
             logger.error(f"Failed to create module: {str(e)}")
-            logger.debug(f"Full traceback: {traceback.format_exc()}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=str(e))
 
     async def run_module(
