@@ -131,6 +131,7 @@ restart-node:
 	@poetry lock
 	@poetry install
 	@echo "poetry install done"
+	@sleep 3
 	@$(MAKE) check-local-hub
 	@$(MAKE) restart-hub
 	@$(MAKE) restart-servers & $(MAKE) restart-celery
