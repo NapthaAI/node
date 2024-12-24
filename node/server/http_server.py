@@ -583,7 +583,7 @@ class HTTPServer:
 
     async def run_module(
         self, 
-        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
+        module_run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
     ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, ToolRun]:
         """
         Generic method to run either an agent, orchestrator, environment, tool or kb
@@ -592,72 +592,74 @@ class HTTPServer:
         """
         try:
             # Determine module type and configuration
-            if isinstance(run_input, AgentRunInput):
+            if isinstance(module_run_input, AgentRunInput):
                 module_type = "agent"
-                deployment = run_input.agent_deployment
-                create_func = lambda db: db.create_agent_run(run_input)
-            elif isinstance(run_input, ToolRunInput):
+                deployment = module_run_input.agent_deployment
+                create_func = lambda db: db.create_agent_run(module_run_input)
+            elif isinstance(module_run_input, ToolRunInput):
                 module_type = "tool"
-                deployment = run_input.tool_deployment
-                create_func = lambda db: db.create_tool_run(run_input)
-            elif isinstance(run_input, OrchestratorRunInput):
+                deployment = module_run_input.tool_deployment
+                create_func = lambda db: db.create_tool_run(module_run_input)
+            elif isinstance(module_run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
-                deployment = run_input.orchestrator_deployment
-                create_func = lambda db: db.create_orchestrator_run(run_input)
-            elif isinstance(run_input, EnvironmentRunInput):
+                deployment = module_run_input.orchestrator_deployment
+                create_func = lambda db: db.create_orchestrator_run(module_run_input)
+            elif isinstance(module_run_input, EnvironmentRunInput):
                 module_type = "environment"
-                deployment = run_input.environment_deployment
-                create_func = lambda db: db.create_environment_run(run_input)
-            elif isinstance(run_input, KBRunInput):
+                deployment = module_run_input.environment_deployment
+                create_func = lambda db: db.create_environment_run(module_run_input)
+            elif isinstance(module_run_input, KBRunInput):
                 module_type = "kb"
-                deployment = run_input.kb_deployment
-                create_func = lambda db: db.create_kb_run(run_input)
+                deployment = module_run_input.kb_deployment
+                create_func = lambda db: db.create_kb_run(module_run_input)
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
-            logger.info(f"Received request to run {module_type}: {run_input}")
+            logger.info(f"Received request to run {module_type}: {module_run_input}")
 
             deployment.module = await list_modules(module_type, deployment.module["name"])
 
-            # Create run record in DB
+            # Create module run record in DB
             async with DB() as db:
-                run = await create_func(db)
-                if not run:
+                module_run = await create_func(db)
+                if not module_run:
                     raise HTTPException(status_code=500, detail=f"Failed to create {module_type} run")
-                run_data = run.model_dump()
+                module_run_data = module_run.model_dump()
 
-                logger.info(f"Run data: {run_data}")
+                logger.info(f"{module_type.capitalize()} run data: {module_run_data}")
+
+
 
             # Execute the task based on module type
             if deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
-                    _ = run_agent.delay(run_data)
+                    _ = run_agent.delay(module_run_data)
                 elif module_type == "tool":
-                    _ = run_tool.delay(run_data)
+                    _ = run_tool.delay(module_run_data)
                 elif module_type == "orchestrator":
-                    _ = run_orchestrator.delay(run_data)
+                    _ = run_orchestrator.delay(module_run_data)
                 elif module_type == "environment":
-                    _ = run_environment.delay(run_data)
+                    _ = run_environment.delay(module_run_data)
                 elif module_type == "kb":
-                    _ = run_kb.delay(run_data)
+                    _ = run_kb.delay(module_run_data)
             elif deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
                 # validate docker params
                 try:
-                    _ = DockerParams(**run_data["inputs"])
+                    _ = DockerParams(**module_run_data["inputs"])
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=f"Invalid docker params: {str(e)}")
-                _ = execute_docker_agent.delay(run_data)
+                _ = execute_docker_agent.delay(module_run_data)
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid {module_type} run type")
 
-            return run_data
+            return module_run_data
 
         except Exception as e:
             logger.error(f"Failed to run {module_type}: {str(e)}")
             error_details = traceback.format_exc()
             logger.error(f"Full traceback: {error_details}")
             raise HTTPException(
-                status_code=500, detail=f"Failed to run {module_type}: {run_input}"
+                status_code=500, detail=f"Failed to run {module_type}: {module_run_input}"
             )
 
     async def agent_create(self, agent_deployment: AgentDeployment) -> AgentDeployment:
