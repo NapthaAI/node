@@ -369,17 +369,6 @@ class OrchestratorEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
-        # convert inputs to BaseModel if dict
-        if isinstance(self.parameters, dict):
-            # Create a dynamic model with types based on the values
-            DynamicParams = create_model(
-                'DynamicParams',
-                **{k: (type(v), v) for k, v in self.parameters.items()}
-            )
-            parameters = DynamicParams(**self.parameters)
-            self.module_run.inputs = parameters
-
-        # TODO: in the new version of the node, is this still needed?
         await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
 
         # Load the orchestrator
