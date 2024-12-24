@@ -4,6 +4,7 @@ import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import AgentModule, NodeConfig
+import os
 from surrealdb import Surreal
 import traceback
 from typing import Dict, List, Optional, Tuple
@@ -234,3 +235,43 @@ class Hub(AsyncMixin):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async exit method for context manager"""
         await self.close()
+
+async def list_modules(module_type: str, module_name: str) -> List:
+
+    if module_type == "agent":
+        list_func = lambda hub: hub.list_agents(module_name)
+    elif module_type == "tool":
+        list_func = lambda hub: hub.list_tools(module_name)
+    elif module_type == "orchestrator":
+        list_func = lambda hub: hub.list_orchestrators(module_name)
+    elif module_type == "environment":
+        list_func = lambda hub: hub.list_environments(module_name)
+    elif module_type == "kb":
+        list_func = lambda hub: hub.list_knowledge_bases(module_name)
+
+    hub_username = os.getenv("HUB_USERNAME")
+    hub_password = os.getenv("HUB_PASSWORD")
+    if not hub_username or not hub_password:
+        raise ValueError("Missing Hub authentication credentials - HUB_USERNAME and HUB_PASSWORD environment variables must be set")
+
+    if module_type not in ["agent", "tool", "orchestrator", "environment", "kb"]:
+        raise ValueError(f"Invalid module type: {module_type}. Must be one of: agent, tool, orchestrator, environment, kb")
+
+    if not module_name:
+        raise ValueError("Module name cannot be empty")
+
+    async with Hub() as hub:
+        try:
+            _, _, _ = await hub.signin(hub_username, hub_password)
+        except Exception as auth_error:
+            raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
+
+        try:
+            module = await list_func(hub)
+        except Exception as list_error:
+            raise RuntimeError(f"Failed to list {module_type} module: {str(list_error)}")
+
+        if not module:
+            raise ValueError(f"{module_type.capitalize()} module '{module_name}' not found")
+
+        return module

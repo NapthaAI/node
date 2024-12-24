@@ -11,7 +11,8 @@ from pathlib import Path
 import subprocess
 import time
 import traceback
-from typing import List, Union
+from pydantic import BaseModel
+from typing import Union, Dict
 from node.schemas import (
     AgentDeployment, 
     AgentRun, 
@@ -25,8 +26,10 @@ from node.schemas import (
     KBDeployment,
     ToolRun,
     ToolDeployment,
+    Module,
+    AgentModule
 )
-from node.worker.utils import download_from_ipfs, unzip_file, load_yaml_config
+from node.worker.utils import download_from_ipfs, unzip_file
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
 
 logger = logging.getLogger(__name__)
@@ -98,27 +101,15 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentRun, OrchestratorRun, KBRun, ToolRun, dict], run_version: str):
-    if isinstance(run, AgentRun):
-        module_name = run.agent_deployment.module["name"]
-        url = run.agent_deployment.module["module_url"]    
-    elif isinstance(run, ToolRun):
-        module_name = run.tool_deployment.module["name"]
-        url = run.tool_deployment.module["module_url"]
-    elif isinstance(run, OrchestratorRun):
-        module_name = run.orchestrator_deployment.module["name"]
-        url = run.orchestrator_deployment.module["module_url"]
-    elif isinstance(run, EnvironmentRun):
-        module_name = run.environment_deployment.module["name"]
-        url = run.environment_deployment.module["module_url"]
-    elif isinstance(run, KBRun):
-        module_name = run.kb_deployment.module["name"]
-        url = run.kb_deployment.module["module_url"]
-    elif isinstance(run, dict):
-        module_name = run["name"]
-        url = run["module_url"]
+async def install_module_with_lock(module: Union[Dict, AgentModule, Module]):
+    if isinstance(module, dict):
+        module_name = module["name"]
+        url = module["module_url"]
+        run_version = module["module_version"]
     else:
-        raise ValueError(f"Invalid module type: {type(run)}")
+        module_name = module.name
+        url = module.module_url
+        run_version = module.module_version
 
     if module_name in INSTALLED_MODULES:
         installed_version = INSTALLED_MODULES[module_name]
@@ -143,10 +134,10 @@ async def ensure_module_installation_with_lock(run: Union[AgentRun, EnvironmentR
                 raise RuntimeError(f"Module {module_name} failed verification after installation")
 
             # Install personas if they exist in module run
-            if isinstance(run, AgentRun):
-                if hasattr(run, 'personas_urls') and run.agent_deployment.module["personas_urls"]:
+            if isinstance(module, AgentModule):
+                if hasattr(module, 'personas_urls') and module.personas_urls:
                     logger.info(f"Installing personas for agent {module_name}")
-                    await install_persona(run.agent_deployment.module["personas_urls"])
+                    await install_persona(module.personas_urls)
 
             logger.info(f"Module {module_name} version {run_version} is installed and verified")
             INSTALLED_MODULES[module_name] = run_version
@@ -318,6 +309,8 @@ def install_module(module_name: str, module_version: str, module_source_url: str
             raise RuntimeError(f"Module {module_name} failed verification after installation")
 
         logger.info(f"Successfully installed and verified {module_name} version {module_version}")
+        return {"name": module_name, "module_version": module_version, "status": "success"}
+
     except Exception as e:
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
@@ -379,53 +372,80 @@ async def load_data_generation_config(agent_run, data_generation_config_path):
     # If no file exists or file is empty, use run config
     return agent_run.agent_deployment.data_generation_config
 
-async def load_agent_deployments(agent_run, agent_deployments_path, module):
-    with open(agent_deployments_path, "r") as file:
-        default_agent_deployments = json.loads(file.read())
+def merge_config(input_config, default_config):
+    """
+    Deep merge configurations, with input taking precedence over defaults
+    
+    Args:
+        input_config: User provided configuration
+        default_config: Default configuration from file
+    """
+    if not input_config:
+        return default_config
+        
+    if isinstance(input_config, dict) and isinstance(default_config, dict):
+        result = default_config.copy()
+        for key, input_value in input_config.items():
+            if input_value is not None:
+                if isinstance(input_value, (dict, list)):
+                    result[key] = merge_config(input_value, result.get(key, {}))
+                else:
+                    result[key] = input_value
+        return result
+    return input_config if input_config is not None else default_config
 
-    def merge_configs(run_config, default_config):
-        """Merge configs with run_config taking precedence"""
-        if not run_config:
-            return default_config
-            
-        if isinstance(run_config, dict) and isinstance(default_config, dict):
-            result = default_config.copy()  # Start with defaults
-            # Override with run_config values that aren't None
-            for key, run_value in run_config.items():
-                if run_value is not None:
-                    if isinstance(run_value, (dict, list)):
-                        result[key] = merge_configs(run_value, result.get(key, {}))
-                    else:
-                        result[key] = run_value
-            return result
-        return run_config if run_config is not None else default_config
+async def load_agent_deployments(input_deployments, default_config_path: str):
+    """
+    Merge input agent deployments with defaults from config file by position.
+    Ensures agent_config and llm_config are properly populated from defaults.
+    """
+    # Load defaults
+    with open(default_config_path, "r") as f:
+        default_deployments = json.load(f)
+
+    # Load LLM configs
+    llm_configs = {}
+    llm_config_path = Path(default_config_path).parent / "llm_configs.json"
+    if llm_config_path.exists():
+        with open(llm_config_path, "r") as f:
+            llm_configs = {c["config_name"]: c for c in json.load(f)}
 
     result_deployments = []
-    for default_deployment in default_agent_deployments:
-        deployment = default_deployment.copy()
-        deployment["module"] = module
-        
-        # Load LLM config
-        if "agent_config" in deployment and "llm_config" in deployment["agent_config"]:
-            config_name = deployment["agent_config"]["llm_config"]["config_name"]
-            config_path = agent_deployments_path.parent / "llm_configs.json"
-            llm_configs = load_llm_configs(config_path)
-            llm_config = next(config for config in llm_configs if config.config_name == config_name)
-            deployment["agent_config"]["llm_config"] = llm_config.dict()
 
-        # Merge with run configuration
-        run_deployment = agent_run.agent_deployment.dict(exclude_unset=True)
-        merged_deployment = merge_configs(run_deployment, deployment)
-
-        # Load persona if persona_module url exists
-        if "persona_module" in deployment["agent_config"] and "module_url" in deployment["agent_config"]["persona_module"]:
-            persona_dir = await install_persona(deployment["agent_config"]["persona_module"]["module_url"])
-            logger.info(f"Persona directory: {persona_dir}")
-            persona_data = load_persona(persona_dir)
-            deployment["agent_config"]["persona_module"]["data"] = persona_data
-            merged_deployment["agent_config"]["persona_module"]["data"] = persona_data
+    for i, default_deployment in enumerate(default_deployments):
+        merged = default_deployment.copy()
         
-        result_deployments.append(AgentDeployment(**merged_deployment))
+        if i < len(input_deployments):
+            input_dict = input_deployments[i].dict(exclude_unset=True)
+            
+            # Preserve default agent_config if input doesn't have it
+            if "agent_config" not in input_dict:
+                input_dict["agent_config"] = default_deployment["agent_config"]
+            elif input_dict["agent_config"] is None:
+                input_dict["agent_config"] = default_deployment["agent_config"]
+            # If input has agent_config but no llm_config, add default llm_config
+            elif not input_dict["agent_config"].get("llm_config"):
+                input_dict["agent_config"]["llm_config"] = default_deployment["agent_config"]["llm_config"]
+
+            merged = merge_config(input_dict, merged)
+
+            # Apply LLM config from llm_configs.json if it exists
+            if "agent_config" in merged and "llm_config" in merged["agent_config"]:
+                config_name = merged["agent_config"]["llm_config"]["config_name"]
+                if config_name in llm_configs:
+                    merged["agent_config"]["llm_config"] = merge_config(
+                        merged["agent_config"]["llm_config"],
+                        llm_configs[config_name]
+                    )
+
+        # Handle persona
+        if (persona_url := merged.get("agent_config", {})
+                                .get("persona_module", {})
+                                .get("module_url")):
+            if persona_dir := await install_persona(persona_url):
+                merged["agent_config"]["persona_module"]["data"] = load_persona(persona_dir)
+
+        result_deployments.append(AgentDeployment(**merged))
 
     return result_deployments
 
@@ -471,22 +491,20 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     return module_run
 
 async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
-    # check if the default_kb_deployments_path exists
-    if os.path.exists(default_kb_deployments_path):
-        # Load default configurations from file
-        with open(default_kb_deployments_path, "r") as file:
-            default_kb_deployments = json.loads(file.read())
-    else:
-        default_kb_deployments = [KBDeployment().model_dump()]
+    """
+    Merge input KB deployments with defaults from config file
+    """
+    # Load defaults or use empty deployment if file doesn't exist
+    default_kb_deployments = ([KBDeployment().model_dump()] if not os.path.exists(default_kb_deployments_path)
+                            else json.load(open(default_kb_deployments_path)))
 
-    default_kb_deployment = default_kb_deployments[0] 
-    input_kb_deployment = input_kb_deployments[0]
-
-    # Update defaults with non-None values from input
-    for key, value in input_kb_deployment.dict(exclude_unset=True).items():
-        if value is not None:
-            default_kb_deployment[key] = value  
-    return [KBDeployment(**default_kb_deployment)]
+    # Merge first default with first input deployment
+    merged = merge_config(
+        input_kb_deployments[0].dict(exclude_unset=True),
+        default_kb_deployments[0]
+    )
+    
+    return [KBDeployment(**merged)]
 
 async def load_tool_deployments(default_tool_deployments_path, input_tool_deployments):
     # Load default configurations from file
@@ -521,11 +539,14 @@ async def load_module(run, module_type="agent"):
         deployment_attr = "agent_deployment"
         module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}")
         
-        # Load configs
+        if isinstance(run.agent_deployment, AgentDeployment):
+            incoming_deployments = [run.agent_deployment]
+        else:
+            incoming_deployments = run.agent_deployment
+
         deployments = await load_agent_deployments(
-            agent_run=run,
-            agent_deployments_path=module_path / module_name / "configs/agent_deployments.json",
-            module=getattr(run, deployment_attr).module
+            input_deployments=incoming_deployments,
+            default_config_path=module_path / module_name / "configs/agent_deployments.json"
         )
         deployment = deployments[0]
         setattr(run, deployment_attr, deployment)
@@ -544,9 +565,6 @@ async def load_module(run, module_type="agent"):
                 input_kb_deployments=run.agent_deployment.kb_deployments
             )
             run.agent_deployment.kb_deployments = kb_deployments
-
-        print("AAAAAA", run.agent_deployment.tool_deployments)
-
         # Load tool deployments
         if run.agent_deployment.tool_deployments:
             tool_deployments = await load_tool_deployments(
@@ -618,96 +636,68 @@ async def load_module(run, module_type="agent"):
     return module_func, run
 
 
-async def load_orchestrator(orchestrator_run, agent_source_dir):
-    """Loads the orchestrator and returns the orchestrator function"""
+async def load_orchestrator_deployments(orchestrator_run, agent_source_dir: str):
+    """
+    Load orchestrator function and prepare run configuration
+    """
     workflow_name = orchestrator_run.orchestrator_deployment.module['name']
-    workflow_path = f"{agent_source_dir}/{workflow_name}"
+    config_path = f"{agent_source_dir}/{workflow_name}/{workflow_name}/configs/agent_deployments.json"
     
-    # Load configuration JSONs
-    config_path = f"{workflow_path}/{workflow_name}/configs"
-    with open(f"{config_path}/agent_deployments.json") as f:
-        default_agent_deployments = json.load(f)
-    with open(f"{config_path}/llm_configs.json") as f:
-        llm_configs = {conf["config_name"]: conf for conf in json.load(f)}
-
-    # Track which default configs have been used
-    used_defaults = set()
+    # Load and merge deployments using the same function as agents
+    deployments = await load_agent_deployments(
+        orchestrator_run.orchestrator_deployment.agent_deployments, 
+        config_path
+    )
     
-    # Convert list to keep final agent deployments
-    final_agent_deployments = []
+    # Handle worker_node_url overrides
+    for i, deployment in enumerate(deployments):
+        if i < len(orchestrator_run.orchestrator_deployment.agent_deployments):
+            incoming_deployment = orchestrator_run.orchestrator_deployment.agent_deployments[i]
+            if incoming_deployment.worker_node_url:
+                deployment.worker_node_url = incoming_deployment.worker_node_url
+    
+    # Update orchestrator run and validate
+    orchestrator_run.orchestrator_deployment.agent_deployments = deployments
+    validated_data = await load_and_validate_input_schema(orchestrator_run)
 
-    # First process incoming agent deployments
-    for agent_deployment in orchestrator_run.orchestrator_deployment.agent_deployments:
-        matched_default = None
-        
-        # Try to find matching default config by name
-        for i, default_config in enumerate(default_agent_deployments):
-            if agent_deployment.name == default_config["name"]:
-                matched_default = default_config
-                used_defaults.add(i)
-                break
-        
-        if matched_default:
-            # Use existing agent_deployment but fill in missing fields from default
-            if agent_deployment.module is None:
-                agent_deployment.module = matched_default["module"]
-            if agent_deployment.worker_node_url is None:
-                agent_deployment.worker_node_url = matched_default["worker_node_url"]
-            
-            # Handle agent_config
-            if agent_deployment.agent_config is None:
-                agent_deployment.agent_config = AgentConfig(**matched_default["agent_config"])
-            else:
-                default_agent_config = matched_default["agent_config"]
-                for key, value in default_agent_config.items():
-                    if not hasattr(agent_deployment.agent_config, key) or getattr(agent_deployment.agent_config, key) is None:
-                        setattr(agent_deployment.agent_config, key, value)
-            
-            # Handle LLM config
-            llm_config_name = matched_default["agent_config"]["llm_config"]["config_name"]
-            if llm_config_name in llm_configs and agent_deployment.agent_config.llm_config is None:
-                agent_deployment.agent_config.llm_config = LLMConfig(**llm_configs[llm_config_name])
-            
-            final_agent_deployments.append(agent_deployment)
-
-    # Add any unused default configurations
-    for i, default_config in enumerate(default_agent_deployments):
-        if i not in used_defaults:
-            # Create new agent deployment from default config
-            agent_config = AgentConfig(**default_config["agent_config"])
-            
-            # Set LLM config
-            llm_config_name = default_config["agent_config"]["llm_config"]["config_name"]
-            if llm_config_name in llm_configs:
-                agent_config.llm_config = LLMConfig(**llm_configs[llm_config_name])
-            
-            new_deployment = AgentDeployment(
-                name=default_config["name"],
-                module=default_config["module"],
-                worker_node_url=default_config["worker_node_url"],
-                agent_config=agent_config
-            )
-            final_agent_deployments.append(new_deployment)
-
-    # Replace worker_node_url if it exists in incoming orchestrator_run
-    for i, deployment in enumerate(final_agent_deployments):
-        incoming_deployment = orchestrator_run.orchestrator_deployment.agent_deployments[i]
-        if incoming_deployment.worker_node_url:
-            deployment.worker_node_url = incoming_deployment.worker_node_url
-
-    # Update orchestrator_run with final deployments
-    orchestrator_run.orchestrator_deployment.agent_deployments = final_agent_deployments
-
-    # Validate the input schema
-    validated_data = load_and_validate_input_schema(orchestrator_run)
-
-    # Import and reload the orchestrator module
-    tn = workflow_name.replace("-", "_")
-    entrypoint = 'run'
-    main_module = importlib.import_module(f"{tn}.run")
-    main_module = importlib.reload(main_module)
-    orchestrator_func = getattr(main_module, entrypoint)
-
-    logger.info(f"Orchestrator run x2: {orchestrator_run}")
+    # Load orchestrator function
+    module_name = workflow_name.replace("-", "_")
+    main_module = importlib.reload(importlib.import_module(f"{module_name}.run"))
+    orchestrator_func = getattr(main_module, "run")
 
     return orchestrator_func, orchestrator_run, validated_data
+
+
+# generic function to load deployments and merge with input deployments
+async def load_deployments(deployments_path, input_deployments, deployment_type):
+    logger.info(f"deployments_path: {deployments_path}")
+    logger.info(f"input_deployments: {input_deployments}")
+    logger.info(f"deployment_type: {deployment_type}")
+    deployment_map = {
+        "agent": AgentDeployment,
+        "tool": ToolDeployment,
+        "environment": EnvironmentDeployment,
+        "kb": KBDeployment
+    }
+
+    # Load defaults if file exists
+    default_deployments = (
+        [deployment_map[deployment_type]().model_dump()] 
+        if not os.path.exists(deployments_path)
+        else json.load(open(deployments_path))
+    )
+
+    logger.info(f"input_deployments: {input_deployments}")
+
+    # Handle empty or None input_deployments
+    if not input_deployments:  # This handles both None and empty list
+        input_deployments = [deployment_map[deployment_type]()]
+        logger.info(f"No input deployments provided, using empty {deployment_type} deployment: {input_deployments[0]}")
+
+    # Always use the first default deployment as base
+    merged = merge_config(
+        input_deployments[0].dict(exclude_unset=True) if isinstance(input_deployments[0], BaseModel) else input_deployments[0],
+        default_deployments[0]
+    )
+    
+    return [deployment_map[deployment_type](**merged)]

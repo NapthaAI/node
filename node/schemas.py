@@ -47,7 +47,7 @@ class AgentModuleType(str, Enum):
     package = "package"
     docker = "docker"
 
-class AgentModule(BaseModel):
+class Module(BaseModel):
     id: str
     name: str
     description: str
@@ -56,6 +56,8 @@ class AgentModule(BaseModel):
     module_type: Optional[AgentModuleType] = AgentModuleType.package
     module_version: Optional[str] = "0.1"
     module_entrypoint: Optional[str] = "run.py"
+
+class AgentModule(Module):
     personas_urls: Optional[List[str]] = None
 
 class AgentConfig(BaseModel):
@@ -109,7 +111,7 @@ class AgentDeployment(BaseModel):
 class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    environment_node_url: str
+    environment_node_url: Optional[str] = "http://localhost:7001"
     environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
 
 class OrchestratorDeployment(BaseModel):

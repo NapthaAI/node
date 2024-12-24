@@ -15,7 +15,7 @@ from typing import List, Union
 
 from node.client import Node
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
-from node.module_manager import ensure_module_installation_with_lock, load_module, load_orchestrator
+from node.module_manager import install_module_with_lock, load_module, load_orchestrator_deployments
 from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
@@ -99,8 +99,19 @@ async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun
         logger.info(f"Received {module_run_engine.module_type} run: {module_run}")
         logger.info(f"Checking if {module_run_engine.module_type} {module_name} version {module_version} is installed")
 
+        if module_run_engine.module_type == "agent":
+            module = module_run.agent_deployment.module
+        elif module_run_engine.module_type == "tool":
+            module = module_run.tool_deployment.module
+        elif module_run_engine.module_type == "orchestrator":
+            module = module_run.orchestrator_deployment.module
+        elif module_run_engine.module_type == "environment":
+            module = module_run.environment_deployment.module
+        elif module_run_engine.module_type == "knowledge_base":
+            module = module_run.kb_deployment.module
+
         try:
-            await ensure_module_installation_with_lock(module_run, module_version)
+            await install_module_with_lock(module)
         except Exception as e:
             error_msg = (f"Failed to install or verify {module_run_engine.module_type} {module_name}: {str(e)}")
             logger.error(error_msg)
@@ -358,17 +369,6 @@ class OrchestratorEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
-        # convert inputs to BaseModel if dict
-        if isinstance(self.parameters, dict):
-            # Create a dynamic model with types based on the values
-            DynamicParams = create_model(
-                'DynamicParams',
-                **{k: (type(v), v) for k, v in self.parameters.items()}
-            )
-            parameters = DynamicParams(**self.parameters)
-            self.module_run.inputs = parameters
-
-        # TODO: in the new version of the node, is this still needed?
         await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
 
         # Load the orchestrator
@@ -376,7 +376,7 @@ class OrchestratorEngine:
             self.orchestrator_func, 
             self.module_run, 
             self.validated_data, 
-        ) = await load_orchestrator(
+        ) = await load_orchestrator_deployments(
             orchestrator_run=self.module_run,
             agent_source_dir=MODULES_SOURCE_DIR
         )
