@@ -640,37 +640,29 @@ class HTTPServer:
             # Determine module type and configuration
             if isinstance(module_run_input, AgentRunInput):
                 module_type = "agent"
-                deployment = module_run_input.agent_deployment
-                node = deployment.worker_node
                 create_func = lambda db: db.create_agent_run(module_run_input)
             elif isinstance(module_run_input, ToolRunInput):
                 module_type = "tool"
-                deployment = module_run_input.tool_deployment
-                node = deployment.tool_node
                 create_func = lambda db: db.create_tool_run(module_run_input)
             elif isinstance(module_run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
-                deployment = module_run_input.orchestrator_deployment
-                node = deployment.orchestrator_node
                 create_func = lambda db: db.create_orchestrator_run(module_run_input)
             elif isinstance(module_run_input, EnvironmentRunInput):
                 module_type = "environment"
-                deployment = module_run_input.environment_deployment
-                node = deployment.environment_node
                 create_func = lambda db: db.create_environment_run(module_run_input)
             elif isinstance(module_run_input, KBRunInput):
                 module_type = "kb"
-                deployment = module_run_input.kb_deployment
-                node = deployment.kb_node
                 create_func = lambda db: db.create_kb_run(module_run_input)
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
             logger.info(f"Received request to run {module_type}: {module_run_input}")
 
-            node = await list_nodes(node.ip)
+            node_data = await list_nodes(module_run_input.deployment.node.ip)
+            module_run_input.deployment.node = node_data 
+            print("AAAAAA222", module_run_input)
 
-            deployment.module = await list_modules(module_type, deployment.module["name"])
+            module_run_input.deployment.module = await list_modules(module_type, module_run_input.deployment.module["name"])
 
             # Create module run record in DB
             async with DB() as db:
@@ -684,7 +676,7 @@ class HTTPServer:
             await self.register_user_on_worker_nodes(module_run)
 
             # Execute the task based on module type
-            if deployment.module.module_type == AgentModuleType.package:
+            if module_run_input.deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(module_run_data)
                 elif module_type == "tool":
@@ -695,7 +687,7 @@ class HTTPServer:
                     _ = run_environment.delay(module_run_data)
                 elif module_type == "kb":
                     _ = run_kb.delay(module_run_data)
-            elif deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
+            elif module_run_input.deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
                 # validate docker params
                 try:
                     _ = DockerParams(**module_run_data["inputs"])

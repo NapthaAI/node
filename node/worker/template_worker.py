@@ -95,20 +95,10 @@ async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun
 
         module_version = f"v{module_run_engine.module['module_version']}"
         module_name = module_run_engine.module["name"]
+        module = module_run.deployment.module
 
         logger.info(f"Received {module_run_engine.module_type} run: {module_run}")
         logger.info(f"Checking if {module_run_engine.module_type} {module_name} version {module_version} is installed")
-
-        if module_run_engine.module_type == "agent":
-            module = module_run.agent_deployment.module
-        elif module_run_engine.module_type == "tool":
-            module = module_run.tool_deployment.module
-        elif module_run_engine.module_type == "orchestrator":
-            module = module_run.orchestrator_deployment.module
-        elif module_run_engine.module_type == "environment":
-            module = module_run.environment_deployment.module
-        elif module_run_engine.module_type == "knowledge_base":
-            module = module_run.kb_deployment.module
 
         try:
             await install_module_with_lock(module)
@@ -180,20 +170,16 @@ async def maybe_async_call(func, *args, **kwargs):
 class ModuleRunEngine:
     def __init__(self, module_run: Union[AgentRun, ToolRun, EnvironmentRun, KBRun]):
         self.module_run = module_run
-        
+        self.deployment = module_run.deployment
         # Determine module type and specific attributes
         if isinstance(module_run, AgentRun):
             self.module_type = "agent"
-            self.deployment = module_run.agent_deployment
         elif isinstance(module_run, ToolRun):
             self.module_type = "tool"
-            self.deployment = module_run.tool_deployment
         elif isinstance(module_run, EnvironmentRun):
             self.module_type = "environment"
-            self.deployment = module_run.environment_deployment
         elif isinstance(module_run, KBRun):
             self.module_type = "knowledge_base"
-            self.deployment = module_run.kb_deployment
         else:
             raise ValueError(f"Invalid module run type: {type(module_run)}")
 
@@ -319,13 +305,13 @@ class ModuleRunEngine:
 class OrchestratorEngine:
     def __init__(self, orchestrator_run: OrchestratorRun):
         self.module_run = orchestrator_run
-        self.deployment = orchestrator_run.orchestrator_deployment
+        self.deployment = orchestrator_run.deployment
         self.module = self.deployment.module
         self.module_type = "orchestrator"
         self.orchestrator_name = self.module["name"]
         self.orchestrator_version = f"v{self.module['module_version']}"
         self.parameters = orchestrator_run.inputs
-        self.orchestrator_node = NodeClient(NodeSchema(ip=NODE_IP, port=NODE_PORT, server_type=SERVER_TYPE))
+        self.orchestrator_node = NodeClient(NodeSchema(ip=NODE_IP, http_port=NODE_PORT, server_type=SERVER_TYPE))
         logger.info(f"Orchestrator node: {self.orchestrator_node}")
 
         self.consumer = {
