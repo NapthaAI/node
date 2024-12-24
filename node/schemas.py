@@ -111,7 +111,7 @@ class AgentDeployment(BaseModel):
 class EnvironmentDeployment(BaseModel):
     name: Optional[str] = "environment_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    environment_node_url: str
+    environment_node_url: Optional[str] = "http://localhost:7001"
     environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
 
 class OrchestratorDeployment(BaseModel):
