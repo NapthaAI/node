@@ -22,7 +22,15 @@ from tenacity import (
 )
 
 from node.config import MODULES_SOURCE_DIR
-from node.module_manager import install_module_with_lock, load_agent_deployments, load_tool_deployments, load_orchestrator_deployments, load_environment_deployments, load_kb_deployments
+from node.module_manager import (
+    install_module_with_lock, 
+    load_agent_deployments, 
+    load_tool_deployments, 
+    load_orchestrator_deployments, 
+    load_environment_deployments, 
+    load_kb_deployments,
+    load_deployments
+)
 from node.schemas import (
     AgentRun,
     AgentRunInput,
@@ -712,31 +720,32 @@ class HTTPServer:
     
     async def create_module(self, module_deployment: Union[AgentDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment]) -> Dict[str, Any]:
         """
-        Unified method to create any type of module (agent, orchestrator, environment, kb)
-        :param module_deployment: Module deployment specifications
-        :return: Creation status and details
+        Unified method to create and install any type of module and its sub-modules
         """
         try:
             # Determine module type and configuration
             if isinstance(module_deployment, AgentDeployment):
                 module_type = "agent"
-                module_name = module_deployment.module.name
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             elif isinstance(module_deployment, OrchestratorDeployment):
                 module_type = "orchestrator"
-                module_name = module_deployment.module.name if not isinstance(module_deployment.module, dict) else module_deployment.module.get("name")
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             elif isinstance(module_deployment, EnvironmentDeployment):
                 module_type = "environment"
-                module_name = module_deployment.module.name
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             elif isinstance(module_deployment, KBDeployment):
                 module_type = "kb"
-                module_name = module_deployment.module.name
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             else:
                 raise HTTPException(status_code=400, detail="Invalid module deployment type")
 
             logger.info(f"Creating {module_type}: {module_deployment}")
 
+            # Install main module
             module = await list_modules(module_type, module_name)
-          
+            if not module:
+                raise HTTPException(status_code=404, detail=f"{module_type} {module_name} not found")
+
             try:
                 await install_module_with_lock(module)
             except Exception as install_error:
@@ -744,86 +753,93 @@ class HTTPServer:
                 logger.debug(f"Full traceback: {traceback.format_exc()}")
                 raise HTTPException(status_code=500, detail=f"{module_type.capitalize()} installation failed: {str(install_error)}")
 
+            # Set up paths for config files
             module_path = os.path.join(MODULES_SOURCE_DIR or "/tmp", module.name)
-            module_config_path = os.path.join(module_path, module.name, "configs")
+            config_path = os.path.join(module_path, module.name, "configs")
 
-            if not any([agent_deployments, environment_deployments, tool_deployments, kb_deployments]):
-                return JSONResponse(content={"status": "success", "message": "Module created successfully. No agent, environment, tool, or kb deployments found."})
+            deployment_status = {
+                "status": "success",
+                "message": f"{module_type.capitalize()} created successfully",
+                "sub_modules": {}
+            }
 
-            # Handle sub modules
-            if hasattr(module_deployment, 'agent_deployments'):
-                agent_deployments = await load_agent_deployments(module_config_path, module_deployment.agent_deployments)
-                agent_modules, agent_installation_status = [], []
-                for agent_deployment in agent_deployments:
-                    agent_modules.append(await list_modules("agent", agent_deployment.module))
-                    try:
-                        agent_installation_status.append(await install_module_with_lock(agent_modules[-1]))
-                    except Exception as e:
-                        agent_installation_status.append({
-                            "name": agent_modules[-1].name,
-                            "module_version": agent_modules[-1].module_version,
-                            "status": str(e),
-                        })
-            if hasattr(module_deployment, 'environment_deployments'):
-                environment_deployments = await load_environment_deployments(module_config_path, module_deployment.environment_deployments)
-                environment_modules, environment_installation_status = [], []
-                for environment_deployment in environment_deployments:
-                    environment_modules.append(await list_modules("environment", environment_deployment.module))
-                    try:
-                        environment_installation_status.append(await install_module_with_lock(environment_modules[-1]))
-                    except Exception as e:
-                        environment_installation_status.append({
-                            "name": environment_modules[-1].name,
-                            "module_version": environment_modules[-1].module_version,
-                            "status": str(e),
-                        })
-            if hasattr(module_deployment, 'tool_deployments'):
-                tool_deployments = await load_tool_deployments(module_config_path, module_deployment.tool_deployments)
-                tool_modules, tool_installation_status = [], []
-                for tool_deployment in tool_deployments:
-                    tool_modules.append(await list_modules("tool", tool_deployment.module))
-                    try:
-                        tool_installation_status.append(await install_module_with_lock(tool_modules[-1]))
-                    except Exception as e:
-                        tool_installation_status.append({
-                            "name": tool_modules[-1].name,
-                            "module_version": tool_modules[-1].module_version,
-                            "status": str(e),
-                        })
-            if hasattr(module_deployment, 'kb_deployments'):
-                kb_deployments = await load_kb_deployments(module_config_path, module_deployment.kb_deployments)
-                kb_modules, kb_installation_status = [], []
-                for kb_deployment in kb_deployments:
-                    kb_modules.append(await list_modules("kb", kb_deployment.module))
-                    try:
-                        kb_installation_status.append(await install_module_with_lock(kb_modules[-1]))
-                    except Exception as e:
-                        kb_installation_status.append({
-                            "name": kb_modules[-1].name,
-                            "module_version": kb_modules[-1].module_version,
-                            "status": str(e),
-                        })
+            # Load and process sub-deployments using specialized loaders
+            loader_map = {
+                "agent_deployments": (load_agent_deployments, "agent"),
+                "tool_deployments": (load_tool_deployments, "tool"),
+                "environment_deployments": (
+                    lambda deployments, config_path: load_deployments(
+                        deployments_path=config_path,  # Don't append filename here since it's already in config_path
+                        input_deployments=deployments,
+                        deployment_type="environment"
+                    ),
+                    "environment"
+                ),
+                "kb_deployments": (
+                    lambda deployments, config_path: load_deployments(
+                        deployments_path=config_path,  # Don't append filename here since it's already in config_path
+                        input_deployments=deployments,
+                        deployment_type="kb"
+                    ),
+                    "kb"
+                )
+            }
 
-            return JSONResponse(
-                content={
-                    "status": "success", 
-                    "message": "Module created successfully", 
-                    "sub_agents": agent_modules, 
-                    "sub_environments": environment_modules, 
-                    "sub_tools": tool_modules, 
-                    "sub_kbs": kb_modules, 
-                    "sub_agent_installation_status": agent_installation_status, 
-                    "sub_environment_installation_status": environment_installation_status, 
-                    "sub_tool_installation_status": tool_installation_status, 
-                    "sub_kb_installation_status": kb_installation_status
-                }
-            )
-        
+            for attr_name, (loader_func, sub_type) in loader_map.items():
+                if hasattr(module_deployment, attr_name):
+                    config_file = os.path.join(config_path, f"{attr_name}.json")
+                    deployments = getattr(module_deployment, attr_name)
+
+                    # Process if we have deployments in input OR config file exists
+                    if deployments is not None or os.path.exists(config_file):
+                        try:
+                            # If no deployments passed but config exists, initialize empty list
+                            if deployments is None and os.path.exists(config_file):
+                                deployments = []
+
+                            # Load and merge deployments
+                            merged_deployments = await loader_func(deployments, config_file)
+                            
+                            # Install sub-modules
+                            installation_status = []
+                            sub_modules = set()
+                            
+                            for deployment in merged_deployments:
+                                module_name = (deployment.module["name"] if isinstance(deployment.module, dict) 
+                                            else deployment.module.name)
+                                sub_modules.add(module_name)
+                                
+                                try:
+                                    sub_module = await list_modules(sub_type, module_name)
+                                    if sub_module:
+                                        await install_module_with_lock(sub_module)
+                                        installation_status.append({
+                                            "name": module_name,
+                                            "module_version": sub_module.module_version,
+                                            "status": "success"
+                                        })
+                                except Exception as e:
+                                    installation_status.append({
+                                        "name": module_name,
+                                        "module_version": "unknown",
+                                        "status": str(e)
+                                    })
+
+                            deployment_status["sub_modules"][sub_type] = {
+                                "modules": list(sub_modules),
+                                "installation_status": installation_status
+                            }
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to load {sub_type} deployments: {str(e)}")
+                            logger.debug(f"Full traceback: {traceback.format_exc()}")
+
+            return JSONResponse(content=deployment_status)
+
         except Exception as e:
             logger.error(f"Failed to create module: {str(e)}")
             logger.debug(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=str(e))
-
 
     async def run_module(
         self, 
