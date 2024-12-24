@@ -14,7 +14,7 @@ from pydantic import BaseModel, create_model
 from typing import List, Union
 
 from node.client import Node as NodeClient
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, SERVER_TYPE, LOCAL_DB_URL
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_IP, NODE_PORT, SERVER_TYPE, LOCAL_DB_URL
 from node.module_manager import install_module_with_lock, load_module, load_orchestrator_deployments
 from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun, NodeSchema
 from node.worker.main import app

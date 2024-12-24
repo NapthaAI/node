@@ -3,7 +3,7 @@ import jwt
 import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
-from node.schemas import AgentModule, NodeConfig
+from node.schemas import AgentModule, NodeConfig, NodeServer
 import os
 from surrealdb import Surreal
 import traceback
@@ -117,7 +117,7 @@ class Hub(AsyncMixin):
             result = await self.surrealdb.select(server_id)
         return result
 
-    async def create_server(self, server_config):
+    async def create_server(self, server_config: NodeServer):
         """Create a server record in the database"""
         logger.info(f"Creating server: {server_config}")
         server = await self.surrealdb.create("server", server_config)

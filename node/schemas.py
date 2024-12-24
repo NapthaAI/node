@@ -1,27 +1,31 @@
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union
-
 from pydantic import BaseModel, Field
+
+class NodeServer(BaseModel):
+    server_type: str
+    port: int
+    node_id: str
 
 class NodeConfig(BaseModel):
     id: str
+    owner: str
     public_key: str
-    num_gpus: int
-    vram: int
-    os: str
-    arch: str
-    ram: int
+    ip: str = Field(default="localhost")
+    server_type: str = Field(default="ws")
+    http_port: int = Field(default=7001)
+    num_servers: int = Field(default=1)
+    servers: List[NodeServer]
     ollama_models: List[str]
     docker_jobs: bool
-    ip: Union[str, None] = Field(default=None)
-    ports: List[int] = Field(default_factory=list)
-    routing: Union[str, None] = Field(default=None)
-    owner: Union[str, None] = Field(default=None)
-    num_servers: int = Field(default=1)
-    node_type: str = Field(default="direct")
-    server_type: str = Field(default="http")
-    servers: Optional[List[str]] = Field(default=None)
+    routing_type: Optional[str] = Field(default="direct")
+    routing_url: Optional[str] = Field(default=None)
+    num_gpus: Optional[int] = Field(default=None)
+    arch: Optional[str] = Field(default=None)
+    os: Optional[str] = Field(default=None)
+    ram: Optional[int] = Field(default=None)
+    vram: Optional[int] = Field(default=None)
 
     class Config:
         allow_mutation = True
@@ -30,7 +34,6 @@ class NodeSchema(BaseModel):
     ip: str
     ports: Optional[List[int]] = None
     num_servers: Optional[int] = None
-    node_type: Optional[str] = None
     server_type: Optional[str] = None
     servers: Optional[List[str]] = None
 

@@ -31,7 +31,6 @@ def import_surql():
         f"{surql_path}/environment.surql",
         f"{surql_path}/persona.surql",
         f"{surql_path}/auth.surql",
-        f"{surql_path}/server.surql",
         f"{surql_path}/node.surql",
         f"{surql_path}/kb.surql",
         f"{surql_path}/memory.surql",
