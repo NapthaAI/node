@@ -48,7 +48,7 @@ from node.schemas import (
     ToolDeployment,
 )
 from node.storage.db.db import DB
-from node.storage.hub.hub import Hub, list_modules
+from node.storage.hub.hub import Hub, list_modules, list_nodes
 from node.storage.storage import (
     write_to_ipfs,
     read_from_ipfs_or_ipns,
@@ -641,27 +641,34 @@ class HTTPServer:
             if isinstance(module_run_input, AgentRunInput):
                 module_type = "agent"
                 deployment = module_run_input.agent_deployment
+                node = deployment.worker_node
                 create_func = lambda db: db.create_agent_run(module_run_input)
             elif isinstance(module_run_input, ToolRunInput):
                 module_type = "tool"
                 deployment = module_run_input.tool_deployment
+                node = deployment.tool_node
                 create_func = lambda db: db.create_tool_run(module_run_input)
             elif isinstance(module_run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
                 deployment = module_run_input.orchestrator_deployment
+                node = deployment.orchestrator_node
                 create_func = lambda db: db.create_orchestrator_run(module_run_input)
             elif isinstance(module_run_input, EnvironmentRunInput):
                 module_type = "environment"
                 deployment = module_run_input.environment_deployment
+                node = deployment.environment_node
                 create_func = lambda db: db.create_environment_run(module_run_input)
             elif isinstance(module_run_input, KBRunInput):
                 module_type = "kb"
                 deployment = module_run_input.kb_deployment
+                node = deployment.kb_node
                 create_func = lambda db: db.create_kb_run(module_run_input)
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
             logger.info(f"Received request to run {module_type}: {module_run_input}")
+
+            node = await list_nodes(node.ip)
 
             deployment.module = await list_modules(module_type, deployment.module["name"])
 

@@ -155,8 +155,17 @@ class Hub(AsyncMixin):
     async def update_node(self, node_id: str, node: Dict) -> bool:
         return await self.surrealdb.update(node_id, node)
 
-    async def list_nodes(self) -> List:
-        return await self.surrealdb.select("node")
+    async def list_nodes(self, node_ip=None) -> List:
+        if not node_ip:
+            nodes = await self.surrealdb.query("SELECT * FROM node;")
+            return nodes[0]['result']
+        else:
+            nodes = await self.surrealdb.query("SELECT * FROM node WHERE ip=$node_ip;", {"node_ip": node_ip})
+            node = nodes[0]['result'][0]
+            server_ids = node['servers']
+            servers = await self.surrealdb.query("SELECT * FROM server WHERE id=$server_ids;", {"server_ids": server_ids})
+            node['servers'] = [NodeServer(**server) for server in servers[0]['result']]
+            return NodeConfig(**node)
 
     async def delete_node(self, node_id: str, servers: Optional[List[str]]=None) -> bool:
         # Delete server records first
@@ -313,3 +322,16 @@ async def list_modules(module_type: str, module_name: str) -> List:
             raise ValueError(f"{module_type.capitalize()} module '{module_name}' not found")
 
         return module
+    
+async def list_nodes(node_ip: str) -> List:
+
+    hub_username = os.getenv("HUB_USERNAME")
+    hub_password = os.getenv("HUB_PASSWORD")
+
+    async with Hub() as hub:
+        try:
+            _, _, _ = await hub.signin(hub_username, hub_password)
+        except Exception as auth_error:
+            raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
+
+        return await hub.list_nodes(node_ip=node_ip)
