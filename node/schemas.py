@@ -111,14 +111,14 @@ class EnvironmentDeployment(BaseModel):
     environment_node: NodeSchema
     name: Optional[str] = "environment_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
+    environment_config: Optional[Union[Dict, BaseModel]] = None
 
 class AgentDeployment(BaseModel):
     worker_node: NodeSchema
     name: Optional[str] = "agent_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    agent_config: Optional[AgentConfig] = AgentConfig()
-    data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
+    agent_config: Optional[AgentConfig] = None
+    data_generation_config: Optional[DataGenerationConfig] = None
     tool_deployments: Optional[List[ToolDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
@@ -127,7 +127,7 @@ class OrchestratorDeployment(BaseModel):
     orchestrator_node: NodeSchema
     name: Optional[str] = "orchestrator_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    orchestrator_config: Optional[OrchestratorConfig] = OrchestratorConfig()
+    orchestrator_config: Optional[OrchestratorConfig] = None
     agent_deployments: Optional[List[AgentDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None

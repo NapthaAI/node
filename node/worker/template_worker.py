@@ -202,10 +202,6 @@ class ModuleRunEngine:
         self.module_version = f"v{self.module['module_version']}"
         self.parameters = module_run.inputs
 
-        # Special handling for agent persona
-        if self.module_type == "agent" and self.deployment.agent_config.persona_module:
-            self.personas_url = self.deployment.agent_config.persona_module["module_url"]
-
         self.consumer = {
             "public_key": module_run.consumer_id.split(":")[1],
             "id": module_run.consumer_id,
@@ -278,17 +274,18 @@ class ModuleRunEngine:
 
     async def handle_output(self, deployment, results):
         """Handles the output of the module run (only for agent and tool runs)"""
-        save_location = deployment.data_generation_config.save_outputs_location
-        if save_location:
-            deployment.data_generation_config.save_outputs_location = save_location
+        if deployment.data_generation_config:
+            save_location = deployment.data_generation_config.save_outputs_location
+            if save_location:
+                deployment.data_generation_config.save_outputs_location = save_location
 
-        if deployment.data_generation_config.save_outputs:
-            if save_location == "ipfs":
-                save_path = getattr(self.deployment.data_generation_config, "save_outputs_path")
-                out_msg = upload_to_ipfs(save_path)
-                out_msg = f"IPFS Hash: {out_msg}"
-                logger.info(f"Output uploaded to IPFS: {out_msg}")
-                self.module_run.results = [out_msg]
+            if deployment.data_generation_config.save_outputs:
+                if save_location == "ipfs":
+                    save_path = getattr(self.deployment.data_generation_config, "save_outputs_path")
+                    out_msg = upload_to_ipfs(save_path)
+                    out_msg = f"IPFS Hash: {out_msg}"
+                    logger.info(f"Output uploaded to IPFS: {out_msg}")
+                    self.module_run.results = [out_msg]
 
     async def complete(self):
         """Marks the module run as completed"""
