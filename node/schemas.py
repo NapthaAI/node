@@ -21,7 +21,7 @@ class NodeConfig(BaseModel):
     num_servers: int = Field(default=1)
     node_type: str = Field(default="direct")
     server_type: str = Field(default="http")
-    servers: Optional[List[Dict]] = Field(default=None)
+    servers: Optional[List[str]] = Field(default=None)
 
     class Config:
         allow_mutation = True

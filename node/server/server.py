@@ -20,12 +20,6 @@ load_dotenv()
 FILE_PATH = Path(__file__).resolve()
 PARENT_DIR = FILE_PATH.parent
 
-def generate_server_name():
-    """Generate a random server name with a prefix."""
-    prefix = "srv"
-    # Generate 6 random alphanumeric characters
-    random_part = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-    return f"{prefix}-{random_part}"
 
 class NodeServer:
     def __init__(self, server_type: str, port: int):
@@ -60,34 +54,29 @@ class NodeServer:
                     except Exception as e:
                         logger.info(f"No existing node to clean up: {e}")
                     
-                    # Create server records first
+                    # Create http server records first
                     server_records = []
-                    server_name = generate_server_name()
                     ip_ = self.node_config.ip
                     if "http://" in ip_:    
                         ip_ = ip_.split("//")[1]
-                    server_record = await hub.create_server({
-                        "name": server_name,
+                    server_records.append({
+                        "server_type": 'http',
                         "connection_string": f"http://{ip_}:7001",
                         "node_id": self.node_id
                     })
 
-                    server_records.append(server_record['id'])
+                    # Create other server records
                     for i, port in enumerate(self.node_config.ports):
-                        server_name = generate_server_name()
-                        server_record = await hub.create_server({
-                            "name": server_name,
+                        server_records.append({
+                            "server_type": self.node_config.server_type,
                             "connection_string": f"{self.node_config.server_type}://{ip_}:{port}",
                             "node_id": self.node_id
                         })
-                        server_records.append(server_record['id'])
 
                     logger.info(f"Server records: {server_records}")
-                    # Add server records to node_config
-                    self.node_config.servers = server_records
-                    
+
                     # Now register the node
-                    self.node_config = await hub.create_node(node_config=self.node_config)
+                    self.node_config = await hub.create_node(node_config=self.node_config, servers=server_records)
                     if isinstance(self.node_config, dict):
                         self.node_id = self.node_config["id"].split(":")[1]
                         self.ip = self.node_config["ip"]
@@ -161,20 +150,9 @@ class NodeServer:
                         if not success:
                             raise Exception("Failed to sign in to hub during unregistration")
 
-                        # delete servers
-                        for server_id in self.node_config['servers']:
-                            try:
-                                success = await hub.delete_server(server_id)
-                                if not success:
-                                    logger.error(f"Failed to delete server: {server_id}")
-                                else:
-                                    logger.info(f"Successfully deleted server: {server_id}")
-                            except Exception as e:
-                                logger.error(f"Error deleting server: {e}")
-
                         # Add timeout to delete_node
                         success = await asyncio.wait_for(
-                            hub.delete_node(node_id=node_id),
+                            hub.delete_node(node_id=node_id, servers=self.node_config['servers']),
                             timeout=10.0
                         )
 

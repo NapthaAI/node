@@ -126,13 +126,23 @@ class Hub(AsyncMixin):
             return server
         return server[0]
     
-    async def create_node(self, node_config: NodeConfig) -> Dict:
+    async def create_node(self, node_config: NodeConfig, servers: Optional[List[str]]=None) -> Dict:
         node_config.owner = self.user_id
         node_id = node_config.id
+
+        # Create server records first
+        server_records = []
+        if servers:
+            for server in servers:
+                s = await self.create_server(server)
+                server_records.append(s['id'])
+            # Add server records to node_config
+            node_config.servers = server_records
 
         logger.info(f"Creating node: {node_config}")
         self.node_config = await self.surrealdb.create(node_id, node_config)
         logger.info(f"Created node: {self.node_config}")
+        
         if self.node_config is None:
             raise Exception("Failed to register node")
         if isinstance(self.node_config, dict):
@@ -148,7 +158,15 @@ class Hub(AsyncMixin):
     async def list_nodes(self) -> List:
         return await self.surrealdb.select("node")
 
-    async def delete_node(self, node_id: str) -> bool:
+    async def delete_node(self, node_id: str, servers: Optional[List[str]]=None) -> bool:
+        # Delete server records first
+        if servers:
+            for server in servers:
+                try:
+                    await self.delete_server(server)
+                except Exception as e:
+                    logger.error(f"Error deleting server: {e}")
+                    return False
         return await self.surrealdb.delete(node_id)
     
     async def delete_server(self, server_id: str) -> bool:
