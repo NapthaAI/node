@@ -7,7 +7,6 @@ import os
 import traceback
 from datetime import datetime
 from typing import Optional, Union, Any, Dict
-
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body, Request
@@ -26,9 +25,6 @@ from node.module_manager import (
     install_module_with_lock, 
     load_agent_deployments, 
     load_tool_deployments, 
-    load_orchestrator_deployments, 
-    load_environment_deployments, 
-    load_kb_deployments,
     load_deployments
 )
 from node.schemas import (
@@ -63,6 +59,7 @@ from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb
+from node.client import Node as NodeClient
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -331,6 +328,19 @@ class HTTPServer:
                 response.pop('_sa_instance_state')
             return response
 
+        async def get_server_connection(self, server_id: str):
+            """
+                Gets server connection details from hub and returns appropriate Node object
+            """
+            try:
+                async with Hub() as hub:
+                    logger.info(f"Getting server connection for {server_id}")
+                    server = await hub.get_server(server_id=server_id)
+                    logger.info(f"Server: {server}")
+                    return server['connection_string']
+            except Exception as e:
+                logger.error(f"Error getting server connection: {e}")
+                raise
         # Monitor endpoints
         @router.post("/monitor/create_agent_run")
         async def monitor_create_agent_run_endpoint(
@@ -454,6 +464,42 @@ class HTTPServer:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    async def register_user_on_worker_nodes(self, module_run: Union[AgentRun, OrchestratorRun]):
+        """
+        Registers user on worker nodes.
+        """
+        logger.info(f"Validating user {module_run.consumer_id} access on worker nodes")
+
+        worker_nodes = []
+        if hasattr(module_run, "agent_deployments"):
+            for deployment in module_run.agent_deployments:
+                if deployment.worker_node:
+                    worker_nodes.append(NodeClient(deployment.worker_node))
+        elif hasattr(module_run, "tool_deployments"):
+            for deployment in module_run.tool_deployments:
+                if deployment.tool_node:
+                    worker_nodes.append(NodeClient(deployment.tool_node))
+        elif hasattr(module_run, "environment_deployments"):
+            for deployment in module_run.environment_deployments:
+                if deployment.environment_node:
+                    worker_nodes.append(NodeClient(deployment.environment_node))
+        elif hasattr(module_run, "kb_deployments"):
+            for deployment in module_run.kb_deployments:
+                if deployment.kb_node:
+                    worker_nodes.append(NodeClient(deployment.kb_node))
+
+        for worker_node_client in worker_nodes:
+            async with worker_node_client as node_client:
+                consumer = await node_client.check_user(user_input=self.consumer)
+                
+                if consumer["is_registered"]:
+                    logger.info(f"User validated on worker node: {node_client.node_schema}")
+                    return
+                
+                logger.info(f"Registering new user on worker node: {node_client.node_schema}")
+                consumer = await node_client.register_user(user_input=consumer)
+                logger.info(f"User registration complete on worker node: {node_client.node_schema}")
 
     async def create_module(self, module_deployment: Union[AgentDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
         """
@@ -628,7 +674,7 @@ class HTTPServer:
 
                 logger.info(f"{module_type.capitalize()} run data: {module_run_data}")
 
-
+            await self.register_user_on_worker_nodes(module_run)
 
             # Execute the task based on module type
             if deployment.module.module_type == AgentModuleType.package:

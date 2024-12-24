@@ -5,6 +5,7 @@ import requests
 from pathlib import Path
 import subprocess
 from typing import List
+from node.schemas import NodeSchema
 
 _logging_initialized = False
 logger = logging.getLogger(__name__)
@@ -54,6 +55,12 @@ def get_logger(name):
         setup_logging()
     return logging.getLogger(name)
 
+
+def node_to_url(node_schema: NodeSchema):
+    if node_schema.server_type == 'grpc':
+        return f"{node_schema.ip}:{node_schema.port}"
+    else:
+        return f"{node_schema.server_type}://{node_schema.ip}:{node_schema.port}"
 
 def get_external_ip():
     """Get the external IP address of the node. If the IP address is not found, raise an error."""

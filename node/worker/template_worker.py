@@ -13,11 +13,10 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, create_model
 from typing import List, Union
 
-from node.client import Node
-from node.storage.hub.hub import Hub
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, NODE_ROUTING, SERVER_TYPE, LOCAL_DB_URL
+from node.client import Node as NodeClient
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_TYPE, NODE_IP, NODE_PORT, SERVER_TYPE, LOCAL_DB_URL
 from node.module_manager import install_module_with_lock, load_module, load_orchestrator_deployments
-from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
+from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun, NodeSchema
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
 
@@ -329,32 +328,13 @@ class OrchestratorEngine:
         self.orchestrator_name = self.module["name"]
         self.orchestrator_version = f"v{self.module['module_version']}"
         self.parameters = orchestrator_run.inputs
-        self.node_type = NODE_TYPE
-        self.server_type = SERVER_TYPE
-        if self.node_type == "direct" and self.server_type in ["http", "grpc"]:
-            self.orchestrator_node = Node(f"{NODE_IP}:{NODE_PORT}", SERVER_TYPE)
-            logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
-        elif self.node_type == "direct" and self.server_type == "ws":
-            ip = NODE_IP
-            if "http" in ip:
-                ip = ip.replace("http://", "ws://")
-            self.orchestrator_node = Node(f"{ip}:{NODE_PORT}", SERVER_TYPE)
-            logger.info(f"Orchestrator node: {self.orchestrator_node.node_url}")
-        elif self.node_type == "indirect":
-            node_id = requests.get("http://localhost:7001/node_id").json()
-            if not node_id:
-                raise ValueError("NODE_ID environment variable is not set")
-            self.orchestrator_node = Node(
-                indirect_node_id=node_id, routing_url=NODE_ROUTING
-            )
-        else:
-            raise ValueError(f"Invalid NODE_TYPE: {self.node_type}")
+        self.orchestrator_node = NodeClient(NodeSchema(ip=NODE_IP, port=NODE_PORT, server_type=SERVER_TYPE))
+        logger.info(f"Orchestrator node: {self.orchestrator_node}")
 
         self.consumer = {
             "public_key": self.module_run.consumer_id.split(":")[1],
             "id": self.module_run.consumer_id,
         }
-
 
     async def init_run(self):
         logger.info("Initializing orchestrator run")
@@ -370,10 +350,6 @@ class OrchestratorEngine:
                 input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
             )
 
-        # TODO: in the new version of the node, is this still needed?
-        await self.check_register_worker_nodes(self.module_run.orchestrator_deployment.agent_deployments)
-
-        # Load the orchestrator
         (
             self.orchestrator_func, 
             self.module_run, 
@@ -382,70 +358,6 @@ class OrchestratorEngine:
             orchestrator_run=self.module_run,
             agent_source_dir=MODULES_SOURCE_DIR
         )
-
-    async def get_server_connection(self, server_id: str):
-        """
-            Gets server connection details from hub and returns appropriate Node object
-        """
-        try:
-            async with Hub() as hub:
-                logger.info(f"Getting server connection for {server_id}")
-                server = await hub.get_server(server_id=server_id)
-                logger.info(f"Server: {server}")
-                return server['connection_string']
-        except Exception as e:
-            logger.error(f"Error getting server connection: {e}")
-            raise
-        
-    async def check_register_worker_nodes(self, agent_deployments: List):
-        """
-        Validates and registers user access rights for worker nodes.
-        Skips validation for worker nodes on the same domain as the orchestrator.
-        """
-        logger.info(f"Validating user {self.consumer} access for {len(agent_deployments)} worker nodes")
-
-        async def process_worker_node(connection_string: str):
-            """Handle user validation and registration for a single worker node"""
-            if "ws://" in connection_string:
-                node = Node(connection_string=connection_string, server_type='ws')
-            elif "grpc://" in connection_string:
-                ip_address = connection_string.replace("grpc://", "")
-                node = Node(node_url=ip_address, server_type='grpc')
-            else:
-                node = Node(node_url=connection_string, server_type='http')
-
-            async with node as node:
-                consumer = await node.check_user(user_input=self.consumer)
-                
-                if consumer["is_registered"]:
-                    logger.info(f"User validated on worker node: {connection_string}")
-                    return
-                
-                logger.info(f"Registering new user on worker node: {connection_string}")
-                consumer = await node.register_user(user_input=consumer)
-                logger.info(f"User registration complete on worker node: {connection_string}")
-
-        for deployment in agent_deployments:
-            worker_url = deployment.worker_node_url
-            if not worker_url:
-                continue
-
-            try:
-                connection_string = await self.get_server_connection(deployment.worker_node_url)
-                deployment.worker_node_url = connection_string
-                logger.info(f"Worker node URL: {deployment.worker_node_url}")
-
-                if 'localhost' in connection_string:
-                    logger.info(f"Skipping validation for localhost worker node: {deployment.worker_node_url}")
-                    continue
-
-                await process_worker_node(connection_string)
-
-            except Exception as e:
-                logger.error(f"Error processing worker node {deployment.worker_node_url}: {e}")
-                raise
-
-        return agent_deployments
 
     async def start_run(self):
         logger.info("Starting orchestrator run")

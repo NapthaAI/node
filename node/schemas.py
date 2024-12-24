@@ -26,6 +26,14 @@ class NodeConfig(BaseModel):
     class Config:
         allow_mutation = True
 
+class NodeSchema(BaseModel):
+    ip: str
+    ports: Optional[List[int]] = None
+    num_servers: Optional[int] = None
+    node_type: Optional[str] = None
+    server_type: Optional[str] = None
+    servers: Optional[List[str]] = None
+
 class LLMClientType(str, Enum):
     OPENAI = "openai"
     AZURE_OPENAI = "azure_openai"
@@ -87,40 +95,42 @@ class DataGenerationConfig(BaseModel):
     default_filename: Optional[str] = None
 
 class ToolDeployment(BaseModel):
+    tool_node: NodeSchema
     name: Optional[str] = "tool_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    tool_node_url: Optional[str] = None
     tool_config: Optional[ToolConfig] = None
     data_generation_config: Optional[DataGenerationConfig] = None
 
 class KBDeployment(BaseModel):
+    kb_node: NodeSchema
     name: Optional[str] = "kb_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    kb_node_url: Optional[str] = "http://localhost:7001"
     kb_config: Optional[Dict] = None
 
+class EnvironmentDeployment(BaseModel):
+    environment_node: NodeSchema
+    name: Optional[str] = "environment_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
+
 class AgentDeployment(BaseModel):
+    worker_node: NodeSchema
     name: Optional[str] = "agent_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    worker_node_url: Optional[str] = None
     agent_config: Optional[AgentConfig] = AgentConfig()
     data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
     tool_deployments: Optional[List[ToolDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
-
-class EnvironmentDeployment(BaseModel):
-    name: Optional[str] = "environment_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    environment_node_url: Optional[str] = "http://localhost:7001"
-    environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
+    environment_deployments: Optional[List[EnvironmentDeployment]] = None
 
 class OrchestratorDeployment(BaseModel):
+    orchestrator_node: NodeSchema
     name: Optional[str] = "orchestrator_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    orchestrator_node_url: Optional[str] = "http://localhost:7001"
     orchestrator_config: Optional[OrchestratorConfig] = OrchestratorConfig()
-    environment_deployments: Optional[List[EnvironmentDeployment]] = None
     agent_deployments: Optional[List[AgentDeployment]] = None
+    environment_deployments: Optional[List[EnvironmentDeployment]] = None
+    kb_deployments: Optional[List[KBDeployment]] = None
 
 class DockerParams(BaseModel):
     docker_image: str
@@ -186,7 +196,7 @@ class AgentRun(BaseModel):
 class AgentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    agent_deployment: AgentDeployment = AgentDeployment()
+    agent_deployment: AgentDeployment = None
     orchestrator_runs: List['OrchestratorRun'] = []
 
 class ToolRunInput(BaseModel):
