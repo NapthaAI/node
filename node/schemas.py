@@ -32,7 +32,7 @@ class NodeConfig(BaseModel):
 
 class NodeSchema(BaseModel):
     ip: str
-    http_port: int
+    http_port: Optional[int] = None
     num_servers: Optional[int] = None
     server_type: Optional[str] = None
     servers: Optional[List[str]] = None
