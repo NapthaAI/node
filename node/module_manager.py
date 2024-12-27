@@ -27,7 +27,9 @@ from node.schemas import (
     ToolRun,
     ToolDeployment,
     Module,
-    AgentModule
+    AgentModule,
+    OrchestratorDeployment,
+    OrchestratorRun
 )
 from node.worker.utils import download_from_ipfs, unzip_file
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -604,36 +606,20 @@ async def load_module(module_run, module_type="agent"):
     return module_func, module_run
 
 
-async def load_orchestrator_deployments(orchestrator_run, agent_source_dir: str):
-    """
-    Load orchestrator function and prepare run configuration
-    """
-    workflow_name = orchestrator_run.deployment.module['name']
-    config_path = f"{agent_source_dir}/{workflow_name}/{workflow_name}/configs/agent_deployments.json"
-    
-    # Load and merge deployments using the same function as agents
-    deployments = await load_agent_deployments(
-        orchestrator_run.deployment.agent_deployments, 
-        config_path
-    )
-    
-    # Handle worker_node overrides
-    for i, deployment in enumerate(deployments):
-        if i < len(orchestrator_run.deployment.agent_deployments):
-            incoming_deployment = orchestrator_run.deployment.agent_deployments[i]
-            if incoming_deployment.worker_node:
-                deployment.worker_node = incoming_deployment.worker_node
-    
-    # Update orchestrator run and validate
-    orchestrator_run.deployment.agent_deployments = deployments
-    validated_data = await load_and_validate_input_schema(orchestrator_run)
+async def load_orchestrator_deployments(default_orchestrator_deployments_path, input_orchestrator_deployments):
+    # Load default configurations from file
+    with open(default_orchestrator_deployments_path, "r") as file:
+        default_orchestrator_deployments = json.loads(file.read())
 
-    # Load orchestrator function
-    module_name = workflow_name.replace("-", "_")
-    main_module = importlib.reload(importlib.import_module(f"{module_name}.run"))
-    orchestrator_func = getattr(main_module, "run")
+    default_orchestrator_deployment = default_orchestrator_deployments[0]
+    input_orchestrator_deployment = input_orchestrator_deployments[0]
 
-    return orchestrator_func, orchestrator_run, validated_data
+    # Update defaults with non-None values from input
+    for key, value in input_orchestrator_deployment.dict(exclude_unset=True).items():           
+        if value is not None:
+            default_orchestrator_deployment[key] = value
+
+    return [OrchestratorDeployment(**default_orchestrator_deployment)]
 
 
 # generic function to load deployments and merge with input deployments
