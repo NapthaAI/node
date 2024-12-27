@@ -442,11 +442,20 @@ async def load_agent_deployments(input_deployments, default_config_path):
 
     return result_deployments
 
-def load_environment_deployments(environment_deployments_path, module):
-    with open(environment_deployments_path, "r") as file:
-        environment_deployments = json.loads(file.read())
+async def load_environment_deployments(default_environment_deployments_path, input_environment_deployments):
+    # Load default configurations from file
+    with open(default_environment_deployments_path, "r") as file:
+        default_environment_deployments = json.loads(file.read())
 
-    return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
+    default_environment_deployment = default_environment_deployments[0]
+    input_environment_deployment = input_environment_deployments[0]
+
+    # Update defaults with non-None values from input
+    for key, value in input_environment_deployment.dict(exclude_unset=True).items():           
+        if value is not None:
+            default_environment_deployment[key] = value
+
+    return [EnvironmentDeployment(**default_environment_deployment)]
 
 async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]:
     module_name = module_run.deployment.module['name']
