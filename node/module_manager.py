@@ -446,21 +446,20 @@ async def load_deployments(deployment_type: str, default_deployments_path: str, 
     # Special handling for agent and tool deployments that have LLM configs
     if deployment_type in ["agent", "tool"]:
         for deployment in default_deployments:
-            config_key = "agent_config" if deployment_type == "agent" else "tool_config"
-            if config_key in deployment and "llm_config" in deployment[config_key]:
-                config_name = deployment[config_key]["llm_config"]["config_name"]
+            if "config" in deployment and "llm_config" in deployment["config"]:
+                config_name = deployment["config"]["llm_config"]["config_name"]
                 config_path = f"{module_path}/configs/llm_configs.json"
                 llm_configs = load_llm_configs(config_path)
                 llm_config = next(config for config in llm_configs if config.config_name == config_name)
-                deployment[config_key]["llm_config"] = llm_config
+                deployment["config"]["llm_config"] = llm_config
 
     # Special handling for agent deployments with personas
     if deployment_type == "agent":
         for deployment in default_deployments:
-            if "persona_module" in deployment["agent_config"] and "module_url" in deployment["agent_config"]["persona_module"]:
-                persona_url = deployment["agent_config"]["persona_module"]["module_url"]
+            if "persona_module" in deployment["config"] and "module_url" in deployment["config"]["persona_module"]:
+                persona_url = deployment["config"]["persona_module"]["module_url"]
                 persona_dir = await install_persona(persona_url)
-                deployment["agent_config"]["persona_module"]["data"] = load_persona(persona_dir)
+                deployment["config"]["persona_module"]["data"] = load_persona(persona_dir)
 
     # Get the first default deployment as base
     default_deployment = default_deployments[0]
