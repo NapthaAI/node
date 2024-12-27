@@ -15,8 +15,8 @@ from typing import List, Union
 
 from node.client import Node as NodeClient
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_IP, NODE_PORT, SERVER_TYPE, LOCAL_DB_URL
-from node.module_manager import install_module_with_lock, load_module, load_orchestrator_deployments
-from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun, NodeSchema
+from node.module_manager import install_module_with_lock, load_module, load_deployments
+from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
 
@@ -211,7 +211,8 @@ class ModuleRunEngine:
             )
 
         # Load the module
-        self.module_func, self.module_run = await load_module(self.module_run, module_type=self.module_type)
+        self.module_run.deployment = await load_deployments(self.module_run, module_type=self.module_type)
+        self.module_func, self.module_run = await load_module(self.module_run)
 
     async def start_run(self):
         """Executes the module run"""

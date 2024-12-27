@@ -489,7 +489,7 @@ async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments)
 async def load_orchestrator_deployments(default_orchestrator_deployments_path, input_orchestrator_deployments):
     return await load_deployments("orchestrator", default_orchestrator_deployments_path, input_orchestrator_deployments)
 
-async def load_module(module_run, module_type="agent"):
+async def load_deployments(module_run, module_type="agent"):
 
     module_name = module_run.deployment.module['name']
     module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}")
@@ -569,6 +569,10 @@ async def load_module(module_run, module_type="agent"):
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
 
+async def load_module(module_run):
+
+    module_name = module_run.deployment.module['name']
+
     module_run = await load_and_validate_input_schema(module_run)
     
     module_run.deployment = load_and_validate_config_schema(module_run.deployment)
@@ -599,36 +603,3 @@ async def load_orchestrator_deployments(default_orchestrator_deployments_path, i
     return [OrchestratorDeployment(**default_orchestrator_deployment)]
 
 
-# generic function to load deployments and merge with input deployments
-async def load_deployments(deployments_path, input_deployments, deployment_type):
-    logger.info(f"deployments_path: {deployments_path}")
-    logger.info(f"input_deployments: {input_deployments}")
-    logger.info(f"deployment_type: {deployment_type}")
-    deployment_map = {
-        "agent": AgentDeployment,
-        "tool": ToolDeployment,
-        "environment": EnvironmentDeployment,
-        "kb": KBDeployment
-    }
-
-    # Load defaults if file exists
-    default_deployments = (
-        [deployment_map[deployment_type]().model_dump()] 
-        if not os.path.exists(deployments_path)
-        else json.load(open(deployments_path))
-    )
-
-    logger.info(f"input_deployments: {input_deployments}")
-
-    # Handle empty or None input_deployments
-    if not input_deployments:  # This handles both None and empty list
-        input_deployments = [deployment_map[deployment_type]()]
-        logger.info(f"No input deployments provided, using empty {deployment_type} deployment: {input_deployments[0]}")
-
-    # Always use the first default deployment as base
-    merged = merge_config(
-        input_deployments[0].dict(exclude_unset=True) if isinstance(input_deployments[0], BaseModel) else input_deployments[0],
-        default_deployments[0]
-    )
-    
-    return [deployment_map[deployment_type](**merged)]
