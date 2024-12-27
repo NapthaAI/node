@@ -419,12 +419,12 @@ def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeplo
         deployment.config = ConfigSchema(**deployment.config)
     return deployment
 
-async def load_deployments(deployment_type: str, default_deployments_path: str, input_deployments: list):
+async def load_module_deployments(module_type: str, default_deployments_path: str, input_deployments: list):
     """
     Generic function to load and merge deployments for any module type.
     
     Args:
-        deployment_type: Type of deployment ("agent", "tool", "environment", "kb", "orchestrator")
+        module_type: Type of module ("agent", "tool", "environment", "kb", "orchestrator")
         default_deployments_path: Path to default deployment config file
         input_deployments: List of input deployments to merge with defaults
     """
@@ -444,7 +444,7 @@ async def load_deployments(deployment_type: str, default_deployments_path: str, 
     module_path = Path(default_deployments_path).parent.parent
 
     # Special handling for agent and tool deployments that have LLM configs
-    if deployment_type in ["agent", "tool"]:
+    if module_type in ["agent", "tool"]:
         for deployment in default_deployments:
             if "config" in deployment and "llm_config" in deployment["config"]:
                 config_name = deployment["config"]["llm_config"]["config_name"]
@@ -454,7 +454,7 @@ async def load_deployments(deployment_type: str, default_deployments_path: str, 
                 deployment["config"]["llm_config"] = llm_config
 
     # Special handling for agent deployments with personas
-    if deployment_type == "agent":
+    if module_type == "agent":
         for deployment in default_deployments:
             if "persona_module" in deployment["config"] and "module_url" in deployment["config"]["persona_module"]:
                 persona_url = deployment["config"]["persona_module"]["module_url"]
@@ -470,25 +470,25 @@ async def load_deployments(deployment_type: str, default_deployments_path: str, 
         if value is not None:
             default_deployment[key] = value
 
-    return [deployment_map[deployment_type](**default_deployment)]
+    return [deployment_map[module_type](**default_deployment)]
 
 # Replace individual load functions with calls to generic function
 async def load_agent_deployments(input_deployments, default_config_path):
-    return await load_deployments("agent", default_config_path, input_deployments)
+    return await load_module_deployments("agent", default_config_path, input_deployments)
 
 async def load_tool_deployments(default_tool_deployments_path, input_tool_deployments):
-    return await load_deployments("tool", default_tool_deployments_path, input_tool_deployments)
+    return await load_module_deployments("tool", default_tool_deployments_path, input_tool_deployments)
 
 async def load_environment_deployments(default_environment_deployments_path, input_environment_deployments):
-    return await load_deployments("environment", default_environment_deployments_path, input_environment_deployments)
+    return await load_module_deployments("environment", default_environment_deployments_path, input_environment_deployments)
 
 async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
-    return await load_deployments("kb", default_kb_deployments_path, input_kb_deployments)
+    return await load_module_deployments("kb", default_kb_deployments_path, input_kb_deployments)
 
 async def load_orchestrator_deployments(default_orchestrator_deployments_path, input_orchestrator_deployments):
-    return await load_deployments("orchestrator", default_orchestrator_deployments_path, input_orchestrator_deployments)
+    return await load_module_deployments("orchestrator", default_orchestrator_deployments_path, input_orchestrator_deployments)
 
-async def load_deployments(module_run, module_type="agent"):
+async def load_deployments_and_subdeployments(module_run, module_type="agent"):
 
     module_name = module_run.deployment.module['name']
     module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}")
@@ -584,21 +584,4 @@ async def load_module(module_run):
     module_func = getattr(main_module, entrypoint)
     
     return module_func, module_run
-
-
-async def load_orchestrator_deployments(default_orchestrator_deployments_path, input_orchestrator_deployments):
-    # Load default configurations from file
-    with open(default_orchestrator_deployments_path, "r") as file:
-        default_orchestrator_deployments = json.loads(file.read())
-
-    default_orchestrator_deployment = default_orchestrator_deployments[0]
-    input_orchestrator_deployment = input_orchestrator_deployments[0]
-
-    # Update defaults with non-None values from input
-    for key, value in input_orchestrator_deployment.dict(exclude_unset=True).items():           
-        if value is not None:
-            default_orchestrator_deployment[key] = value
-
-    return [OrchestratorDeployment(**default_orchestrator_deployment)]
-
 
