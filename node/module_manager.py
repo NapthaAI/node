@@ -396,67 +396,6 @@ def merge_config(input_config, default_config):
         return result
     return input_config if input_config is not None else default_config
 
-
-async def load_agent_deployments(input_deployments, default_config_path):
-    # Load default configurations from file
-    with open(default_config_path, "r") as file:
-        default_agent_deployments = json.loads(file.read())
-
-    module_path = Path(default_config_path).parent.parent
-
-    for deployment in default_agent_deployments:
-        for field, value in deployment.items():
-            print(f"  {field}:", value)
-
-    # Load LLM configs for all default deployments
-    for deployment in default_agent_deployments:
-        if "agent_config" in deployment and "llm_config" in deployment["agent_config"]:
-            config_name = deployment["agent_config"]["llm_config"]["config_name"]
-            config_path = f"{module_path}/configs/llm_configs.json"
-            llm_configs = load_llm_configs(config_path)
-            llm_config = next(config for config in llm_configs if config.config_name == config_name)
-            deployment["agent_config"]["llm_config"] = llm_config
-        if "persona_module" in deployment["agent_config"] and "module_url" in deployment["agent_config"]["persona_module"]:
-            persona_url = deployment["agent_config"]["persona_module"]["module_url"]
-            persona_dir = await install_persona(persona_url)
-            deployment["agent_config"]["persona_module"]["data"] = load_persona(persona_dir)
-
-    result_deployments = []
-
-    # Process each input deployment, merging with defaults
-    for i, input_deployment in enumerate(input_deployments):
-        # Get corresponding default deployment or use first default if no match
-        default_deployment = default_agent_deployments[min(i, len(default_agent_deployments)-1)].copy()
-
-        # Update defaults with non-None values from input
-        for key, value in input_deployment.dict(exclude_unset=True).items():           
-            if value is not None:
-                default_deployment[key] = value
-
-        result_deployments.append(AgentDeployment(**default_deployment))
-
-    for deployment in result_deployments:
-        for field, value in deployment.__dict__.items():
-            print(f"  {field}:", value)
-
-
-    return result_deployments
-
-async def load_environment_deployments(default_environment_deployments_path, input_environment_deployments):
-    # Load default configurations from file
-    with open(default_environment_deployments_path, "r") as file:
-        default_environment_deployments = json.loads(file.read())
-
-    default_environment_deployment = default_environment_deployments[0]
-    input_environment_deployment = input_environment_deployments[0]
-
-    # Update defaults with non-None values from input
-    for key, value in input_environment_deployment.dict(exclude_unset=True).items():           
-        if value is not None:
-            default_environment_deployment[key] = value
-
-    return [EnvironmentDeployment(**default_environment_deployment)]
-
 async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]:
     module_name = module_run.deployment.module['name']
 
@@ -480,46 +419,75 @@ def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeplo
         deployment.config = ConfigSchema(**deployment.config)
     return deployment
 
-async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
-    # Load default configurations from file
-    with open(default_kb_deployments_path, "r") as file:
-        default_kb_deployments = json.loads(file.read())
+async def load_deployments(deployment_type: str, default_deployments_path: str, input_deployments: list):
+    """
+    Generic function to load and merge deployments for any module type.
+    
+    Args:
+        deployment_type: Type of deployment ("agent", "tool", "environment", "kb", "orchestrator")
+        default_deployments_path: Path to default deployment config file
+        input_deployments: List of input deployments to merge with defaults
+    """
+    # Map deployment types to their corresponding classes
+    deployment_map = {
+        "agent": AgentDeployment,
+        "tool": ToolDeployment,
+        "environment": EnvironmentDeployment,
+        "kb": KBDeployment,
+        "orchestrator": OrchestratorDeployment
+    }
 
-    default_kb_deployment = default_kb_deployments[0]
-    input_kb_deployment = input_kb_deployments[0]
+    # Load default configurations from file
+    with open(default_deployments_path, "r") as file:
+        default_deployments = json.loads(file.read())
+
+    module_path = Path(default_deployments_path).parent.parent
+
+    # Special handling for agent and tool deployments that have LLM configs
+    if deployment_type in ["agent", "tool"]:
+        for deployment in default_deployments:
+            config_key = "agent_config" if deployment_type == "agent" else "tool_config"
+            if config_key in deployment and "llm_config" in deployment[config_key]:
+                config_name = deployment[config_key]["llm_config"]["config_name"]
+                config_path = f"{module_path}/configs/llm_configs.json"
+                llm_configs = load_llm_configs(config_path)
+                llm_config = next(config for config in llm_configs if config.config_name == config_name)
+                deployment[config_key]["llm_config"] = llm_config
+
+    # Special handling for agent deployments with personas
+    if deployment_type == "agent":
+        for deployment in default_deployments:
+            if "persona_module" in deployment["agent_config"] and "module_url" in deployment["agent_config"]["persona_module"]:
+                persona_url = deployment["agent_config"]["persona_module"]["module_url"]
+                persona_dir = await install_persona(persona_url)
+                deployment["agent_config"]["persona_module"]["data"] = load_persona(persona_dir)
+
+    # Get the first default deployment as base
+    default_deployment = default_deployments[0]
+    input_deployment = input_deployments[0]
 
     # Update defaults with non-None values from input
-    for key, value in input_kb_deployment.dict(exclude_unset=True).items():           
+    for key, value in input_deployment.dict(exclude_unset=True).items():           
         if value is not None:
-            default_kb_deployment[key] = value
+            default_deployment[key] = value
 
-    return [KBDeployment(**default_kb_deployment)]
+    return [deployment_map[deployment_type](**default_deployment)]
+
+# Replace individual load functions with calls to generic function
+async def load_agent_deployments(input_deployments, default_config_path):
+    return await load_deployments("agent", default_config_path, input_deployments)
 
 async def load_tool_deployments(default_tool_deployments_path, input_tool_deployments):
-    # Load default configurations from file
-    with open(default_tool_deployments_path, "r") as file:
-        default_tool_deployments = json.loads(file.read())
+    return await load_deployments("tool", default_tool_deployments_path, input_tool_deployments)
 
-    module_path = Path(default_tool_deployments_path).parent.parent
+async def load_environment_deployments(default_environment_deployments_path, input_environment_deployments):
+    return await load_deployments("environment", default_environment_deployments_path, input_environment_deployments)
 
-    for deployment in default_tool_deployments:
-        # Load LLM config if present
-        if "tool_config" in deployment and "llm_config" in deployment["tool_config"]:
-            config_name = deployment["tool_config"]["llm_config"]["config_name"]
-            config_path = f"{module_path}/configs/llm_configs.json"
-            llm_configs = load_llm_configs(config_path)
-            llm_config = next(config for config in llm_configs if config.config_name == config_name)
-            deployment["tool_config"]["llm_config"] = llm_config
+async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
+    return await load_deployments("kb", default_kb_deployments_path, input_kb_deployments)
 
-    default_tool_deployment = default_tool_deployments[0]
-    input_tool_deployment = input_tool_deployments[0]
-
-    # Update defaults with non-None values from input
-    for key, value in input_tool_deployment.dict(exclude_unset=True).items():           
-        if value is not None:
-            default_tool_deployment[key] = value
-
-    return [ToolDeployment(**default_tool_deployment)]
+async def load_orchestrator_deployments(default_orchestrator_deployments_path, input_orchestrator_deployments):
+    return await load_deployments("orchestrator", default_orchestrator_deployments_path, input_orchestrator_deployments)
 
 async def load_module(module_run, module_type="agent"):
 
