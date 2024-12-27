@@ -658,11 +658,30 @@ class HTTPServer:
                 
             logger.info(f"Received request to run {module_type}: {module_run_input}")
 
+            # Load module data for main deployment
+            module_run_input.deployment.module = await list_modules(module_type, module_run_input.deployment.module["name"])
+
+            # Load node data for main deployment
             node_data = await list_nodes(module_run_input.deployment.node.ip)
             module_run_input.deployment.node = node_data 
-            print("AAAAAA222", module_run_input)
 
-            module_run_input.deployment.module = await list_modules(module_type, module_run_input.deployment.module["name"])
+            # Load node data for sub-deployments
+            if hasattr(module_run_input.deployment, "agent_deployments"):
+                for agent_deployment in module_run_input.deployment.agent_deployments:
+                    worker_node_data = await list_nodes(agent_deployment.node.ip)
+                    agent_deployment.node = worker_node_data
+            if hasattr(module_run_input.deployment, "tool_deployments"):
+                for tool_deployment in module_run_input.deployment.tool_deployments:
+                    worker_node_data = await list_nodes(tool_deployment.node.ip)
+                    tool_deployment.node = worker_node_data
+            if hasattr(module_run_input.deployment, "environment_deployments"):
+                for environment_deployment in module_run_input.deployment.environment_deployments:
+                    worker_node_data = await list_nodes(environment_deployment.node.ip)
+                    environment_deployment.node = worker_node_data            
+            if hasattr(module_run_input.deployment, "kb_deployments"):
+                for kb_deployment in module_run_input.deployment.kb_deployments:
+                    worker_node_data = await list_nodes(kb_deployment.node.ip)
+                    kb_deployment.node = worker_node_data
 
             # Create module run record in DB
             async with DB() as db:

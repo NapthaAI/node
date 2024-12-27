@@ -60,7 +60,7 @@ def node_to_url(node_schema: NodeSchema):
     if node_schema.server_type == 'grpc':
         return f"{node_schema.ip}:{node_schema.port}"
     else:
-        return f"{node_schema.server_type}://{node_schema.ip}:{node_schema.port}"
+        return f"{node_schema.server_type}://{node_schema.ip}:{node_schema.http_port}"
 
 def get_external_ip():
     """Get the external IP address of the node. If the IP address is not found, raise an error."""
