@@ -171,9 +171,13 @@ class ModuleRunEngine:
     def __init__(self, module_run: Union[AgentRun, ToolRun, EnvironmentRun, KBRun]):
         self.module_run = module_run
         self.deployment = module_run.deployment
-        # Determine module type and specific attributes
+        self.module = self.deployment.module
+
+        # Determine module type
         if isinstance(module_run, AgentRun):
             self.module_type = "agent"
+        elif isinstance(module_run, OrchestratorRun):
+            self.module_type = "orchestrator"
         elif isinstance(module_run, ToolRun):
             self.module_type = "tool"
         elif isinstance(module_run, EnvironmentRun):
@@ -183,7 +187,6 @@ class ModuleRunEngine:
         else:
             raise ValueError(f"Invalid module run type: {type(module_run)}")
 
-        self.module = self.deployment.module
         self.module_name = self.module["name"]
         self.module_version = f"v{self.module['module_version']}"
         self.parameters = module_run.inputs
@@ -219,21 +222,7 @@ class ModuleRunEngine:
         logger.info(f"{self.module_type.title()} deployment: {self.deployment}")
 
         try:
-            # Create kwargs based on module type
-            if self.module_type == "agent":
-                kwargs = {
-                    "agent_run": self.module_run,
-                    "agents_dir": MODULES_SOURCE_DIR
-                }
-            elif self.module_type == "tool":
-                kwargs = {"tool_run": self.module_run}
-            elif self.module_type == "environment":
-                kwargs = {"environment_run": self.module_run}
-            elif self.module_type == "knowledge_base":
-                kwargs = {"kb_run": self.module_run}
-            else:
-                kwargs = {"module_run": self.module_run}
-
+            kwargs = {"module_run": self.module_run}
             response = await maybe_async_call(self.module_func, **kwargs)
         except Exception as e:
             logger.error(f"Error running {self.module_type}: {e}")
@@ -300,100 +289,3 @@ class ModuleRunEngine:
             - datetime.fromisoformat(self.module_run.start_processing_time)
         ).total_seconds()
         await update_db_with_status_sync(module_run=self.module_run)
-
-
-class OrchestratorEngine:
-    def __init__(self, orchestrator_run: OrchestratorRun):
-        self.module_run = orchestrator_run
-        self.deployment = orchestrator_run.deployment
-        self.module = self.deployment.module
-        self.module_type = "orchestrator"
-        self.orchestrator_name = self.module["name"]
-        self.orchestrator_version = f"v{self.module['module_version']}"
-        self.parameters = orchestrator_run.inputs
-        self.orchestrator_node = NodeClient(NodeSchema(ip=NODE_IP, http_port=NODE_PORT, server_type=SERVER_TYPE))
-        logger.info(f"Orchestrator node: {self.orchestrator_node}")
-
-        self.consumer = {
-            "public_key": self.module_run.consumer_id.split(":")[1],
-            "id": self.module_run.consumer_id,
-        }
-
-    async def init_run(self):
-        logger.info("Initializing orchestrator run")
-        self.module_run.status = "processing"
-        self.module_run.start_processing_time = datetime.now(pytz.timezone("UTC")).isoformat()
-
-        await update_db_with_status_sync(module_run=self.module_run)
-
-        if "input_dir" in self.parameters or "input_ipfs_hash" in self.parameters:
-            self.parameters = prepare_input_dir(
-                parameters=self.parameters,
-                input_dir=self.parameters.get("input_dir", None),
-                input_ipfs_hash=self.parameters.get("input_ipfs_hash", None),
-            )
-
-        (
-            self.orchestrator_func, 
-            self.module_run, 
-            self.validated_data, 
-        ) = await load_orchestrator_deployments(
-            orchestrator_run=self.module_run,
-            agent_source_dir=MODULES_SOURCE_DIR
-        )
-
-    async def start_run(self):
-        logger.info("Starting orchestrator run")
-        self.module_run.status = "running"
-        await update_db_with_status_sync(module_run=self.module_run)
-
-        try:
-            response = await maybe_async_call(
-                self.orchestrator_func,
-                orchestrator_run=self.module_run,
-                db_url=LOCAL_DB_URL,
-                agents_dir=MODULES_SOURCE_DIR,
-            )
-        except Exception as e:
-            logger.error(f"Error running orchestrator: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
-
-        logger.info(f"Orchestrator run response: {response}")
-
-        if isinstance(response, (dict, list, tuple)):
-            response = json.dumps(response)
-        elif isinstance(response, BaseModel):
-            response = response.model_dump_json()
-
-        if not isinstance(response, str):
-            raise ValueError(f"Agent/orchestrator response is not a string: {response}. Current response type: {type(response)}")
-
-        self.module_run.results = [response]
-        self.module_run.status = "completed"
-
-    async def complete(self):
-        self.module_run.status = "completed"
-        self.module_run.error = False
-        self.module_run.error_message = ""
-        self.module_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.module_run.duration = (
-            datetime.fromisoformat(self.module_run.completed_time)
-            - datetime.fromisoformat(self.module_run.start_processing_time)
-        ).total_seconds()
-        await update_db_with_status_sync(module_run=self.module_run)
-        logger.info("Orchestrator run completed")
-
-    async def fail(self):
-        logger.error("Error running flow")
-        error_details = traceback.format_exc()
-        logger.error(f"Traceback: {error_details}")
-        self.module_run.status = "error"
-        self.module_run.error = True
-        self.module_run.error_message = error_details
-        self.module_run.completed_time = datetime.now(pytz.utc).isoformat()
-        self.module_run.duration = (
-            datetime.fromisoformat(self.module_run.completed_time)
-            - datetime.fromisoformat(self.module_run.start_processing_time)
-        ).total_seconds()
-        await update_db_with_status_sync(orchestrator_run=self.module_run)

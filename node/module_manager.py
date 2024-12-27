@@ -551,6 +551,12 @@ async def load_module(module_run, module_type="agent"):
         )
         module_run.deployment = deployments[0]
 
+    elif module_type == "orchestrator":
+        deployments = await load_orchestrator_deployments(
+            input_deployments=[module_run.deployment],
+            default_config_path=module_path / "configs/orchestrator_deployments.json"
+        )
+
     elif module_type == "tool":
         tool_deployments = await load_tool_deployments(
             default_tool_deployments_path=module_path / "configs/tool_deployments.json",
@@ -573,7 +579,7 @@ async def load_module(module_run, module_type="agent"):
         module_run.deployment = kb_deployments[0]
 
     else:
-        raise ValueError("module_type must be either 'agent', 'tool', 'environment' or 'knowledge_base'")
+        raise ValueError("module_type must be either 'agent', 'orchestrator', 'tool', 'environment' or 'knowledge_base'")
 
     if module_type == "agent" and module_run.deployment.data_generation_config:
         # Handle output configuration
