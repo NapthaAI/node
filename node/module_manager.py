@@ -445,17 +445,7 @@ async def load_agent_deployments(input_deployments, default_config_path):
 def load_environment_deployments(environment_deployments_path, module):
     with open(environment_deployments_path, "r") as file:
         environment_deployments = json.loads(file.read())
-    for deployment in environment_deployments:
-        deployment["module"] = module
-        if "environment_config" in deployment and isinstance(deployment["environment_config"], dict):
-            # Get the config_schema from environment_config.config_name
-            config_schema = deployment["environment_config"].get("config_name", "EnvironmentConfig")
-            # Import the specific config class from the module's schemas
-            module_name = module["name"].replace("-", "_")
-            schemas_module = importlib.import_module(f"{module_name}.schemas")
-            ConfigClass = getattr(schemas_module, config_schema)
-            # Create instance of the specific config class
-            deployment["environment_config"] = ConfigClass(**deployment["environment_config"])
+
     return [EnvironmentDeployment(**deployment) for deployment in environment_deployments]
 
 async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]:
@@ -472,6 +462,14 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     
     return module_run
 
+def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment]):
+    if "config" in deployment and isinstance(deployment.config, dict):
+        config_name = deployment.config["config_name"]
+        module_name = deployment.module["name"].replace("-", "_")
+        schemas_module = importlib.import_module(f"{module_name}.schemas")
+        ConfigSchema = getattr(schemas_module, config_name)
+        deployment.config = ConfigSchema(**deployment.config)
+    return deployment
 
 async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
     # Load default configurations from file
@@ -596,6 +594,8 @@ async def load_module(module_run, module_type="agent"):
 
     module_run = await load_and_validate_input_schema(module_run)
     
+    module_run.deployment = load_and_validate_config_schema(module_run.deployment)
+
     # Load the module function
     module_name = module_name.replace("-", "_")
     entrypoint = module_run.deployment.module["module_entrypoint"].split(".")[0]
