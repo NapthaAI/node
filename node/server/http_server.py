@@ -3,7 +3,6 @@ import io
 import json
 import httpx
 import logging
-import os
 import traceback
 from datetime import datetime
 from typing import Optional, Union, Any, Dict
@@ -13,6 +12,7 @@ from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, B
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
+from pathlib import Path
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -22,10 +22,7 @@ from tenacity import (
 
 from node.config import MODULES_SOURCE_DIR
 from node.module_manager import (
-    install_module_with_lock, 
-    load_agent_deployments, 
-    load_tool_deployments, 
-    load_deployments
+    setup_module_deployment,
 )
 from node.schemas import (
     AgentRun,
@@ -527,100 +524,13 @@ class HTTPServer:
 
             logger.info(f"Creating {module_type}: {module_deployment}")
 
-            # Install main module
-            module = await list_modules(module_type, module_name)
-            if not module:
-                raise HTTPException(status_code=404, detail=f"{module_type} {module_name} not found")
+            main_module_name = module_deployment.module['name']
+            main_module_path = Path(f"{MODULES_SOURCE_DIR}/{main_module_name}/{main_module_name}")
 
-            try:
-                await install_module_with_lock(module)
-            except Exception as install_error:
-                logger.error(f"Failed to install {module_type}: {str(install_error)}")
-                logger.debug(f"Full traceback: {traceback.format_exc()}")
-                raise HTTPException(status_code=500, detail=f"{module_type.capitalize()} installation failed: {str(install_error)}")
+            module_deployment = await setup_module_deployment(module_type, main_module_path / "configs/deployment.json", module_deployment.name, module_deployment)
 
-            # Set up paths for config files
-            module_path = os.path.join(MODULES_SOURCE_DIR or "/tmp", module.name)
-            config_path = os.path.join(module_path, module.name, "configs")
+            return module_deployment
 
-            deployment_status = {
-                "status": "success",
-                "message": f"{module_type.capitalize()} created successfully",
-                "sub_modules": {}
-            }
-
-            # Load and process sub-deployments using specialized loaders
-            loader_map = {
-                "agent_deployments": (load_agent_deployments, "agent"),
-                "tool_deployments": (load_tool_deployments, "tool"),
-                "environment_deployments": (
-                    lambda deployments, config_path: load_deployments(
-                        deployments_path=config_path,  # Don't append filename here since it's already in config_path
-                        input_deployments=deployments,
-                        deployment_type="environment"
-                    ),
-                    "environment"
-                ),
-                "kb_deployments": (
-                    lambda deployments, config_path: load_deployments(
-                        deployments_path=config_path,  # Don't append filename here since it's already in config_path
-                        input_deployments=deployments,
-                        deployment_type="kb"
-                    ),
-                    "kb"
-                )
-            }
-
-            for attr_name, (loader_func, sub_type) in loader_map.items():
-                if hasattr(module_deployment, attr_name):
-                    config_file = os.path.join(config_path, f"{attr_name}.json")
-                    deployments = getattr(module_deployment, attr_name)
-
-                    # Process if we have deployments in input OR config file exists
-                    if deployments is not None or os.path.exists(config_file):
-                        try:
-                            # If no deployments passed but config exists, initialize empty list
-                            if deployments is None and os.path.exists(config_file):
-                                deployments = []
-
-                            # Load and merge deployments
-                            merged_deployments = await loader_func(deployments, config_file)
-                            
-                            # Install sub-modules
-                            installation_status = []
-                            sub_modules = set()
-                            
-                            for deployment in merged_deployments:
-                                module_name = (deployment.module["name"] if isinstance(deployment.module, dict) 
-                                            else deployment.module.name)
-                                sub_modules.add(module_name)
-                                
-                                try:
-                                    sub_module = await list_modules(sub_type, module_name)
-                                    if sub_module:
-                                        await install_module_with_lock(sub_module)
-                                        installation_status.append({
-                                            "name": module_name,
-                                            "module_version": sub_module.module_version,
-                                            "status": "success"
-                                        })
-                                except Exception as e:
-                                    installation_status.append({
-                                        "name": module_name,
-                                        "module_version": "unknown",
-                                        "status": str(e)
-                                    })
-
-                            deployment_status["sub_modules"][sub_type] = {
-                                "modules": list(sub_modules),
-                                "installation_status": installation_status
-                            }
-                            
-                        except Exception as e:
-                            logger.error(f"Failed to load {sub_type} deployments: {str(e)}")
-                            logger.debug(f"Full traceback: {traceback.format_exc()}")
-
-            return JSONResponse(content=deployment_status)
 
         except Exception as e:
             logger.error(f"Failed to create module: {str(e)}")
@@ -637,55 +547,36 @@ class HTTPServer:
         :return: Status
         """
         try:
+
+            if not module_run_input.deployment.initialized == True:
+                module_deployment = await self.create_module(module_run_input.deployment)
+                module_run_input.deployment = module_deployment
+
             # Determine module type and configuration
             if isinstance(module_run_input, AgentRunInput):
                 module_type = "agent"
-                create_func = lambda db: db.create_agent_run(module_run_input)
+                create_func = lambda db: db.create_agent_run
             elif isinstance(module_run_input, ToolRunInput):
                 module_type = "tool"
-                create_func = lambda db: db.create_tool_run(module_run_input)
+                create_func = lambda db: db.create_tool_run
             elif isinstance(module_run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
-                create_func = lambda db: db.create_orchestrator_run(module_run_input)
+                create_func = lambda db: db.create_orchestrator_run
             elif isinstance(module_run_input, EnvironmentRunInput):
                 module_type = "environment"
-                create_func = lambda db: db.create_environment_run(module_run_input)
+                create_func = lambda db: db.create_environment_run
             elif isinstance(module_run_input, KBRunInput):
                 module_type = "kb"
-                create_func = lambda db: db.create_kb_run(module_run_input)
+                create_func = lambda db: db.create_kb_run
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
             logger.info(f"Received request to run {module_type}: {module_run_input}")
 
-            # Load module data for main deployment
-            module_run_input.deployment.module = await list_modules(module_type, module_run_input.deployment.module["name"])
-
-            # Load node data for main deployment
-            node_data = await list_nodes(module_run_input.deployment.node.ip)
-            module_run_input.deployment.node = node_data 
-
-            # Load node data for sub-deployments
-            if hasattr(module_run_input.deployment, "agent_deployments"):
-                for agent_deployment in module_run_input.deployment.agent_deployments:
-                    worker_node_data = await list_nodes(agent_deployment.node.ip)
-                    agent_deployment.node = worker_node_data
-            if hasattr(module_run_input.deployment, "tool_deployments"):
-                for tool_deployment in module_run_input.deployment.tool_deployments:
-                    worker_node_data = await list_nodes(tool_deployment.node.ip)
-                    tool_deployment.node = worker_node_data
-            if hasattr(module_run_input.deployment, "environment_deployments"):
-                for environment_deployment in module_run_input.deployment.environment_deployments:
-                    worker_node_data = await list_nodes(environment_deployment.node.ip)
-                    environment_deployment.node = worker_node_data            
-            if hasattr(module_run_input.deployment, "kb_deployments"):
-                for kb_deployment in module_run_input.deployment.kb_deployments:
-                    worker_node_data = await list_nodes(kb_deployment.node.ip)
-                    kb_deployment.node = worker_node_data
 
             # Create module run record in DB
             async with DB() as db:
-                module_run = await create_func(db)
+                module_run = await create_func(db)(module_run_input)
                 if not module_run:
                     raise HTTPException(status_code=500, detail=f"Failed to create {module_type} run")
                 module_run_data = module_run.model_dump()

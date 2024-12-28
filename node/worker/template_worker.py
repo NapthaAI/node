@@ -5,17 +5,15 @@ import json
 import logging
 import os
 import pytz
-import requests
 import sys
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
-from pydantic import BaseModel, create_model
-from typing import List, Union
+from pydantic import BaseModel
+from typing import Union
 
-from node.client import Node as NodeClient
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_IP, NODE_PORT, SERVER_TYPE, LOCAL_DB_URL
-from node.module_manager import install_module_with_lock, load_module, load_deployments_and_subdeployments
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
+from node.module_manager import install_module_with_lock, load_module
 from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
@@ -211,7 +209,6 @@ class ModuleRunEngine:
             )
 
         # Load the module
-        await load_deployments_and_subdeployments(self.module_run, module_type=self.module_type)
         self.module_func, self.module_run = await load_module(self.module_run)
 
     async def start_run(self):
