@@ -867,9 +867,3 @@ class HTTPServer:
             await self.server.serve()
         finally:
             self._started = False
-
-    ###### toolset stuff ###############
-    async def get_toolset_list(self, agent_run_id: str):
-        pass
-        
-    ######### end toolset stuff ########
