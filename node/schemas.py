@@ -30,12 +30,10 @@ class NodeConfig(BaseModel):
     class Config:
         allow_mutation = True
 
-class NodeSchema(BaseModel):
+class NodeConfigInput(BaseModel):
     ip: str
     http_port: Optional[int] = None
-    num_servers: Optional[int] = None
     server_type: Optional[str] = None
-    servers: Optional[List[str]] = None
 
 class LLMClientType(str, Enum):
     OPENAI = "openai"
@@ -73,21 +71,29 @@ class AgentModule(Module):
 
 class AgentConfig(BaseModel):
     config_name: Optional[str] = None
+    config_schema: Optional[str] = None
     llm_config: Optional[LLMConfig] = None
     persona_module: Optional[Union[Dict, BaseModel]] = None
     system_prompt: Optional[Union[Dict, BaseModel]] = None
 
 class ToolConfig(BaseModel):
     config_name: Optional[str] = None
+    config_schema: Optional[str] = None
     llm_config: Optional[LLMConfig] = None
 
 class OrchestratorConfig(BaseModel):
     config_name: Optional[str] = "orchestrator_config"
+    config_schema: Optional[str] = None
     max_rounds: Optional[int] = 5
 
 class EnvironmentConfig(BaseModel):
     config_name: Optional[str] = None
+    config_schema: Optional[str] = None
     environment_type: Optional[str] = None
+
+class KBConfig(BaseModel):
+    config_name: Optional[str] = None
+    config_schema: Optional[str] = None
 
 class DataGenerationConfig(BaseModel):
     save_outputs: Optional[bool] = None
@@ -98,26 +104,29 @@ class DataGenerationConfig(BaseModel):
     default_filename: Optional[str] = None
 
 class ToolDeployment(BaseModel):
-    node: NodeSchema
+    node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "tool_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[ToolConfig] = None
     data_generation_config: Optional[DataGenerationConfig] = None
+    initialized: Optional[bool] = False
 
 class KBDeployment(BaseModel):
-    node: NodeSchema
+    node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "kb_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
-    config: Optional[Dict] = None
+    config: Optional[Union[Dict, BaseModel]] = None
+    initialized: Optional[bool] = False
 
 class EnvironmentDeployment(BaseModel):
-    node: NodeSchema
+    node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "environment_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[Union[Dict, BaseModel]] = None
+    initialized: Optional[bool] = False
 
 class AgentDeployment(BaseModel):
-    node: NodeSchema
+    node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "agent_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[AgentConfig] = None
@@ -125,15 +134,17 @@ class AgentDeployment(BaseModel):
     tool_deployments: Optional[List[ToolDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
+    initialized: Optional[bool] = False
 
 class OrchestratorDeployment(BaseModel):
-    node: NodeSchema
+    node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "orchestrator_deployment"
     module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[OrchestratorConfig] = None
     agent_deployments: Optional[List[AgentDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
+    initialized: Optional[bool] = False
 
 class DockerParams(BaseModel):
     docker_image: str
@@ -202,12 +213,26 @@ class AgentRunInput(BaseModel):
     deployment: AgentDeployment = None
     orchestrator_runs: List['OrchestratorRun'] = []
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        return model_dict
+
 class ToolRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     deployment: ToolDeployment
     agent_run: Optional[AgentRun] = None
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        return model_dict
+    
 class ToolRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -228,6 +253,13 @@ class OrchestratorRunInput(BaseModel):
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     deployment: OrchestratorDeployment
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        return model_dict
+    
 class OrchestratorRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -250,6 +282,13 @@ class EnvironmentRunInput(BaseModel):
     deployment: EnvironmentDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        return model_dict
+
 class EnvironmentRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -271,6 +310,13 @@ class KBRunInput(BaseModel):
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     deployment: KBDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        return model_dict
 
 class KBRun(BaseModel):
     consumer_id: str

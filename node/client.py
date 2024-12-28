@@ -17,7 +17,8 @@ from node.server import grpc_server_pb2, grpc_server_pb2_grpc
 from google.protobuf.struct_pb2 import Struct
 from google.protobuf.json_format import MessageToDict
 from node.grpc_pool_manager import get_grpc_pool_instance
-from node.schemas import NodeSchema
+from node.schemas import NodeConfigInput
+
 from node.utils import node_to_url
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ HTTP_TIMEOUT = 300
 
 
 class Node:
-    def __init__(self, node_schema: NodeSchema):
+    def __init__(self, node_schema: NodeConfigInput):
         self.node_schema = node_schema
         self.node_url = node_to_url(node_schema)
         self.server_type = node_schema.server_type
