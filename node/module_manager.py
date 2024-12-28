@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from dotenv import load_dotenv
 import fcntl
 import shutil
 from git import Repo
@@ -11,7 +12,6 @@ from pathlib import Path
 import subprocess
 import time
 import traceback
-from pydantic import BaseModel
 from typing import Union, Dict
 from node.schemas import (
     AgentDeployment, 
@@ -20,7 +20,6 @@ from node.schemas import (
     EnvironmentRun,
     OrchestratorRun, 
     LLMConfig, 
-    AgentConfig,
     DataGenerationConfig,
     KBRun,
     KBDeployment,
@@ -33,8 +32,10 @@ from node.schemas import (
 )
 from node.worker.utils import download_from_ipfs, unzip_file
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
+from node.storage.hub.hub import list_modules, list_nodes
 
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 INSTALLED_MODULES = {}
 
@@ -343,12 +344,6 @@ def load_persona(persona_dir):
         logger.error(f"Error loading persona from {persona_dir}: {e}")
         return None
 
-def load_llm_configs(llm_configs_path):
-    with open(llm_configs_path, "r") as file:
-        llm_configs = json.loads(file.read())
-    return [LLMConfig(**config) for config in llm_configs]
-
-
 async def load_data_generation_config(agent_run, data_generation_config_path):
     run_config = agent_run.deployment.data_generation_config
     if run_config is None:
@@ -411,23 +406,105 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     return module_run
 
 def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment]):
-    if "config" in deployment and isinstance(deployment.config, dict):
-        config_name = deployment.config["config_name"]
+    if "config_schema" in deployment.config and deployment.config["config_schema"] is not None:
+        config_schema = deployment.config["config_schema"]
         module_name = deployment.module["name"].replace("-", "_")
         schemas_module = importlib.import_module(f"{module_name}.schemas")
-        ConfigSchema = getattr(schemas_module, config_name)
+        ConfigSchema = getattr(schemas_module, config_schema)
         deployment.config = ConfigSchema(**deployment.config)
     return deployment
 
-async def load_module_deployments(module_type: str, default_deployments_path: str, input_deployments: list):
-    """
-    Generic function to load and merge deployments for any module type.
-    
-    Args:
-        module_type: Type of module ("agent", "tool", "environment", "kb", "orchestrator")
-        default_deployments_path: Path to default deployment config file
-        input_deployments: List of input deployments to merge with defaults
-    """
+def load_llm_configs(llm_configs_path):
+    logger.info(f"Loading LLM configs from {llm_configs_path}")
+    with open(llm_configs_path, "r") as file:
+        llm_configs = json.loads(file.read())
+    return [LLMConfig(**config) for config in llm_configs]
+
+async def load_module_metadata(module_type: str, deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment]):
+    logger.info(f"Loading module metadata for deployment {deployment}")
+    module_name = deployment.module["name"]
+
+    logger.info(f"Loading module metadata for {module_name}")
+    module_data = await list_modules(module_type, module_name)
+    deployment.module = module_data
+
+    if not module_data:
+        raise ValueError(f"Module {module_type} {module_name} not found")
+
+    return module_data
+
+async def load_node_metadata(deployment):
+    # Node metadata is always loaded from input parameters
+    logger.info(f"Loading node metadata for {deployment.node.ip}")
+    assert deployment.node is not None, "Node is not set"
+    node_data = await list_nodes(deployment.node.ip)
+    deployment.node = node_data
+    logger.info(f"Node metadata loaded {deployment.node}")
+
+async def load_module_config_data(deployment, default_deployment):
+    logger.info(f"Loading module config data for {deployment.module.name}")
+
+    module_name = deployment.module.name
+    module_type = deployment.module.id.split(":")[0]
+    module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}")
+
+    deployment.config = default_deployment["config"]
+
+    if "llm_config" in default_deployment["config"] and default_deployment["config"]["llm_config"] is not None:
+        config_name = default_deployment["config"]["llm_config"]["config_name"]
+        config_path = f"{module_path}/configs/llm_configs.json"
+        llm_configs = load_llm_configs(config_path)
+        llm_config = next(config for config in llm_configs if config.config_name == config_name)
+        deployment.config["llm_config"] = llm_config
+    if "persona_module" in default_deployment["config"] and default_deployment["config"]["persona_module"] is not None:
+        persona_url = default_deployment["config"]["persona_module"]["module_url"]
+        persona_dir = await install_persona(persona_url)
+        deployment.config["persona_module"] = {"data": load_persona(persona_dir)}
+
+    logger.info(f"Module config data loaded {deployment.config}")
+
+async def load_subdeployments(deployment, main_deployment_default):
+    logger.info(f"Loading subdeployments for {main_deployment_default['module']['name']}")
+    logger.info(f"Main deployment default: {main_deployment_default}")
+
+    module_path = Path(f"{MODULES_SOURCE_DIR}/{main_deployment_default["module"]["name"]}/{main_deployment_default["module"]["name"]}")
+
+    if hasattr(deployment, "agent_deployments") and deployment.agent_deployments:
+        # Update defaults with non-None values from input
+        agent_deployments = []
+        for i, agent_deployment in enumerate(deployment.agent_deployments):
+            deployment_name = main_deployment_default["agent_deployments"][i]["name"]
+            agent_deployment = await setup_module_deployment("agent", module_path / "configs/agent_deployments.json", deployment_name, deployment.agent_deployments[i])
+            agent_deployments.append(agent_deployment)
+        deployment.agent_deployments = agent_deployments
+    if hasattr(deployment, "tool_deployments") and deployment.tool_deployments:
+        tool_deployments = []
+        for i, tool_deployment in enumerate(deployment.tool_deployments):
+            deployment_name = main_deployment_default["tool_deployments"][i]["name"]
+            tool_deployment = await setup_module_deployment("tool", module_path / "configs/tool_deployments.json", deployment_name, deployment.tool_deployments[i])
+            tool_deployments.append(tool_deployment)
+        deployment.tool_deployments = tool_deployments
+    if hasattr(deployment, "environment_deployments") and deployment.environment_deployments:
+        environment_deployments = []
+        for i, environment_deployment in enumerate(deployment.environment_deployments):
+            deployment_name = main_deployment_default["environment_deployments"][i]["name"]
+            environment_deployment = await setup_module_deployment("environment", module_path / "configs/environment_deployments.json", deployment_name, deployment.environment_deployments[i])
+            environment_deployments.append(environment_deployment)
+        deployment.environment_deployments = environment_deployments
+    if hasattr(deployment, "kb_deployments") and deployment.kb_deployments:
+        kb_deployments = []
+        for i, kb_deployment in enumerate(deployment.kb_deployments):
+            deployment_name = main_deployment_default["kb_deployments"][i]["name"]
+            kb_deployment = await setup_module_deployment("kb", module_path / "configs/kb_deployments.json", deployment_name, deployment.kb_deployments[i])
+            kb_deployments.append(kb_deployment)
+        deployment.kb_deployments = kb_deployments
+    logger.info(f"Subdeployments loaded {deployment}")
+    return deployment
+
+async def setup_module_deployment(module_type: str, main_deployment_default_path: str, deployment_name: str, deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment]):
+    logger.info(f"Setting up module deployment for {deployment_name}")
+    logger.info(f"Deployment: {deployment}")
+
     # Map deployment types to their corresponding classes
     deployment_map = {
         "agent": AgentDeployment,
@@ -437,136 +514,42 @@ async def load_module_deployments(module_type: str, default_deployments_path: st
         "orchestrator": OrchestratorDeployment
     }
 
-    # Load default configurations from file
-    with open(default_deployments_path, "r") as file:
-        default_deployments = json.loads(file.read())
+    if deployment.module:
+        # Install module from input parameters
+        module = await load_module_metadata(module_type, deployment)
+        await install_module_with_lock(module)
 
-    module_path = Path(default_deployments_path).parent.parent
+    # Load default deployment config from module
+    with open(main_deployment_default_path, "r") as file:
+        main_deployment_default = json.loads(file.read())
 
-    # Special handling for agent and tool deployments that have LLM configs
-    if module_type in ["agent", "tool"]:
-        for deployment in default_deployments:
-            if "config" in deployment and "llm_config" in deployment["config"]:
-                config_name = deployment["config"]["llm_config"]["config_name"]
-                config_path = f"{module_path}/configs/llm_configs.json"
-                llm_configs = load_llm_configs(config_path)
-                llm_config = next(config for config in llm_configs if config.config_name == config_name)
-                deployment["config"]["llm_config"] = llm_config
+    if deployment_name is None:
+        default_deployment = main_deployment_default[0]
+    else:
+        # Get the first deployment with matching name
+        default_deployment = next((d for d in main_deployment_default if d["name"] == deployment_name), None)
+        if default_deployment is None:
+            raise ValueError(f"No default deployment found with name {deployment_name}")
 
-    # Special handling for agent deployments with personas
-    if module_type == "agent":
-        for deployment in default_deployments:
-            if "persona_module" in deployment["config"] and "module_url" in deployment["config"]["persona_module"]:
-                persona_url = deployment["config"]["persona_module"]["module_url"]
-                persona_dir = await install_persona(persona_url)
-                deployment["config"]["persona_module"]["data"] = load_persona(persona_dir)
+    if not deployment.module:
+        # Install module from default deployment
+        module = await load_module_metadata(module_type, deployment_map[module_type](**default_deployment))
+        deployment.module = module
+        await install_module_with_lock(module)
 
-    # Get the first default deployment as base
-    default_deployment = default_deployments[0]
-    input_deployment = input_deployments[0]
+    # Fill in metadata and config data
+    await load_node_metadata(deployment)
+    await load_module_config_data(deployment, default_deployment)
+    deployment = await load_subdeployments(deployment, default_deployment)
 
-    # Update defaults with non-None values from input
-    for key, value in input_deployment.dict(exclude_unset=True).items():           
+    # Override default deployment with input values
+    for key, value in deployment.__dict__.items():    
         if value is not None:
             default_deployment[key] = value
 
-    return [deployment_map[module_type](**default_deployment)]
+    deployment.initialized = True
 
-# Replace individual load functions with calls to generic function
-async def load_agent_deployments(input_deployments, default_config_path):
-    return await load_module_deployments("agent", default_config_path, input_deployments)
-
-async def load_tool_deployments(default_tool_deployments_path, input_tool_deployments):
-    return await load_module_deployments("tool", default_tool_deployments_path, input_tool_deployments)
-
-async def load_environment_deployments(default_environment_deployments_path, input_environment_deployments):
-    return await load_module_deployments("environment", default_environment_deployments_path, input_environment_deployments)
-
-async def load_kb_deployments(default_kb_deployments_path, input_kb_deployments):
-    return await load_module_deployments("kb", default_kb_deployments_path, input_kb_deployments)
-
-async def load_orchestrator_deployments(default_orchestrator_deployments_path, input_orchestrator_deployments):
-    return await load_module_deployments("orchestrator", default_orchestrator_deployments_path, input_orchestrator_deployments)
-
-async def load_deployments_and_subdeployments(module_run, module_type="agent"):
-
-    module_name = module_run.deployment.module['name']
-    module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}")
-
-    # Load sub-deployments
-    if hasattr(module_run.deployment, "agent_deployments") and module_run.deployment.agent_deployments:
-        agent_deployments = await load_agent_deployments(
-            input_deployments=module_run.deployment.agent_deployments,
-            default_config_path=module_path / "configs/agent_deployments.json"
-        )
-        module_run.deployment.agent_deployments = agent_deployments
-    if hasattr(module_run.deployment, "tool_deployments") and module_run.deployment.tool_deployments:
-        tool_deployments = await load_tool_deployments(
-            default_tool_deployments_path=module_path / "configs/tool_deployments.json",
-            input_tool_deployments=module_run.deployment.tool_deployments
-        )
-        module_run.deployment.tool_deployments = tool_deployments
-    if hasattr(module_run.deployment, "environment_deployments") and module_run.deployment.environment_deployments:
-        environment_deployments = await load_environment_deployments(
-            environment_deployments_path=module_path / "configs/environment_deployments.json",
-            module=module_run.deployment.module
-        )
-        module_run.deployment.environment_deployments = environment_deployments
-    if hasattr(module_run.deployment, "kb_deployments") and module_run.deployment.kb_deployments:
-        kb_deployments = await load_kb_deployments(
-            default_kb_deployments_path=module_path / "configs/kb_deployments.json",
-            input_kb_deployments=module_run.deployment.kb_deployments
-        )
-        module_run.deployment.kb_deployments = kb_deployments
-
-    # Load the module from the modules directory
-    if module_type == "agent":
-        deployments = await load_agent_deployments(
-            input_deployments=[module_run.deployment],
-            default_config_path=module_path / "configs/agent_deployments.json"
-        )
-        module_run.deployment = deployments[0]
-
-    elif module_type == "orchestrator":
-        deployments = await load_orchestrator_deployments(
-            input_deployments=[module_run.deployment],
-            default_config_path=module_path / "configs/orchestrator_deployments.json"
-        )
-
-    elif module_type == "tool":
-        tool_deployments = await load_tool_deployments(
-            default_tool_deployments_path=module_path / "configs/tool_deployments.json",
-            input_tool_deployments=[module_run.deployment]
-        )
-        module_run.deployment = tool_deployments[0]
-        
-    elif module_type == "environment":       
-        deployments = load_environment_deployments(
-            environment_deployments_path=module_path / "configs/environment_deployments.json",
-            module=module_run.deployment.module
-        )
-        module_run.deployment = deployments[0]
-
-    elif module_type == "knowledge_base":
-        kb_deployments = await load_kb_deployments(
-            default_kb_deployments_path=module_path / "configs/kb_deployments.json",
-            input_kb_deployments=[module_run.deployment]
-        )
-        module_run.deployment = kb_deployments[0]
-
-    else:
-        raise ValueError("module_type must be either 'agent', 'orchestrator', 'tool', 'environment' or 'knowledge_base'")
-
-    if module_type == "agent" and module_run.deployment.data_generation_config:
-        # Handle output configuration
-        if module_run.deployment.data_generation_config.save_outputs:
-            if ':' in module_run.id:
-                output_path = f"{BASE_OUTPUT_DIR}/{module_run.id.split(':')[1]}"
-            else:
-                output_path = f"{BASE_OUTPUT_DIR}/{module_run.id}"
-            module_run.deployment.data_generation_config.save_outputs_path = output_path
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
+    return deployment_map[module_type](**default_deployment)
 
 async def load_module(module_run):
 

@@ -86,10 +86,7 @@ async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun
         module_run: Either an AgentRun, OrchestratorRun, or EnvironmentRun object
     """
     try:
-        if isinstance(module_run, OrchestratorRun):
-            module_run_engine = OrchestratorEngine(module_run)
-        else:
-            module_run_engine = ModuleRunEngine(module_run)
+        module_run_engine = ModuleRunEngine(module_run)
 
         module_version = f"v{module_run_engine.module['module_version']}"
         module_name = module_run_engine.module["name"]
@@ -241,20 +238,28 @@ class ModuleRunEngine:
         
         # Handle output for agent runs
         if self.module_type == "agent":
-            await self.handle_output(self.deployment, response)
+            await self.handle_output(self.module_run, response)
             
         self.module_run.status = "completed"
 
-    async def handle_output(self, deployment, results):
+    async def handle_output(self, module_run, results):
         """Handles the output of the module run (only for agent and tool runs)"""
-        if deployment.data_generation_config:
-            save_location = deployment.data_generation_config.save_outputs_location
+        if module_run.deployment.data_generation_config:
+            save_location = module_run.deployment.data_generation_config.save_outputs_location
             if save_location:
-                deployment.data_generation_config.save_outputs_location = save_location
+                module_run.deployment.data_generation_config.save_outputs_location = save_location
 
-            if deployment.data_generation_config.save_outputs:
-                if save_location == "ipfs":
-                    save_path = getattr(self.deployment.data_generation_config, "save_outputs_path")
+            if module_run.deployment.data_generation_config.save_outputs:
+                if save_location == "node":
+                    if ':' in module_run.id:
+                        output_path = f"{BASE_OUTPUT_DIR}/{module_run.id.split(':')[1]}"
+                    else:
+                        output_path = f"{BASE_OUTPUT_DIR}/{module_run.id}"
+                    module_run.deployment.data_generation_config.save_outputs_path = output_path
+                    if not os.path.exists(output_path):
+                        os.makedirs(output_path)
+                elif save_location == "ipfs":
+                    save_path = getattr(module_run.deployment.data_generation_config, "save_outputs_path")
                     out_msg = upload_to_ipfs(save_path)
                     out_msg = f"IPFS Hash: {out_msg}"
                     logger.info(f"Output uploaded to IPFS: {out_msg}")
