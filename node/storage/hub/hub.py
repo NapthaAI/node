@@ -3,7 +3,7 @@ import jwt
 import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
-from node.schemas import AgentModule, NodeConfig
+from node.schemas import AgentModule, NodeConfig, NodeServer
 import os
 from surrealdb import Surreal
 import traceback
@@ -110,12 +110,39 @@ class Hub(AsyncMixin):
             return result[0]["result"][0]
         return None
 
-    async def create_node(self, node_config: NodeConfig) -> Dict:
+    async def get_server(self, server_name: str=None, server_id: str=None) -> Optional[Dict]:
+        if server_name:
+            result = await self.surrealdb.query("SELECT * FROM server WHERE name = $server_name LIMIT 1", {"name": server_name})
+        elif server_id:
+            result = await self.surrealdb.select(server_id)
+        return result
+
+    async def create_server(self, server_config: NodeServer):
+        """Create a server record in the database"""
+        logger.info(f"Creating server: {server_config}")
+        server = await self.surrealdb.create("server", server_config)
+        logger.info(f"created server: {server}")
+        if isinstance(server, dict):
+            return server
+        return server[0]
+    
+    async def create_node(self, node_config: NodeConfig, servers: Optional[List[str]]=None) -> Dict:
         node_config.owner = self.user_id
         node_id = node_config.id
+
+        # Create server records first
+        server_records = []
+        if servers:
+            for server in servers:
+                s = await self.create_server(server)
+                server_records.append(s['id'])
+            # Add server records to node_config
+            node_config.servers = server_records
+
         logger.info(f"Creating node: {node_config}")
         self.node_config = await self.surrealdb.create(node_id, node_config)
         logger.info(f"Created node: {self.node_config}")
+        
         if self.node_config is None:
             raise Exception("Failed to register node")
         if isinstance(self.node_config, dict):
@@ -128,11 +155,31 @@ class Hub(AsyncMixin):
     async def update_node(self, node_id: str, node: Dict) -> bool:
         return await self.surrealdb.update(node_id, node)
 
-    async def list_nodes(self) -> List:
-        return await self.surrealdb.select("node")
+    async def list_nodes(self, node_ip=None) -> List:
+        if not node_ip:
+            nodes = await self.surrealdb.query("SELECT * FROM node;")
+            return nodes[0]['result']
+        else:
+            nodes = await self.surrealdb.query("SELECT * FROM node WHERE ip=$node_ip;", {"node_ip": node_ip})
+            node = nodes[0]['result'][0]
+            server_ids = node['servers']
+            servers = await self.surrealdb.query("SELECT * FROM server WHERE id=$server_ids;", {"server_ids": server_ids})
+            node['servers'] = [NodeServer(**server) for server in servers[0]['result']]
+            return NodeConfig(**node)
 
-    async def delete_node(self, node_id: str) -> bool:
+    async def delete_node(self, node_id: str, servers: Optional[List[str]]=None) -> bool:
+        # Delete server records first
+        if servers:
+            for server in servers:
+                try:
+                    await self.delete_server(server)
+                except Exception as e:
+                    logger.error(f"Error deleting server: {e}")
+                    return False
         return await self.surrealdb.delete(node_id)
+    
+    async def delete_server(self, server_id: str) -> bool:
+        return await self.surrealdb.delete(server_id)
 
     async def list_agents(self, agent_name=None) -> List:
         try:
@@ -275,3 +322,16 @@ async def list_modules(module_type: str, module_name: str) -> List:
             raise ValueError(f"{module_type.capitalize()} module '{module_name}' not found")
 
         return module
+    
+async def list_nodes(node_ip: str) -> List:
+
+    hub_username = os.getenv("HUB_USERNAME")
+    hub_password = os.getenv("HUB_PASSWORD")
+
+    async with Hub() as hub:
+        try:
+            _, _, _ = await hub.signin(hub_username, hub_password)
+        except Exception as auth_error:
+            raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
+
+        return await hub.list_nodes(node_ip=node_ip)

@@ -17,7 +17,9 @@ from node.server import grpc_server_pb2, grpc_server_pb2_grpc
 from google.protobuf.struct_pb2 import Struct
 from google.protobuf.json_format import MessageToDict
 from node.grpc_pool_manager import get_grpc_pool_instance
+from node.schemas import NodeConfigInput
 
+from node.utils import node_to_url
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,10 @@ HTTP_TIMEOUT = 300
 
 
 class Node:
-    def __init__(self, node_url, server_type):
-        self.node_url = node_url
-        self.server_type = server_type
+    def __init__(self, node_schema: NodeConfigInput):
+        self.node_schema = node_schema
+        self.node_url = node_to_url(node_schema)
+        self.server_type = node_schema.server_type
         self.connections = {}
         self.access_token = None
 
@@ -91,6 +94,20 @@ class Node:
             return json.loads(response)
         finally:
             await self.disconnect_ws(client_id)
+
+    async def check_health(self):
+        # only works for http and ws
+        if self.server_type == "http" or self.server_type == "ws":
+            try:
+                async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                    response = await client.get(f"{self.node_url}/health")
+                    response.raise_for_status()
+                    return True
+            except Exception as e:
+                logger.error(f"Error checking health: {e}")
+                return False
+        else:
+            raise ValueError("Invalid server type")
 
     async def check_user(self, user_input):
         print("Checking user... ", user_input)

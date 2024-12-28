@@ -3,17 +3,16 @@ import io
 import json
 import httpx
 import logging
-import os
 import traceback
 from datetime import datetime
 from typing import Optional, Union, Any, Dict
-
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
+from pathlib import Path
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -23,13 +22,7 @@ from tenacity import (
 
 from node.config import MODULES_SOURCE_DIR
 from node.module_manager import (
-    install_module_with_lock, 
-    load_agent_deployments, 
-    load_tool_deployments, 
-    load_orchestrator_deployments, 
-    load_environment_deployments, 
-    load_kb_deployments,
-    load_deployments
+    setup_module_deployment,
 )
 from node.schemas import (
     AgentRun,
@@ -52,7 +45,7 @@ from node.schemas import (
     ToolDeployment,
 )
 from node.storage.db.db import DB
-from node.storage.hub.hub import Hub, list_modules
+from node.storage.hub.hub import Hub, list_modules, list_nodes
 from node.storage.storage import (
     write_to_ipfs,
     read_from_ipfs_or_ipns,
@@ -63,6 +56,7 @@ from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb
+from node.client import Node as NodeClient
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -331,6 +325,19 @@ class HTTPServer:
                 response.pop('_sa_instance_state')
             return response
 
+        async def get_server_connection(self, server_id: str):
+            """
+                Gets server connection details from hub and returns appropriate Node object
+            """
+            try:
+                async with Hub() as hub:
+                    logger.info(f"Getting server connection for {server_id}")
+                    server = await hub.get_server(server_id=server_id)
+                    logger.info(f"Server: {server}")
+                    return server['connection_string']
+            except Exception as e:
+                logger.error(f"Error getting server connection: {e}")
+                raise
         # Monitor endpoints
         @router.post("/monitor/create_agent_run")
         async def monitor_create_agent_run_endpoint(
@@ -455,6 +462,42 @@ class HTTPServer:
             allow_headers=["*"],
         )
 
+    async def register_user_on_worker_nodes(self, module_run: Union[AgentRun, OrchestratorRun]):
+        """
+        Registers user on worker nodes.
+        """
+        logger.info(f"Validating user {module_run.consumer_id} access on worker nodes")
+
+        worker_nodes = []
+        if hasattr(module_run, "agent_deployments"):
+            for deployment in module_run.agent_deployments:
+                if deployment.worker_node:
+                    worker_nodes.append(NodeClient(deployment.worker_node))
+        elif hasattr(module_run, "tool_deployments"):
+            for deployment in module_run.tool_deployments:
+                if deployment.tool_node:
+                    worker_nodes.append(NodeClient(deployment.tool_node))
+        elif hasattr(module_run, "environment_deployments"):
+            for deployment in module_run.environment_deployments:
+                if deployment.environment_node:
+                    worker_nodes.append(NodeClient(deployment.environment_node))
+        elif hasattr(module_run, "kb_deployments"):
+            for deployment in module_run.kb_deployments:
+                if deployment.kb_node:
+                    worker_nodes.append(NodeClient(deployment.kb_node))
+
+        for worker_node_client in worker_nodes:
+            async with worker_node_client as node_client:
+                consumer = await node_client.check_user(user_input=self.consumer)
+                
+                if consumer["is_registered"]:
+                    logger.info(f"User validated on worker node: {node_client.node_schema}")
+                    return
+                
+                logger.info(f"Registering new user on worker node: {node_client.node_schema}")
+                consumer = await node_client.register_user(user_input=consumer)
+                logger.info(f"User registration complete on worker node: {node_client.node_schema}")
+
     async def create_module(self, module_deployment: Union[AgentDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
         """
         Unified method to create and install any type of module and its sub-modules
@@ -481,100 +524,13 @@ class HTTPServer:
 
             logger.info(f"Creating {module_type}: {module_deployment}")
 
-            # Install main module
-            module = await list_modules(module_type, module_name)
-            if not module:
-                raise HTTPException(status_code=404, detail=f"{module_type} {module_name} not found")
+            main_module_name = module_deployment.module['name']
+            main_module_path = Path(f"{MODULES_SOURCE_DIR}/{main_module_name}/{main_module_name}")
 
-            try:
-                await install_module_with_lock(module)
-            except Exception as install_error:
-                logger.error(f"Failed to install {module_type}: {str(install_error)}")
-                logger.debug(f"Full traceback: {traceback.format_exc()}")
-                raise HTTPException(status_code=500, detail=f"{module_type.capitalize()} installation failed: {str(install_error)}")
+            module_deployment = await setup_module_deployment(module_type, main_module_path / "configs/deployment.json", module_deployment.name, module_deployment)
 
-            # Set up paths for config files
-            module_path = os.path.join(MODULES_SOURCE_DIR or "/tmp", module.name)
-            config_path = os.path.join(module_path, module.name, "configs")
+            return module_deployment
 
-            deployment_status = {
-                "status": "success",
-                "message": f"{module_type.capitalize()} created successfully",
-                "sub_modules": {}
-            }
-
-            # Load and process sub-deployments using specialized loaders
-            loader_map = {
-                "agent_deployments": (load_agent_deployments, "agent"),
-                "tool_deployments": (load_tool_deployments, "tool"),
-                "environment_deployments": (
-                    lambda deployments, config_path: load_deployments(
-                        deployments_path=config_path,  # Don't append filename here since it's already in config_path
-                        input_deployments=deployments,
-                        deployment_type="environment"
-                    ),
-                    "environment"
-                ),
-                "kb_deployments": (
-                    lambda deployments, config_path: load_deployments(
-                        deployments_path=config_path,  # Don't append filename here since it's already in config_path
-                        input_deployments=deployments,
-                        deployment_type="kb"
-                    ),
-                    "kb"
-                )
-            }
-
-            for attr_name, (loader_func, sub_type) in loader_map.items():
-                if hasattr(module_deployment, attr_name):
-                    config_file = os.path.join(config_path, f"{attr_name}.json")
-                    deployments = getattr(module_deployment, attr_name)
-
-                    # Process if we have deployments in input OR config file exists
-                    if deployments is not None or os.path.exists(config_file):
-                        try:
-                            # If no deployments passed but config exists, initialize empty list
-                            if deployments is None and os.path.exists(config_file):
-                                deployments = []
-
-                            # Load and merge deployments
-                            merged_deployments = await loader_func(deployments, config_file)
-                            
-                            # Install sub-modules
-                            installation_status = []
-                            sub_modules = set()
-                            
-                            for deployment in merged_deployments:
-                                module_name = (deployment.module["name"] if isinstance(deployment.module, dict) 
-                                            else deployment.module.name)
-                                sub_modules.add(module_name)
-                                
-                                try:
-                                    sub_module = await list_modules(sub_type, module_name)
-                                    if sub_module:
-                                        await install_module_with_lock(sub_module)
-                                        installation_status.append({
-                                            "name": module_name,
-                                            "module_version": sub_module.module_version,
-                                            "status": "success"
-                                        })
-                                except Exception as e:
-                                    installation_status.append({
-                                        "name": module_name,
-                                        "module_version": "unknown",
-                                        "status": str(e)
-                                    })
-
-                            deployment_status["sub_modules"][sub_type] = {
-                                "modules": list(sub_modules),
-                                "installation_status": installation_status
-                            }
-                            
-                        except Exception as e:
-                            logger.error(f"Failed to load {sub_type} deployments: {str(e)}")
-                            logger.debug(f"Full traceback: {traceback.format_exc()}")
-
-            return JSONResponse(content=deployment_status)
 
         except Exception as e:
             logger.error(f"Failed to create module: {str(e)}")
@@ -583,7 +539,7 @@ class HTTPServer:
 
     async def run_module(
         self, 
-        run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
+        module_run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
     ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, ToolRun]:
         """
         Generic method to run either an agent, orchestrator, environment, tool or kb
@@ -591,73 +547,74 @@ class HTTPServer:
         :return: Status
         """
         try:
+
+            if not module_run_input.deployment.initialized == True:
+                module_deployment = await self.create_module(module_run_input.deployment)
+                module_run_input.deployment = module_deployment
+
             # Determine module type and configuration
-            if isinstance(run_input, AgentRunInput):
+            if isinstance(module_run_input, AgentRunInput):
                 module_type = "agent"
-                deployment = run_input.agent_deployment
-                create_func = lambda db: db.create_agent_run(run_input)
-            elif isinstance(run_input, ToolRunInput):
+                create_func = lambda db: db.create_agent_run
+            elif isinstance(module_run_input, ToolRunInput):
                 module_type = "tool"
-                deployment = run_input.tool_deployment
-                create_func = lambda db: db.create_tool_run(run_input)
-            elif isinstance(run_input, OrchestratorRunInput):
+                create_func = lambda db: db.create_tool_run
+            elif isinstance(module_run_input, OrchestratorRunInput):
                 module_type = "orchestrator"
-                deployment = run_input.orchestrator_deployment
-                create_func = lambda db: db.create_orchestrator_run(run_input)
-            elif isinstance(run_input, EnvironmentRunInput):
+                create_func = lambda db: db.create_orchestrator_run
+            elif isinstance(module_run_input, EnvironmentRunInput):
                 module_type = "environment"
-                deployment = run_input.environment_deployment
-                create_func = lambda db: db.create_environment_run(run_input)
-            elif isinstance(run_input, KBRunInput):
+                create_func = lambda db: db.create_environment_run
+            elif isinstance(module_run_input, KBRunInput):
                 module_type = "kb"
-                deployment = run_input.kb_deployment
-                create_func = lambda db: db.create_kb_run(run_input)
+                create_func = lambda db: db.create_kb_run
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
-            logger.info(f"Received request to run {module_type}: {run_input}")
+            logger.info(f"Received request to run {module_type}: {module_run_input}")
 
-            deployment.module = await list_modules(module_type, deployment.module["name"])
 
-            # Create run record in DB
+            # Create module run record in DB
             async with DB() as db:
-                run = await create_func(db)
-                if not run:
+                module_run = await create_func(db)(module_run_input)
+                if not module_run:
                     raise HTTPException(status_code=500, detail=f"Failed to create {module_type} run")
-                run_data = run.model_dump()
+                module_run_data = module_run.model_dump()
 
-                logger.info(f"Run data: {run_data}")
+                logger.info(f"{module_type.capitalize()} run data: {module_run_data}")
+
+            await self.register_user_on_worker_nodes(module_run)
 
             # Execute the task based on module type
-            if deployment.module.module_type == AgentModuleType.package:
+            if module_run_input.deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
-                    _ = run_agent.delay(run_data)
+                    _ = run_agent.delay(module_run_data)
                 elif module_type == "tool":
-                    _ = run_tool.delay(run_data)
+                    _ = run_tool.delay(module_run_data)
                 elif module_type == "orchestrator":
-                    _ = run_orchestrator.delay(run_data)
+                    _ = run_orchestrator.delay(module_run_data)
                 elif module_type == "environment":
-                    _ = run_environment.delay(run_data)
+                    _ = run_environment.delay(module_run_data)
                 elif module_type == "kb":
-                    _ = run_kb.delay(run_data)
-            elif deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
+                    _ = run_kb.delay(module_run_data)
+            elif module_run_input.deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
                 # validate docker params
                 try:
-                    _ = DockerParams(**run_data["inputs"])
+                    _ = DockerParams(**module_run_data["inputs"])
                 except Exception as e:
                     raise HTTPException(status_code=400, detail=f"Invalid docker params: {str(e)}")
-                _ = execute_docker_agent.delay(run_data)
+                _ = execute_docker_agent.delay(module_run_data)
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid {module_type} run type")
 
-            return run_data
+            return module_run_data
 
         except Exception as e:
             logger.error(f"Failed to run {module_type}: {str(e)}")
             error_details = traceback.format_exc()
             logger.error(f"Full traceback: {error_details}")
             raise HTTPException(
-                status_code=500, detail=f"Failed to run {module_type}: {run_input}"
+                status_code=500, detail=f"Failed to run {module_type}: {module_run_input}"
             )
 
     async def agent_create(self, agent_deployment: AgentDeployment) -> AgentDeployment:

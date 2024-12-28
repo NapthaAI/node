@@ -4,6 +4,7 @@ import os
 import signal
 from pathlib import Path
 from typing import Optional
+import traceback
 
 from node.config import get_node_config
 from node.storage.hub.hub import Hub
@@ -18,13 +19,13 @@ load_dotenv()
 FILE_PATH = Path(__file__).resolve()
 PARENT_DIR = FILE_PATH.parent
 
+
 class NodeServer:
     def __init__(self, server_type: str, port: int):
         self.node_config = get_node_config()
         self.node_id = self.node_config.id.split(":")[1]
         # Store initial config values
         self.ip = self.node_config.ip
-        self.type = self.node_config.node_type
         self.server: Optional[HTTPServer | WebSocketServer | GrpcServer] = None
         self.server_type = server_type
         self.port = port
@@ -51,15 +52,37 @@ class NodeServer:
                     except Exception as e:
                         logger.info(f"No existing node to clean up: {e}")
                     
+                    # Create http server records first
+                    server_records = []
+                    ip_ = self.node_config.ip
+                    http_port = self.node_config.http_port
+                    if "http://" in ip_:    
+                        ip_ = ip_.split("//")[1]
+                    server_records.append({
+                        "server_type": 'http',
+                        "node_id": self.node_id,
+                        "port": http_port
+                    })
+
+                    # Create other server records
+                    for i in range(self.node_config.num_servers):
+                        server_records.append({
+                            "server_type": self.node_config.server_type,
+                            "node_id": self.node_id,
+                            "port": self.node_config.servers[i].port
+                        })
+
+                    logger.info(f"Server records: {server_records}")
+
                     # Now register the node
-                    self.node_config = await hub.create_node(node_config=self.node_config)
+                    self.node_config = await hub.create_node(node_config=self.node_config, servers=server_records)
                     if isinstance(self.node_config, dict):
                         self.node_id = self.node_config["id"].split(":")[1]
                         self.ip = self.node_config["ip"]
-                        self.type = self.node_config["node_type"]
                     logger.info(f"Registered node: {self.node_config['id'] if isinstance(self.node_config, dict) else self.node_config.id}")
             except Exception as e:
                 logger.error(f"Error during node registration: {e}")
+                logger.error(f"Traceback: {''.join(traceback.format_exc())}")
                 # Ensure we try to clean up even if registration fails
                 await self.unregister_node()
                 raise
@@ -92,7 +115,6 @@ class NodeServer:
             self.server = WebSocketServer(
                 ip, 
                 self.port,
-                node_type=self.type,
                 node_id=self.node_id
             )
         elif self.server_type == "grpc":
@@ -100,7 +122,6 @@ class NodeServer:
             self.server = GrpcServer(
                 ip,
                 self.port,
-                node_type=self.type,
                 node_id=self.node_id
             )
         else:
@@ -128,7 +149,7 @@ class NodeServer:
 
                         # Add timeout to delete_node
                         success = await asyncio.wait_for(
-                            hub.delete_node(node_id=node_id),
+                            hub.delete_node(node_id=node_id, servers=self.node_config['servers']),
                             timeout=10.0
                         )
 
@@ -212,6 +233,7 @@ async def run_server(server_type: str, port: int):
         
     except Exception as e:
         logger.error(f"Error running server: {e}")
+        logger.error(traceback.format_exc())
         if not node_server.shutdown_event.is_set():
             await node_server.graceful_shutdown()
     finally:

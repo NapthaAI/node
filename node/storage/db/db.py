@@ -146,8 +146,8 @@ class DB:
         try:
             Model, Schema = model_map[run_type]
             with self.session() as db:
-                if hasattr(run_input, 'model_dump'):
-                    run = Model(**run_input.model_dump())
+                if hasattr(run_input, 'model_dict'):
+                    run = Model(**run_input.model_dict())
                 else:
                     run = Model(**run_input)
                 db.add(run)

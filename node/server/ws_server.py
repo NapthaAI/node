@@ -83,10 +83,9 @@ class DateTimeEncoder(json.JSONEncoder):
 
 
 class WebSocketServer:
-    def __init__(self, host: str, port: int, node_type: str, node_id: str):
+    def __init__(self, host: str, port: int, node_id: str):
         self.host = host
         self.port = port
-        self.node_type = node_type
         self.node_id = node_id
         self.app = FastAPI()
         self.temp_files = {}
@@ -1111,40 +1110,20 @@ class WebSocketServer:
 
     async def launch_server(self):
         """Start the WebSocket server"""
-        if self.node_type == "indirect":
-            # Your existing indirect server code...
-            node_id_app = FastAPI()
-            
-            @node_id_app.get("/node_id")
-            async def get_node_id():
-                return {"node_id": self.node_id}
-
-            node_id_config = uvicorn.Config(
-                node_id_app, 
-                host="0.0.0.0", 
-                port=self.port, 
-                log_level="info"
-            )
-            node_id_server = uvicorn.Server(node_id_config)
-
-            asyncio.create_task(node_id_server.serve())
-            self.relay_websocket = await self.establish_connection()
-            await self.handle_indirect_messages()
-        else:
-            config = uvicorn.Config(
-                self.app,
-                host="0.0.0.0",
-                port=self.port,
-                log_level="debug",
-                timeout_keep_alive=300,
-                limit_concurrency=2000,
-                backlog=4096,
-                timeout_graceful_shutdown=5,
-                reload=False
-            )
-            self.server = uvicorn.Server(config)
-            self._started = True
-            try:
-                await self.server.serve()
-            finally:
-                self._started = False
+        config = uvicorn.Config(
+            self.app,
+            host="0.0.0.0",
+            port=self.port,
+            log_level="debug",
+            timeout_keep_alive=300,
+            limit_concurrency=2000,
+            backlog=4096,
+            timeout_graceful_shutdown=5,
+            reload=False
+        )
+        self.server = uvicorn.Server(config)
+        self._started = True
+        try:
+            await self.server.serve()
+        finally:
+            self._started = False
