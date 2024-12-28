@@ -338,18 +338,7 @@ class HTTPServer:
             except Exception as e:
                 logger.error(f"Error getting server connection: {e}")
                 raise
-        # Monitor endpoints
-        @router.post("/monitor/create_agent_run")
-        async def monitor_create_agent_run_endpoint(
-            agent_run_input: AgentRunInput,
-        ) -> AgentRun:
-            """Log a new agent run with orchestrator."""
-            return await self.monitor_create_agent_run(agent_run_input)
 
-        @router.post("/monitor/update_agent_run")
-        async def monitor_update_agent_run_endpoint(agent_run: AgentRun) -> AgentRun:
-            """Update an existing agent run with orchestrator."""
-            return await self.monitor_update_agent_run(agent_run)
         # Local DB endpoints
         @router.post("/local-db/create-table")
         async def create_local_table_endpoint(
@@ -738,74 +727,6 @@ class HTTPServer:
 
     async def kb_check(self, kb_run: KBRun) -> KBRun:
         return await self.check_module(kb_run)
-
-    @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=0.5, max=10),
-        retry=retry_if_exception_type(TransientDatabaseError),
-        before_sleep=lambda retry_state: logger.info(
-            f"Retrying operation, attempt {retry_state.attempt_number}"
-        ),
-    )
-    async def monitor_create_agent_run(
-        self, agent_run_input: AgentRunInput
-    ) -> AgentRun:
-        try:
-            logger.info(
-                f"Creating agent run for worker node {agent_run_input.worker_nodes[0]}"
-            )
-            async with DB() as db:
-                agent_run = await db.create_agent_run(agent_run_input)
-                if isinstance(agent_run, list):
-                    agent_run = agent_run[0]
-                agent_run.pop("_sa_instance_state", None)
-                agent_run = AgentRun(**agent_run)
-            logger.info(
-                f"Created agent run for worker node {agent_run_input.worker_nodes[0]}"
-            )
-            return agent_run
-        except Exception as e:
-            logger.error(f"Failed to create agent run: {str(e)}")
-            logger.debug(f"Full traceback: {traceback.format_exc()}")
-            if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
-                raise TransientDatabaseError(str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Internal server error occurred while creating agent run",
-            )
-
-    @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=0.5, max=10),
-        retry=retry_if_exception_type(TransientDatabaseError),
-        before_sleep=lambda retry_state: logger.info(
-            f"Retrying operation, attempt {retry_state.attempt_number}"
-        ),
-    )
-    async def monitor_update_agent_run(self, agent_run: AgentRun) -> AgentRun:
-        try:
-            logger.info(
-                f"Updating agent run for worker node {agent_run.worker_nodes[0]}"
-            )
-            async with DB() as db:
-                updated_agent_run = await db.update_agent_run(agent_run.id, agent_run)
-                if isinstance(updated_agent_run, list):
-                    updated_agent_run = updated_agent_run[0]
-                updated_agent_run.pop("_sa_instance_state", None)
-                updated_agent_run = AgentRun(**updated_agent_run)
-            logger.info(
-                f"Updated agent run for worker node {agent_run.worker_nodes[0]}"
-            )
-            return updated_agent_run
-        except Exception as e:
-            logger.error(f"Failed to update agent run: {str(e)}")
-            logger.debug(f"Full traceback: {traceback.format_exc()}")
-            if isinstance(e, asyncio.TimeoutError) or "Resource busy" in str(e):
-                raise TransientDatabaseError(str(e))
-            raise HTTPException(
-                status_code=500,
-                detail="Internal server error occurred while updating agent run",
-            )
 
     async def create_local_table(self, table_name: str, 
                             schema: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
