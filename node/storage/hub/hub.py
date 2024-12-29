@@ -163,8 +163,11 @@ class Hub(AsyncMixin):
             nodes = await self.surrealdb.query("SELECT * FROM node WHERE ip=$node_ip;", {"node_ip": node_ip})
             node = nodes[0]['result'][0]
             server_ids = node['servers']
-            servers = await self.surrealdb.query("SELECT * FROM server WHERE id=$server_ids;", {"server_ids": server_ids})
-            node['servers'] = [NodeServer(**server) for server in servers[0]['result']]
+            servers = []
+            for server_id in server_ids:
+                server = await self.surrealdb.select(server_id)
+                servers.append(server)
+            node['servers'] = [NodeServer(**server) for server in servers]
             return NodeConfig(**node)
 
     async def delete_node(self, node_id: str, servers: Optional[List[str]]=None) -> bool:
