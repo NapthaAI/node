@@ -12,9 +12,11 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from typing import Dict, List, Optional, Union, Any
 
 from node.config import LOCAL_DB_URL
-from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User, KBRun, ToolRun
+from node.storage.db.models import AgentRun, MemoryRun, OrchestratorRun, EnvironmentRun, User, KBRun, ToolRun
 from node.schemas import (
-    AgentRun as AgentRunSchema, 
+    AgentRun as AgentRunSchema,
+    MemoryRunInput,
+    MemoryRun as MemoryRunSchema,
     OrchestratorRun as OrchestratorRunSchema,
     EnvironmentRun as EnvironmentRunSchema,
     AgentRunInput,
@@ -134,10 +136,11 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
-    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema]:
+    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, MemoryRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema]:
         model_map = {
             'agent': (AgentRun, AgentRunSchema),
-            'orchestrator': (OrchestratorRun, OrchestratorRunSchema), 
+            'memory': (MemoryRun, MemoryRunSchema),
+            'orchestrator': (OrchestratorRun, OrchestratorRunSchema),
             'environment': (EnvironmentRun, EnvironmentRunSchema),
             'knowledge_base': (KBRun, KBRunSchema),
             'tool': (ToolRun, ToolRunSchema)
@@ -161,6 +164,9 @@ class DB:
 
     async def create_agent_run(self, agent_run_input: Union[AgentRunInput, Dict]) -> AgentRunSchema:
         return await self.create_module_run(agent_run_input, 'agent')
+    
+    async def create_memory_run(self, memory_run_input: Union[MemoryRunInput, Dict]) -> MemoryRunSchema:
+        return await self.create_module_run(memory_run_input, 'memory')
 
     async def create_tool_run(self, tool_run_input: Union[ToolRunInput, Dict]) -> ToolRunSchema:
         return await self.create_module_run(tool_run_input, 'tool')
@@ -174,9 +180,10 @@ class DB:
     async def create_kb_run(self, kb_run_input: Union[KBRunInput, Dict]) -> KBRunSchema:
         return await self.create_module_run(kb_run_input, 'knowledge_base')
 
-    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema], run_type: str) -> bool:
+    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, MemoryRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema], run_type: str) -> bool:
         model_map = {
             'agent': AgentRun,
+            'memory': MemoryRun,
             'orchestrator': OrchestratorRun,
             'environment': EnvironmentRun,
             'knowledge_base': KBRun,
@@ -201,6 +208,9 @@ class DB:
 
     async def update_agent_run(self, run_id: int, run_data: AgentRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'agent')
+    
+    async def update_memory_run(self, run_id: int, run_data: MemoryRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'memory')
 
     async def update_tool_run(self, run_id: int, run_data: ToolRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'tool')
@@ -217,6 +227,7 @@ class DB:
     async def list_module_runs(self, run_type: str, run_id: Optional[int] = None) -> Union[Dict, List[Dict], None]:
         model_map = {
             'agent': AgentRun,
+            'memory': MemoryRun,
             'orchestrator': OrchestratorRun,
             'environment': EnvironmentRun,
             'knowledge_base': KBRun,
@@ -248,6 +259,9 @@ class DB:
 
     async def list_agent_runs(self, agent_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('agent', agent_run_id)
+    
+    async def list_memory_runs(self, memory_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('memory', memory_run_id)
 
     async def list_tool_runs(self, tool_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('tool', tool_run_id)
