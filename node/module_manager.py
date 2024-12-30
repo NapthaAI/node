@@ -28,7 +28,8 @@ from node.schemas import (
     Module,
     AgentModule,
     OrchestratorDeployment,
-    OrchestratorRun
+    OrchestratorRun,
+    AgentConfig
 )
 from node.worker.utils import download_from_ipfs, unzip_file
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -175,7 +176,7 @@ async def download_persona(persona_module: str):
 
     persona_url = persona_module.module_url
 
-    logger.info(f"Installing persona {persona_url}")
+    logger.info(f"Downloading persona {persona_url}")
     if persona_url in ["", None, " "]:
         logger.warning(f"Skipping empty persona URL")
         return None
@@ -327,6 +328,7 @@ def install_module(module_name: str, module_version: str, module_source_url: str
 def load_persona(persona_dir: str, persona_module: Module):
     """Load persona from a JSON file in a git repository."""
     try:
+        logger.info(f"Loading persona {persona_module.name} from {persona_dir}")
         persona_dir = Path(persona_dir)
         persona_file = persona_dir / persona_module.module_entrypoint
         with persona_file.open('r') as f:
@@ -435,27 +437,35 @@ async def load_node_metadata(deployment):
     deployment.node = node_data
     logger.info(f"Node metadata loaded {deployment.node}")
 
-async def load_module_config_data(deployment, default_deployment):
+async def load_module_config_data(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment], default_deployment: Dict):
     logger.info(f"Loading module config data for {deployment.module.name}")
 
     module_name = deployment.module.name
     module_type = deployment.module.id.split(":")[0]
     module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}")
 
-    deployment.config = default_deployment["config"]
+    # Iterate over default config and update values of deployment that are not set
+    if deployment.config is None:
+        deployment.config = AgentConfig()
+    for key, value in default_deployment["config"].items():
+        if not hasattr(deployment.config, key) or getattr(deployment.config, key) is None:
+            setattr(deployment.config, key, value)
 
     if "llm_config" in default_deployment["config"] and default_deployment["config"]["llm_config"] is not None:
         config_name = default_deployment["config"]["llm_config"]["config_name"]
         config_path = f"{module_path}/configs/llm_configs.json"
         llm_configs = load_llm_configs(config_path)
         llm_config = next(config for config in llm_configs if config.config_name == config_name)
-        deployment.config["llm_config"] = llm_config
+        deployment.config.llm_config = llm_config
     if "persona_module" in default_deployment["config"] and default_deployment["config"]["persona_module"] is not None:
-        persona_module = default_deployment["config"]["persona_module"]
+        if deployment.config.persona_module is not None:
+            persona_module = deployment.config.persona_module
+        else:
+            persona_module = default_deployment["config"]["persona_module"]
         persona_module = await list_modules("persona", persona_module["name"])
 
         persona_dir = await download_persona(persona_module)
-        deployment.config["system_prompt"]["persona"] = load_persona(persona_dir, persona_module)
+        deployment.config.system_prompt["persona"] = load_persona(persona_dir, persona_module)
 
     logger.info(f"Module config data loaded {deployment.config}")
 
