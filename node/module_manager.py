@@ -13,6 +13,7 @@ import subprocess
 import time
 import traceback
 from typing import Union, Dict
+import yaml
 from node.schemas import (
     AgentDeployment, 
     AgentRun, 
@@ -319,18 +320,22 @@ def install_module(module_name: str, module_version: str, module_source_url: str
         raise RuntimeError(error_msg) from e
 
 def load_persona(persona_dir: str, persona_module: Module):
-    """Load persona from a JSON file in a git repository."""
+    """Load persona from a JSON or YAML file in a git repository."""
     try:
         logger.info(f"Loading persona {persona_module.name} from {persona_dir}")
         persona_dir = Path(persona_dir)
         persona_file = persona_dir / persona_module.module_entrypoint
-        with persona_file.open('r') as f:
-            persona_data = json.load(f)
-            
-        return persona_data
+
+        with open(persona_file, 'r') as file:
+            if persona_file.suffix.lower() in ['.yaml', '.yml']:
+                persona_data = yaml.safe_load(file)
+            else:
+                persona_data = json.load(file)
+            return persona_data
         
     except Exception as e:
         logger.error(f"Error loading persona from {persona_dir}: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 async def load_data_generation_config(agent_run, data_generation_config_path):
