@@ -363,7 +363,7 @@ async def list_nodes(node_ip: str) -> List:
         node = await hub.list_nodes(node_ip=node_ip)
 
         if node:
-            node_id = node['id'].split(':')[-1]
+            node_id = node.id.split(':')[-1]
             query = f"SELECT * FROM server WHERE node_id = '{node_id}'"
 
             servers = await hub.surrealdb.query(query)
@@ -373,7 +373,7 @@ async def list_nodes(node_ip: str) -> List:
                 for server in servers
                 if server['server_type'] in ['ws', 'grpc']
             ]
-            node['ports'] = alt_ports
+            node.ports = alt_ports
 
         return node
 
