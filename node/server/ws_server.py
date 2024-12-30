@@ -157,7 +157,7 @@ class WebSocketServer:
                     logger.info(f"Endpoint: run_agent :: Received data: {data}")
 
                     # Simulating a response process
-                    result = await self.run_agent_direct(data, client_id)
+                    result = await self.run_agent(data, client_id)
                     logger.info(f"Endpoint: run_agent :: Sending result: {result}")
                     await self.manager.send_message(result, client_id, "run_agent")
 
@@ -195,7 +195,7 @@ class WebSocketServer:
                 data = await websocket.receive_json()
                 logger.info(f"Endpoint: run_orchestrator :: Received data: {data}")
 
-                result = await self.run_orchestrator_direct(data, client_id)
+                result = await self.run_orchestrator(data, client_id)
                 logger.info(f"Endpoint: run_orchestrator :: Sending result: {result}")
                 await self.manager.send_message(result, client_id, "run_orchestrator")
 
@@ -216,49 +216,6 @@ class WebSocketServer:
             except Exception as e:
                 logger.error(f"Failed to connect to relay server: {e}")
                 await asyncio.sleep(5)  # Wait before retrying
-
-    async def handle_indirect_messages(self):
-        while True:
-            try:
-                message = await self.relay_websocket.recv()
-                await self.process_message(message, self.relay_websocket)
-            except websockets.ConnectionClosed:
-                logger.warning("Connection to relay server closed. Reconnecting...")
-                self.relay_websocket = await self.establish_connection()
-            except Exception as e:
-                logger.error(f"Error handling message: {e}")
-                await asyncio.sleep(1)
-
-    async def process_message(self, message, websocket):
-        try:
-            data = json.loads(message)
-            task = data.get("task")
-            params = data.get("params")
-            client_id = data.get("source_node")
-            logger.info(f"Processing message: {task} with params: {params}")
-            if task == "run_agent":
-                result = await self.run_agent_indirect(data, client_id)
-            elif task == "check_agent_run":
-                result = await self.check_agent_run_indirect(data, client_id)
-            elif task == "check_user":
-                result = await self.check_user_indirect(data, client_id)
-            elif task == "register_user":
-                result = await self.register_user_indirect(data, client_id)
-            elif task == "write_storage":
-                result = await self.write_storage_indirect(data, client_id)
-            elif task == "write_ipfs":
-                result = await self.write_ipfs_indirect(data, client_id)
-            elif task == "read_storage":
-                result = await self.read_storage_indirect(data, client_id)
-            elif task == "read_ipfs":
-                result = await self.read_ipfs_indirect(data, client_id)
-            else:
-                logger.error(f"Unknown task: {task}")
-                raise ValueError(f"Unknown task: {task}")
-            await self.send_response(result)
-        except Exception as e:
-            logger.error(f"Error processing message: {e}")
-            await self.send_response({"status": "error", "message": str(e)})
 
     async def send_response(self, response):
         try:
@@ -281,13 +238,13 @@ class WebSocketServer:
                         f"Failed to send response after reconnection: {str(e2)}"
                     )
 
-    async def run_agent_direct(self, data: dict, client_id: str) -> str:
+    async def run_agent(self, data: dict, client_id: str) -> str:
         try:
-            logger.info(f"run_agent_direct: Received data: {data}")
+            logger.info(f"run_agent: Received data: {data}")
             agent_run_input = AgentRunInput(**data)
-            logger.info(f"run_agent_direct: Created AgentRunInput: {agent_run_input}")
+            logger.info(f"run_agent: Created AgentRunInput: {agent_run_input}")
             result = await self.run_agent(agent_run_input)
-            logger.info(f"run_agent_direct: Got result: {result}")
+            logger.info(f"run_agent: Got result: {result}")
             return json.dumps(
                 {"status": "success", "data": result}, cls=DateTimeEncoder
             )
@@ -296,13 +253,13 @@ class WebSocketServer:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    async def run_orchestrator_direct(self, data: dict, client_id: str) -> str:
+    async def run_orchestrator(self, data: dict, client_id: str) -> str:
         try:
-            logger.info(f"run_orchestrator_direct: Received data: {data}")
+            logger.info(f"run_orchestrator: Received data: {data}")
             orchestrator_run_input = OrchestratorRunInput(**data)
-            logger.info(f"run_orchestrator_direct: Created OrchestratorRunInput: {orchestrator_run_input}")
+            logger.info(f"run_orchestrator: Created OrchestratorRunInput: {orchestrator_run_input}")
             result = await self.run_orchestrator(orchestrator_run_input)
-            logger.info(f"run_orchestrator_direct: Got result: {result}")
+            logger.info(f"run_orchestrator: Got result: {result}")
             return json.dumps(
                 {"status": "success", "data": result}, cls=DateTimeEncoder
             )
@@ -310,23 +267,6 @@ class WebSocketServer:
             logger.error(f"Error processing job: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return json.dumps({"status": "error", "message": str(e)})
-
-    async def run_agent_indirect(self, message: dict, client_id: str) -> dict:
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        params = message["params"]
-        response = {
-            "target_node": target_node_id,
-            "source_node": source_node_id,
-            "task": "run_agent",
-        }
-        try:
-            agent_run_input = AgentRunInput(**params)
-            result = await self.run_agent(agent_run_input)
-            response["params"] = result
-        except Exception as e:
-            response["params"] = {"error": str(e)}
-        return response
 
     async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
         try:
@@ -450,7 +390,7 @@ class WebSocketServer:
             while True:
                 data = await websocket.receive_text()
                 logger.info(f"Endpoint: check_agent_run :: Received data: {data}")
-                result = await self.check_agent_run_direct(data, client_id)
+                result = await self.check_agent_run(data, client_id)
                 logger.info(f"Endpoint: check_agent_run :: Sending result: {result}")
                 await self.manager.send_message(result, client_id, "check_agent_run")
         except WebSocketDisconnect:
@@ -461,7 +401,7 @@ class WebSocketServer:
             )
             self.manager.disconnect(client_id, "check_agent_run")
 
-    async def check_agent_run_direct(self, data: str, client_id: str) -> str:
+    async def check_agent_run(self, data: str, client_id: str) -> str:
         try:
             agent_run_data = json.loads(data)
             agent_run = AgentRun(**agent_run_data)
@@ -472,23 +412,6 @@ class WebSocketServer:
         except Exception as e:
             logger.error(f"Error checking agent run: {str(e)}")
             return json.dumps({"status": "error", "message": str(e)})
-
-    async def check_agent_run_indirect(self, message: dict, client_id: str) -> str:
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        params = message["params"]
-        response = {
-            "target_node": target_node_id,
-            "source_node": source_node_id,
-            "task": "check_agent_run",
-        }
-        try:
-            agent_run = AgentRun(**params)
-            result = await self.check_agent_run(agent_run)
-            response["params"] = result.dict()
-        except Exception as e:
-            response["params"] = {"error": str(e)}
-        return json.dumps(response)
 
     async def check_agent_run(self, agent_run: AgentRun) -> AgentRun:
         """
@@ -528,34 +451,16 @@ class WebSocketServer:
         try:
             while True:
                 data = await websocket.receive_text()
-                result = await self.check_user_direct(data)
+                result = await self.check_user(data)
                 await self.manager.send_message(result, client_id, "check_user")
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "check_user")
 
-    async def check_user_direct(self, data: str) -> str:
+    async def check_user(self, data: str) -> str:
         data = json.loads(data)
         _, response = await check_user(data)
         if '_sa_instance_state' in response:
             response.pop('_sa_instance_state')
-        return json.dumps(response)
-
-    async def check_user_indirect(self, message: dict, client_id: str) -> str:
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        params = message["params"]
-        response = {
-            "target_node": target_node_id,
-            "source_node": source_node_id,
-            "task": "check_user",
-        }
-        try:
-            result = await check_user(params)
-            if '_sa_instance_state' in result:
-                result.pop('_sa_instance_state')
-            response["params"] = result
-        except Exception as e:
-            response["params"] = {"error": str(e)}
         return json.dumps(response)
 
     async def register_user_endpoint(self, websocket: WebSocket, client_id: str):
@@ -563,35 +468,16 @@ class WebSocketServer:
         try:
             while True:
                 data = await websocket.receive_text()
-                result = await self.register_user_direct(data)
+                result = await self.register_user(data)
                 await self.manager.send_message(result, client_id, "register_user")
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "register_user")
 
-    async def register_user_direct(self, data: str) -> str:
+    async def register_user(self, data: str) -> str:
         data = json.loads(data)
         _, response = await register_user(data)
         if '_sa_instance_state' in response:
             response.pop('_sa_instance_state')
-        return json.dumps(response)
-
-    async def register_user_indirect(self, message: dict, client_id: str) -> str:
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        params = message["params"]
-        response = {
-            "target_node": target_node_id,
-            "source_node": source_node_id,
-            "task": "register_user",
-        }
-        try:
-            _, result = await register_user(params)
-            if '_sa_instance_state' in result:
-                result.pop('_sa_instance_state')
-            response["params"] = result
-        except Exception as e:
-            logger.error(f"Error registering user: {e}")
-            response["params"] = {"error": str(e)}
         return json.dumps(response)
 
     async def write_storage_endpoint(self, websocket: WebSocket, client_id: str):
@@ -599,12 +485,12 @@ class WebSocketServer:
         try:
             while True:
                 data = await websocket.receive_text()
-                result = await self.write_storage_direct(data, client_id)
+                result = await self.write_storage(data, client_id)
                 await self.manager.send_message(result, client_id, "write_storage")
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "write_storage")
 
-    async def write_storage_direct(self, data: str, client_id: str) -> str:
+    async def write_storage(self, data: str, client_id: str) -> str:
         params = json.loads(data)
         filename = params["filename"]
         file_data = params["file_data"]
@@ -637,22 +523,6 @@ class WebSocketServer:
                 return json.dumps({"status": "success", "message": "Chunk received"})
         except Exception as e:
             return json.dumps({"status": "error", "message": str(e)})
-
-    async def write_storage_indirect(self, message: dict, client_id: str) -> str:
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        params = message["params"]
-        response = {
-            "target_node": target_node_id,
-            "source_node": source_node_id,
-            "task": "write_storage",
-        }
-        try:
-            result = await self.write_storage_direct(json.dumps(params), client_id)
-            response["params"] = json.loads(result)
-        except Exception as e:
-            response["params"] = {"error": str(e)}
-        return json.dumps(response)
 
     async def write_ipfs_endpoint(self, websocket: WebSocket, client_id: str):
         await self.manager.connect(websocket, client_id, "write_ipfs")
@@ -721,23 +591,6 @@ class WebSocketServer:
         except Exception as e:
             logger.error(f"Error in write_to_ipfs: {str(e)}")
             return {"status": "error", "message": str(e)}
-
-    async def write_ipfs_indirect(self, message: dict, client_id: str) -> dict:
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        params = message["params"]
-        response = {
-            "target_node": target_node_id,
-            "source_node": source_node_id,
-            "task": "write_ipfs",
-        }
-        try:
-            result = await self.write_ipfs(params, client_id)
-            response["params"] = result
-        except Exception as e:
-            logger.error(f"Error in write_ipfs_indirect: {str(e)}")
-            response["params"] = {"status": "error", "message": str(e)}
-        return response
 
     async def read_storage_endpoint(self, websocket: WebSocket, client_id: str):
         await self.manager.connect(websocket, client_id, "read_storage")
@@ -808,72 +661,6 @@ class WebSocketServer:
                 client_id,
                 "read_storage",
             )
-
-    async def read_storage_indirect(self, message: dict, client_id: str):
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        task = message["task"]
-        params = message["params"]
-
-        try:
-            status_code, message_dict = await read_storage(params["folder_id"])
-            if status_code == 200:
-                zip_filename = message_dict["path"]
-                file_size = os.path.getsize(zip_filename)
-                chunk_index = 0
-                chunk_total = (file_size // CHUNK_SIZE) + 1
-
-                with open(zip_filename, "rb") as file:
-                    while chunk := file.read(CHUNK_SIZE):
-                        encoded_chunk = base64.b64encode(chunk).decode("utf-8")
-                        response = {
-                            "target_node": target_node_id,
-                            "source_node": source_node_id,
-                            "task": task,  # Include the task in the message
-                            "params": {
-                                "status": "success",
-                                "file_data": encoded_chunk,
-                                "filename": os.path.basename(zip_filename),
-                                "chunk_index": chunk_index,
-                                "chunk_total": chunk_total,
-                            },
-                        }
-                        # await websocket.send_text(json.dumps(response))
-                        await self.send_response(json.dumps(response))
-                        chunk_index += 1
-
-                # Send EOF
-                response = {
-                    "target_node": target_node_id,
-                    "source_node": source_node_id,
-                    "task": task,  # Include the task in the message
-                    "params": {
-                        "status": "success",
-                        "file_data": "EOF",
-                        "filename": os.path.basename(zip_filename),
-                        "chunk_index": chunk_index,
-                        "chunk_total": chunk_total,
-                    },
-                }
-                await self.send_response(json.dumps(response))
-            else:
-                response = {
-                    "target_node": target_node_id,
-                    "source_node": source_node_id,
-                    "task": task,
-                    "params": {"status": "error", "message": message_dict["message"]},
-                }
-                await self.send_response(json.dumps(response))
-
-        except Exception as e:
-            logger.error(f"Error in read_storage_indirect: {str(e)}")
-            response = {
-                "target_node": target_node_id,
-                "source_node": source_node_id,
-                "task": task,
-                "params": {"status": "error", "message": str(e)},
-            }
-            await self.send_response(json.dumps(response))
 
     async def read_ipfs_endpoint(self, websocket: WebSocket, client_id: str):
         await self.manager.connect(websocket, client_id, "read_ipfs")
@@ -966,98 +753,6 @@ class WebSocketServer:
                 client_id,
                 "read_ipfs",
             )
-
-    async def read_ipfs_indirect(self, message: dict, client_id: str):
-        target_node_id = message["source_node"]
-        source_node_id = message["target_node"]
-        task = message["task"]
-        params = message["params"]
-
-        try:
-            status_code, message_dict = await read_from_ipfs_or_ipns(
-                params["hash_or_name"]
-            )
-            if status_code == 200:
-                if "content" in message_dict:
-                    # For zipped directory content
-                    content = message_dict["content"]
-                    file_size = len(content)
-                    chunk_total = (file_size // CHUNK_SIZE) + 1
-                    for chunk_index in range(chunk_total):
-                        start = chunk_index * CHUNK_SIZE
-                        end = start + CHUNK_SIZE
-                        chunk = content[start:end]
-                        encoded_chunk = base64.b64encode(chunk).decode("utf-8")
-                        response = {
-                            "target_node": target_node_id,
-                            "source_node": source_node_id,
-                            "task": task,
-                            "params": {
-                                "status": "success",
-                                "file_data": encoded_chunk,
-                                "filename": f"{params['hash_or_name']}.zip",
-                                "chunk_index": chunk_index,
-                                "chunk_total": chunk_total,
-                            },
-                        }
-                        await self.send_response(json.dumps(response))
-                else:
-                    # For single file content
-                    temp_filename = message_dict["path"]
-                    file_size = os.path.getsize(temp_filename)
-                    chunk_total = (file_size // CHUNK_SIZE) + 1
-                    with open(temp_filename, "rb") as file:
-                        for chunk_index in range(chunk_total):
-                            chunk = file.read(CHUNK_SIZE)
-                            encoded_chunk = base64.b64encode(chunk).decode("utf-8")
-                            response = {
-                                "target_node": target_node_id,
-                                "source_node": source_node_id,
-                                "task": task,
-                                "params": {
-                                    "status": "success",
-                                    "file_data": encoded_chunk,
-                                    "filename": message_dict["filename"],
-                                    "chunk_index": chunk_index,
-                                    "chunk_total": chunk_total,
-                                },
-                            }
-                            await self.send_response(json.dumps(response))
-
-                # Send EOF
-                response = {
-                    "target_node": target_node_id,
-                    "source_node": source_node_id,
-                    "task": task,
-                    "params": {
-                        "status": "success",
-                        "file_data": "EOF",
-                        "filename": message_dict.get(
-                            "filename", f"{params['hash_or_name']}.zip"
-                        ),
-                        "chunk_index": chunk_total - 1,
-                        "chunk_total": chunk_total,
-                    },
-                }
-                await self.send_response(json.dumps(response))
-            else:
-                response = {
-                    "target_node": target_node_id,
-                    "source_node": source_node_id,
-                    "task": task,
-                    "params": {"status": "error", "message": message_dict["message"]},
-                }
-                await self.send_response(json.dumps(response))
-
-        except Exception as e:
-            logger.error(f"Error in read_ipfs_indirect: {str(e)}")
-            response = {
-                "target_node": target_node_id,
-                "source_node": source_node_id,
-                "task": task,
-                "params": {"status": "error", "message": str(e)},
-            }
-            await self.send_response(json.dumps(response))
 
     async def graceful_shutdown(self):
         """Fast and efficient WebSocket server shutdown"""
