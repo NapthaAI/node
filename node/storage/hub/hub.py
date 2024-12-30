@@ -360,4 +360,20 @@ async def list_nodes(node_ip: str) -> List:
         except Exception as auth_error:
             raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
 
-        return await hub.list_nodes(node_ip=node_ip)
+        node = await hub.list_nodes(node_ip=node_ip)
+
+        if node:
+            node_id = node['id'].split(':')[-1]
+            query = f"SELECT * FROM server WHERE node_id = '{node_id}'"
+
+            servers = await hub.surrealdb.query(query)
+            servers = servers[0]['result']
+            alt_ports = [
+                server['port'] 
+                for server in servers
+                if server['server_type'] in ['ws', 'grpc']
+            ]
+            node['ports'] = alt_ports
+
+        return node
+
