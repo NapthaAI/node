@@ -20,6 +20,7 @@ class NodeConfig(BaseModel):
     servers: List[NodeServer]
     models: List[str]
     docker_jobs: bool
+    ports: Optional[List[int]] = None
     routing_type: Optional[str] = Field(default="direct")
     routing_url: Optional[str] = Field(default=None)
     num_gpus: Optional[int] = Field(default=None)
