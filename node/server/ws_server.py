@@ -7,17 +7,18 @@ import websockets
 from datetime import datetime
 import traceback
 import logging
-from typing import Dict
+from typing import Dict, Any
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from node.schemas import (
     AgentRun, 
     AgentRunInput, 
-    OrchestratorRun, 
-    OrchestratorRunInput
+    OrchestratorRunInput,
+    AgentDeployment
 )
-from node.config import BASE_OUTPUT_DIR
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
 from node.storage.storage import (
@@ -31,7 +32,7 @@ from node.storage.storage import (
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_orchestrator, run_agent
-
+from node.module_manager import setup_module_deployment
 
 logger = logging.getLogger(__name__)
 CHUNK_SIZE = 256 * 1024
@@ -328,22 +329,39 @@ class WebSocketServer:
             response["params"] = {"error": str(e)}
         return response
 
+    async def create_module(self, module_deployment: AgentDeployment) -> Dict[str, Any]:
+        """
+        Unified method to create and install any type of module and its sub-modules
+        """
+        try:
+            # Determine module type and configuration
+            if isinstance(module_deployment, AgentDeployment):
+                module_type = "agent"
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
+            else:
+                raise HTTPException(status_code=400, detail="Invalid module deployment type")
+
+            logger.info(f"Creating {module_type}: {module_deployment}")
+
+            main_module_name = module_deployment.module['name']
+            main_module_path = Path(f"{MODULES_SOURCE_DIR}/{main_module_name}/{main_module_name}")
+
+            module_deployment = await setup_module_deployment(module_type, main_module_path / "configs/deployment.json", module_deployment.name, module_deployment)
+
+            return module_deployment
+
+        except Exception as e:
+            logger.error(f"Failed to create module: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
         try:
             logger.info(f"Received task: {agent_run_input}")
 
-            async with Hub() as hub:
-                success, user, user_id = await hub.signin(
-                    os.getenv("HUB_USERNAME"), 
-                    os.getenv("HUB_PASSWORD")
-                )
-                agent_module = await hub.list_agents(f"{agent_run_input.agent_deployment.module['name']}")
-                logger.info(f"Found agent: {agent_module}")
-
-                if not agent_module:
-                    raise ValueError("Agent not found")
-
-                agent_run_input.agent_deployment.module = agent_module
+            if not agent_run_input.deployment.initialized == True:
+                agent_deployment = await self.create_module(agent_run_input.deployment)
+                agent_run_input.deployment = agent_deployment
 
             async with DB() as db:
                 agent_run = await db.create_agent_run(agent_run_input)
@@ -352,9 +370,9 @@ class WebSocketServer:
                 agent_run_data = agent_run.model_dump()
 
             # Execute the task
-            if agent_run.agent_deployment.module["execution_type"] == "package":
+            if agent_run.deployment.module["module_type"] == "package":
                 task = run_agent.delay(agent_run_data)
-            elif agent_run.agent_deployment.module["execution_type"] == "docker":
+            elif agent_run.deployment.module["module_type"] == "docker":
                 task = execute_docker_agent.delay(agent_run_data)
             else:
                 raise HTTPException(status_code=400, detail="Invalid agent run type")
