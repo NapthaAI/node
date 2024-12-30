@@ -535,7 +535,8 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
         # Get the first deployment with matching name
         default_deployment = next((d for d in main_deployment_default if d["name"] == deployment_name), None)
         if default_deployment is None:
-            raise ValueError(f"No default deployment found with name {deployment_name}")
+            # raise ValueError(f"No default deployment found with name {deployment_name}")
+            default_deployment = main_deployment_default[0]
 
     if not deployment.module:
         # Install module from default deployment
