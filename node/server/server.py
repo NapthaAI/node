@@ -149,7 +149,7 @@ class NodeServer:
 
                         # Add timeout to delete_node
                         success = await asyncio.wait_for(
-                            hub.delete_node(node_id=node_id, servers=self.node_config['servers']),
+                            hub.delete_node(node_id=node_id, servers=self.node_config.servers),
                             timeout=10.0
                         )
 
