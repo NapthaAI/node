@@ -80,7 +80,6 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                     'module_type': agent_module.module_type.value if hasattr(agent_module.module_type, 'value') else agent_module.module_type,
                     'module_version': agent_module.module_version,
                     'module_entrypoint': agent_module.module_entrypoint,
-                    'personas_urls': agent_module.personas_urls
                 }
 
             # Convert to dictionary format for database

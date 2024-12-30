@@ -137,12 +137,6 @@ async def install_module_with_lock(module: Union[Dict, AgentModule, Module]):
             if not verify_module_installation(module_name):
                 raise RuntimeError(f"Module {module_name} failed verification after installation")
 
-            # Install personas if they exist in module run
-            if isinstance(module, AgentModule):
-                if hasattr(module, 'personas_urls') and module.personas_urls:
-                    logger.info(f"Installing personas for agent {module_name}")
-                    await download_persona(module.personas_urls)
-
             logger.info(f"Module {module_name} version {run_version} is installed and verified")
             INSTALLED_MODULES[module_name] = run_version
     except LockAcquisitionError as e:

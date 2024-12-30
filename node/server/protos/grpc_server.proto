@@ -93,7 +93,6 @@ message AgentModule {
     string type = 6;
     string version = 7;
     optional string entrypoint = 8;
-    repeated string personas_urls = 9;
 }
 
 message AgentDeployment {
