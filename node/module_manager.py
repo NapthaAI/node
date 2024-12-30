@@ -140,7 +140,7 @@ async def install_module_with_lock(module: Union[Dict, AgentModule, Module]):
             if isinstance(module, AgentModule):
                 if hasattr(module, 'personas_urls') and module.personas_urls:
                     logger.info(f"Installing personas for agent {module_name}")
-                    await install_persona(module.personas_urls)
+                    await download_persona(module.personas_urls)
 
             logger.info(f"Module {module_name} version {run_version} is installed and verified")
             INSTALLED_MODULES[module_name] = run_version
@@ -165,25 +165,27 @@ def verify_module_installation(module_name: str) -> bool:
         return False
     
 
-async def install_persona(personas_url: str):
-    if not personas_url:
+async def download_persona(persona_module: str):
+    if not persona_module:
         logger.info("No personas to install")
         return
 
     personas_base_dir = Path(MODULES_SOURCE_DIR) / "personas"
     personas_base_dir.mkdir(exist_ok=True)
 
-    logger.info(f"Installing persona {personas_url}")
-    if personas_url in ["", None, " "]:
+    persona_url = persona_module.module_url
+
+    logger.info(f"Installing persona {persona_url}")
+    if persona_url in ["", None, " "]:
         logger.warning(f"Skipping empty persona URL")
         return None
     # identify if the persona is a git repo or an ipfs hash
-    if "ipfs://" in personas_url:
-        return await install_persona_from_ipfs(personas_url, personas_base_dir)
+    if "ipfs://" in persona_url:
+        return await download_persona_from_ipfs(persona_url, personas_base_dir)
     else:
-        return await install_persona_from_git(personas_url, personas_base_dir)
+        return await download_persona_from_git(persona_url, personas_base_dir)
         
-async def install_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
+async def download_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
     try:
         if "::" not in persona_url:
             raise ValueError(f"Invalid persona URL: {persona_url}. Expected format: ipfs://ipfs_hash::persona_folder_name")
@@ -210,7 +212,7 @@ async def install_persona_from_ipfs(persona_url: str, personas_base_dir: Path):
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
 
-async def install_persona_from_git(repo_url: str, personas_base_dir: Path):
+async def download_persona_from_git(repo_url: str, personas_base_dir: Path):
     try:
         repo_name = repo_url.split('/')[-1]
         persona_dir = personas_base_dir / repo_name
@@ -322,19 +324,11 @@ def install_module(module_name: str, module_version: str, module_source_url: str
             error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
         raise RuntimeError(error_msg) from e
 
-def load_persona(persona_dir):
+def load_persona(persona_dir: str, persona_module: Module):
     """Load persona from a JSON file in a git repository."""
     try:
         persona_dir = Path(persona_dir)
-        # Get list of JSON files in repo using pathlib
-        json_files = list(persona_dir.rglob("*.json"))
-                
-        if not json_files:
-            logger.error(f"No JSON files found in repository {persona_dir}")
-            return None
-            
-        # Load the first JSON file found
-        persona_file = json_files[0]
+        persona_file = persona_dir / persona_module.module_entrypoint
         with persona_file.open('r') as f:
             persona_data = json.load(f)
             
@@ -457,9 +451,11 @@ async def load_module_config_data(deployment, default_deployment):
         llm_config = next(config for config in llm_configs if config.config_name == config_name)
         deployment.config["llm_config"] = llm_config
     if "persona_module" in default_deployment["config"] and default_deployment["config"]["persona_module"] is not None:
-        persona_url = default_deployment["config"]["persona_module"]["module_url"]
-        persona_dir = await install_persona(persona_url)
-        deployment.config["persona_module"] = {"data": load_persona(persona_dir)}
+        persona_module = default_deployment["config"]["persona_module"]
+        persona_module = await list_modules("persona", persona_module["name"])
+
+        persona_dir = await download_persona(persona_module)
+        deployment.config["system_prompt"]["persona"] = load_persona(persona_dir, persona_module)
 
     logger.info(f"Module config data loaded {deployment.config}")
 
