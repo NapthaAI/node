@@ -27,6 +27,9 @@ from node.module_manager import (
 from node.schemas import (
     AgentRun,
     AgentRunInput,
+    MemoryDeployment,
+    MemoryRun,
+    MemoryRunInput,
     ToolRun,
     ToolRunInput,
     OrchestratorRun,
@@ -55,7 +58,7 @@ from node.storage.storage import (
 from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb
+from node.worker.template_worker import run_agent, run_memory, run_tool, run_environment, run_orchestrator, run_kb
 from node.client import Node as NodeClient
 
 logger = logging.getLogger(__name__)
@@ -128,6 +131,33 @@ class HTTPServer:
             :return: Status
             """
             return await self.agent_check(agent_run)
+        
+        @router.post("/memory/create")
+        async def memory_create_endpoint(memory_input: MemoryDeployment) -> MemoryDeployment:
+            """
+            Create a memory module
+            :param memory_input: MemoryDeployment
+            :return: MemoryDeployment
+            """
+            return await self.memory_create(memory_input)
+
+        @router.post("/memory/run")
+        async def memory_run_endpoint(memory_run_input: MemoryRunInput) -> MemoryRun:
+            """
+            Run a memory module
+            :param memory_run_input: Memory run specifications
+            :return: Status
+            """
+            return await self.memory_run(memory_run_input)
+
+        @router.post("/memory/check")
+        async def memory_check_endpoint(memory_run: MemoryRun) -> MemoryRun:
+            """
+            Check a memory module
+            :param memory_run: MemoryRun details
+            :return: Status
+            """
+            return await self.memory_check(memory_run)
 
         @router.post("/tool/create")
         async def tool_create_endpoint(tool_input: ToolDeployment) -> ToolDeployment:
@@ -487,7 +517,7 @@ class HTTPServer:
                 consumer = await node_client.register_user(user_input=consumer)
                 logger.info(f"User registration complete on worker node: {node_client.node_schema}")
 
-    async def create_module(self, module_deployment: Union[AgentDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
+    async def create_module(self, module_deployment: Union[AgentDeployment, MemoryDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
         """
         Unified method to create and install any type of module and its sub-modules
         """
@@ -495,6 +525,9 @@ class HTTPServer:
             # Determine module type and configuration
             if isinstance(module_deployment, AgentDeployment):
                 module_type = "agent"
+                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
+            elif isinstance(module_deployment, MemoryDeployment):
+                module_type = "memory"
                 module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             elif isinstance(module_deployment, OrchestratorDeployment):
                 module_type = "orchestrator"
@@ -528,11 +561,11 @@ class HTTPServer:
 
     async def run_module(
         self, 
-        module_run_input: Union[AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
-    ) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, ToolRun]:
+        module_run_input: Union[AgentRunInput, MemoryRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
+    ) -> Union[AgentRun, MemoryRun, OrchestratorRun, EnvironmentRun, ToolRun]:
         """
-        Generic method to run either an agent, orchestrator, environment, tool or kb
-        :param run_input: Run specifications (AgentRunInput, OrchestratorRunInput, EnvironmentRunInput, ToolRunInput or KBRunInput)
+        Generic method to run either an agent, memory, orchestrator, environment, tool or kb
+        :param run_input: Run specifications (AgentRunInput, MemoryRunInput, OrchestratorRunInput, EnvironmentRunInput, ToolRunInput or KBRunInput)
         :return: Status
         """
         try:
@@ -545,6 +578,9 @@ class HTTPServer:
             if isinstance(module_run_input, AgentRunInput):
                 module_type = "agent"
                 create_func = lambda db: db.create_agent_run
+            elif isinstance(module_run_input, MemoryRunInput):
+                module_type = "memory"
+                create_func = lambda db: db.create_memory_run
             elif isinstance(module_run_input, ToolRunInput):
                 module_type = "tool"
                 create_func = lambda db: db.create_tool_run
@@ -578,6 +614,8 @@ class HTTPServer:
             if module_run_input.deployment.module.module_type == AgentModuleType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(module_run_data)
+                elif module_type == "memory":
+                    _ = run_memory.delay(module_run_data)
                 elif module_type == "tool":
                     _ = run_tool.delay(module_run_data)
                 elif module_type == "orchestrator":
@@ -608,6 +646,9 @@ class HTTPServer:
 
     async def agent_create(self, agent_deployment: AgentDeployment) -> AgentDeployment:
         return await self.create_module(agent_deployment)
+    
+    async def memory_create(self, memory_deployment: MemoryDeployment) -> MemoryDeployment:
+        return await self.create_module(memory_deployment)
 
     async def tool_create(self, tool_deployment: ToolDeployment) -> ToolDeployment:
         return await self.create_module(tool_deployment)
@@ -623,6 +664,9 @@ class HTTPServer:
 
     async def agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         return await self.run_module(agent_run_input)
+    
+    async def memory_run(self, memory_run_input: MemoryRunInput) -> MemoryRun:
+        return await self.run_module(memory_run_input)
 
     async def tool_run(self, tool_run_input: ToolRunInput) -> ToolRun:
         return await self.run_module(tool_run_input)
@@ -635,14 +679,15 @@ class HTTPServer:
 
     async def kb_run(self, kb_run_input: KBRunInput) -> KBRun:
         return await self.run_module(kb_run_input)
+    
 
     async def check_module(
         self, 
-        module_run: Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun]
-    ) -> Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun]:
+        module_run: Union[AgentRun, MemoryRun, ToolRun, OrchestratorRun, EnvironmentRun]
+    ) -> Union[AgentRun, MemoryRun, ToolRun, OrchestratorRun, EnvironmentRun]:
         """
-        Check a module run (agent, tool, orchestrator, or environment)
-        :param module_run: Run details (AgentRun, ToolRun, OrchestratorRun, or EnvironmentRun)
+        Check a module run (agent, memory, tool, orchestrator, or environment)
+        :param module_run: Run details (AgentRun, MemoryRun, ToolRun, OrchestratorRun, or EnvironmentRun)
         :return: Status
         """
         try:
@@ -650,6 +695,9 @@ class HTTPServer:
             if isinstance(module_run, AgentRun):
                 module_type = "agent"
                 list_func = lambda db: db.list_agent_runs(module_run.id)
+            elif isinstance(module_run, MemoryRun):
+                module_type = "memory"
+                list_func = lambda db: db.list_memory_runs(module_run.id)
             elif isinstance(module_run, ToolRun):
                 module_type = "tool"
                 list_func = lambda db: db.list_tool_runs(module_run.id)
@@ -715,6 +763,9 @@ class HTTPServer:
 
     async def agent_check(self, agent_run: AgentRun) -> AgentRun:
         return await self.check_module(agent_run)
+    
+    async def memory_check(self, memory_run: MemoryRun) -> MemoryRun:
+        return await self.check_module(memory_run)
 
     async def tool_check(self, tool_run: ToolRun) -> ToolRun:
         return await self.check_module(tool_run)

@@ -111,6 +111,13 @@ class ToolDeployment(BaseModel):
     data_generation_config: Optional[DataGenerationConfig] = None
     initialized: Optional[bool] = False
 
+class MemoryDeployment(BaseModel):
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = "memory_deployment"
+    module: Optional[Union[Dict, AgentModule]] = None
+    config: Optional[Union[Dict, BaseModel]] = None
+    initialized: Optional[bool] = False
+
 class KBDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "kb_deployment"
@@ -322,6 +329,34 @@ class KBRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     deployment: KBDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[Optional[str]] = []   
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
+
+class MemoryRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    deployment: MemoryDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        return model_dict
+
+class MemoryRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    deployment: MemoryDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
     error: bool = False

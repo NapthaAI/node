@@ -14,7 +14,7 @@ from typing import Union
 
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
 from node.module_manager import install_module_with_lock, load_module
-from node.schemas import AgentRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
+from node.schemas import AgentRun, MemoryRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
 
@@ -35,6 +35,16 @@ def run_agent(self, agent_run):
         agent_run = AgentRun(**agent_run)
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(_run_module_async(agent_run))
+    finally:
+        # Force cleanup of channels
+        app.backend.cleanup()
+
+@app.task(bind=True, acks_late=True)
+def run_memory(self, memory_run):
+    try:
+        memory_run = MemoryRun(**memory_run)
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(_run_module_async(memory_run))
     finally:
         # Force cleanup of channels
         app.backend.cleanup()
@@ -79,11 +89,11 @@ def run_kb(self, kb_run):
         # Force cleanup of channels
         app.backend.cleanup()
 
-async def _run_module_async(module_run: Union[AgentRun, ToolRun, OrchestratorRun, EnvironmentRun, KBRun]) -> None:
-    """Handles execution of agent, orchestrator, and environment runs.
+async def _run_module_async(module_run: Union[AgentRun, MemoryRun, ToolRun, OrchestratorRun, EnvironmentRun, KBRun]) -> None:
+    """Handles execution of agent, memory, orchestrator, and environment runs.
     
     Args:
-        module_run: Either an AgentRun, OrchestratorRun, or EnvironmentRun object
+        module_run: Either an AgentRun, MemoryRun, OrchestratorRun, or EnvironmentRun object
     """
     try:
         module_run_engine = ModuleRunEngine(module_run)
@@ -163,7 +173,7 @@ async def maybe_async_call(func, *args, **kwargs):
 
 
 class ModuleRunEngine:
-    def __init__(self, module_run: Union[AgentRun, ToolRun, EnvironmentRun, KBRun]):
+    def __init__(self, module_run: Union[AgentRun, MemoryRun, ToolRun, EnvironmentRun, KBRun]):
         self.module_run = module_run
         self.deployment = module_run.deployment
         self.module = self.deployment.module
@@ -171,6 +181,8 @@ class ModuleRunEngine:
         # Determine module type
         if isinstance(module_run, AgentRun):
             self.module_type = "agent"
+        elif isinstance(module_run, MemoryRun):
+            self.module_type = "memory"
         elif isinstance(module_run, OrchestratorRun):
             self.module_type = "orchestrator"
         elif isinstance(module_run, ToolRun):
