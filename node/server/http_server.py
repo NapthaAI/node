@@ -44,7 +44,7 @@ from node.schemas import (
     KBDeployment,
     KBRunInput,
     KBRun,
-    AgentModuleType,
+    ModuleExecutionType,
     ToolDeployment,
 )
 from node.storage.db.db import DB
@@ -611,7 +611,7 @@ class HTTPServer:
             await self.register_user_on_worker_nodes(module_run)
 
             # Execute the task based on module type
-            if module_run_input.deployment.module.module_type == AgentModuleType.package:
+            if module_run_input.deployment.module.module_type == ModuleExecutionType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(module_run_data)
                 elif module_type == "memory":
@@ -624,7 +624,7 @@ class HTTPServer:
                     _ = run_environment.delay(module_run_data)
                 elif module_type == "kb":
                     _ = run_kb.delay(module_run_data)
-            elif module_run_input.deployment.module.module_type == AgentModuleType.docker and module_type == "agent":
+            elif module_run_input.deployment.module.module_type == ModuleExecutionType.docker and module_type == "agent":
                 # validate docker params
                 try:
                     _ = DockerParams(**module_run_data["inputs"])

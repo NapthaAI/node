@@ -70,7 +70,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             # Convert agent_module to dict if it's not already
             if isinstance(agent_module, dict):
                 module_dict = agent_module
-            else:  # Assuming it's an AgentModule instance
+            else:  # Assuming it's an Module instance
                 module_dict = {
                     'id': agent_module.id,
                     'name': agent_module.name,

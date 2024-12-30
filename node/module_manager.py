@@ -26,7 +26,6 @@ from node.schemas import (
     ToolRun,
     ToolDeployment,
     Module,
-    AgentModule,
     OrchestratorDeployment,
     OrchestratorRun,
     AgentConfig
@@ -105,7 +104,7 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
         logger.warning(f"Module {module_name} not found")
         return False
 
-async def install_module_with_lock(module: Union[Dict, AgentModule, Module]):
+async def install_module_with_lock(module: Union[Dict, Module]):
     if isinstance(module, dict):
         module_name = module["name"]
         url = module["module_url"]

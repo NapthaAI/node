@@ -52,7 +52,7 @@ class LLMConfig(BaseModel):
     temperature: Optional[float] = None
     api_base: Optional[str] = None
 
-class AgentModuleType(str, Enum):
+class ModuleExecutionType(str, Enum):
     package = "package"
     docker = "docker"
 
@@ -62,18 +62,15 @@ class Module(BaseModel):
     description: str
     author: str
     module_url: str
-    module_type: Optional[AgentModuleType] = AgentModuleType.package
+    module_type: Optional[ModuleExecutionType] = ModuleExecutionType.package
     module_version: Optional[str] = "0.1"
     module_entrypoint: Optional[str] = "run.py"
-
-class AgentModule(Module):
-    personas_urls: Optional[List[str]] = None
 
 class AgentConfig(BaseModel):
     config_name: Optional[str] = None
     config_schema: Optional[str] = None
     llm_config: Optional[LLMConfig] = None
-    persona_module: Optional[Union[Dict, BaseModel]] = None
+    persona_module: Optional[Union[Dict, Module]] = None
     system_prompt: Optional[Union[Dict, BaseModel]] = None
 
 class ToolConfig(BaseModel):
@@ -205,7 +202,7 @@ class AgentRun(BaseModel):
         for key, value in model_dict.items():
             if isinstance(value, datetime):
                 model_dict[key] = value.isoformat()
-            elif isinstance(value, AgentModuleType):
+            elif isinstance(value, ModuleExecutionType):
                 model_dict[key] = value.value
         for i, orchestrator_run in enumerate(model_dict['orchestrator_runs']):
             for key, value in orchestrator_run.items():
