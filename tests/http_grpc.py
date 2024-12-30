@@ -102,7 +102,6 @@ class TestHTTPServer(unittest.TestCase):
                         'worker_node_url': '',
                         'agent_config': {}
                     },
-                    "personas_urls": None
                 }
                 self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
                 logger.debug(f"Run agent response: {self.response.json()}")

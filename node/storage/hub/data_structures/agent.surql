@@ -11,4 +11,3 @@ DEFINE FIELD module_url ON TABLE agent TYPE string;
 DEFINE FIELD module_type ON TABLE agent TYPE string;
 DEFINE FIELD module_version ON TABLE agent TYPE string;
 DEFINE FIELD module_entrypoint ON TABLE agent TYPE string;
-DEFINE FIELD personas_urls ON TABLE agent TYPE option<array<string>>;
