@@ -1,5 +1,5 @@
 model_list:
-- model_name: gpt-4o-mini
+- model_name: openai:gpt-4o-mini
   litellm_params:
     model: openai/gpt-4o-mini
     api_key: os.environ/OPENAI_API_KEY
@@ -7,3 +7,5 @@ model_list:
   litellm_params:
     model: ollama/phi3:mini
     api_base: http://localhost:11434
+litellm_settings:
+  enable_json_schema_validation: true
