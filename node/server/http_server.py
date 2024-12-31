@@ -522,34 +522,12 @@ class HTTPServer:
         Unified method to create and install any type of module and its sub-modules
         """
         try:
-            # Determine module type and configuration
-            if isinstance(module_deployment, AgentDeployment):
-                module_type = "agent"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            elif isinstance(module_deployment, MemoryDeployment):
-                module_type = "memory"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            elif isinstance(module_deployment, OrchestratorDeployment):
-                module_type = "orchestrator"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            elif isinstance(module_deployment, EnvironmentDeployment):
-                module_type = "environment"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            elif isinstance(module_deployment, KBDeployment):
-                module_type = "kb"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            elif isinstance(module_deployment, ToolDeployment):
-                module_type = "tool"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            else:
-                raise HTTPException(status_code=400, detail="Invalid module deployment type")
-
-            logger.info(f"Creating {module_type}: {module_deployment}")
+            logger.info(f"Creating {module_deployment.module['module_type']}: {module_deployment}")
 
             main_module_name = module_deployment.module['name']
             main_module_path = Path(f"{MODULES_SOURCE_DIR}/{main_module_name}/{main_module_name}")
 
-            module_deployment = await setup_module_deployment(module_type, main_module_path / "configs/deployment.json", module_deployment.name, module_deployment)
+            module_deployment = await setup_module_deployment(module_deployment.module["module_type"], main_module_path / "configs/deployment.json", module_deployment.name, module_deployment)
 
             return module_deployment
 
@@ -576,28 +554,23 @@ class HTTPServer:
 
             # Determine module type and configuration
             if isinstance(module_run_input, AgentRunInput):
-                module_type = "agent"
                 create_func = lambda db: db.create_agent_run
             elif isinstance(module_run_input, MemoryRunInput):
-                module_type = "memory"
                 create_func = lambda db: db.create_memory_run
             elif isinstance(module_run_input, ToolRunInput):
-                module_type = "tool"
                 create_func = lambda db: db.create_tool_run
             elif isinstance(module_run_input, OrchestratorRunInput):
-                module_type = "orchestrator"
                 create_func = lambda db: db.create_orchestrator_run
             elif isinstance(module_run_input, EnvironmentRunInput):
-                module_type = "environment"
                 create_func = lambda db: db.create_environment_run
             elif isinstance(module_run_input, KBRunInput):
-                module_type = "kb"
                 create_func = lambda db: db.create_kb_run
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
-            logger.info(f"Received request to run {module_type}: {module_run_input}")
+            module_type = module_run_input.deployment.module.module_type
 
+            logger.info(f"Received request to run {module_type}: {module_run_input}")
 
             # Create module run record in DB
             async with DB() as db:
@@ -611,7 +584,7 @@ class HTTPServer:
             await self.register_user_on_worker_nodes(module_run)
 
             # Execute the task based on module type
-            if module_run_input.deployment.module.module_type == ModuleExecutionType.package:
+            if module_run_input.deployment.module.execution_type == ModuleExecutionType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(module_run_data)
                 elif module_type == "memory":
@@ -624,7 +597,7 @@ class HTTPServer:
                     _ = run_environment.delay(module_run_data)
                 elif module_type == "kb":
                     _ = run_kb.delay(module_run_data)
-            elif module_run_input.deployment.module.module_type == ModuleExecutionType.docker and module_type == "agent":
+            elif module_run_input.deployment.module.execution_type == ModuleExecutionType.docker and module_type == "agent":
                 # validate docker params
                 try:
                     _ = DockerParams(**module_run_data["inputs"])
@@ -637,11 +610,11 @@ class HTTPServer:
             return module_run_data
 
         except Exception as e:
-            logger.error(f"Failed to run {module_type}: {str(e)}")
+            logger.error(f"Failed to run module: {str(e)}")
             error_details = traceback.format_exc()
             logger.error(f"Full traceback: {error_details}")
             raise HTTPException(
-                status_code=500, detail=f"Failed to run {module_type}: {module_run_input}"
+                status_code=500, detail=f"Failed to run module: {module_run_input}"
             )
 
     async def agent_create(self, agent_deployment: AgentDeployment) -> AgentDeployment:
@@ -693,25 +666,21 @@ class HTTPServer:
         try:
             # Determine module type and configuration
             if isinstance(module_run, AgentRun):
-                module_type = "agent"
                 list_func = lambda db: db.list_agent_runs(module_run.id)
             elif isinstance(module_run, MemoryRun):
-                module_type = "memory"
                 list_func = lambda db: db.list_memory_runs(module_run.id)
             elif isinstance(module_run, ToolRun):
-                module_type = "tool"
                 list_func = lambda db: db.list_tool_runs(module_run.id)
             elif isinstance(module_run, OrchestratorRun):
-                module_type = "orchestrator"
                 list_func = lambda db: db.list_orchestrator_runs(module_run.id)
             elif isinstance(module_run, EnvironmentRun):
-                module_type = "environment"
                 list_func = lambda db: db.list_environment_runs(module_run.id)
             elif isinstance(module_run, KBRun):
-                module_type = "kb"
                 list_func = lambda db: db.list_kb_runs(module_run.id)
             else:
                 raise HTTPException(status_code=400, detail="Invalid module run type")
+
+            module_type = module_run.deployment.module['module_type']
 
             logger.info(f"Checking {module_type} run")
             if module_run.id is None:

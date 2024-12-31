@@ -11,3 +11,4 @@ DEFINE FIELD module_url ON TABLE memory TYPE string;
 DEFINE FIELD module_type ON TABLE memory TYPE string;
 DEFINE FIELD module_version ON TABLE memory TYPE string;
 DEFINE FIELD module_entrypoint ON TABLE memory TYPE string;
+DEFINE FIELD execution_type ON TABLE memory TYPE string;

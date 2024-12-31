@@ -80,6 +80,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                     'module_type': agent_module.module_type.value if hasattr(agent_module.module_type, 'value') else agent_module.module_type,
                     'module_version': agent_module.module_version,
                     'module_entrypoint': agent_module.module_entrypoint,
+                    'execution_type': agent_module.execution_type.value if hasattr(agent_module.execution_type, 'value') else agent_module.execution_type,
                 }
 
             # Convert to dictionary format for database
@@ -115,10 +116,10 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             logger.info(f"Agent run: {agent_run}")
 
             # Execute the task
-            module_type = module_dict['module_type']
-            if module_type == "package":
+            execution_type = module_dict['execution_type']
+            if execution_type == "package":
                 task = run_agent.delay(agent_run)
-            elif module_type == "docker":
+            elif execution_type == "docker":
                 task = execute_docker_agent.delay(agent_run)
             else:
                 yield grpc_server_pb2.AgentRun(
@@ -261,6 +262,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                         'module_type': orchestrator_module.module_type.value if hasattr(orchestrator_module.module_type, 'value') else orchestrator_module.module_type,
                         'module_version': orchestrator_module.module_version,
                         'module_entrypoint': orchestrator_module.module_entrypoint,
+                        'execution_type': orchestrator_module.execution_type.value if hasattr(orchestrator_module.execution_type, 'value') else orchestrator_module.execution_type,
                     }
 
             # Create run input dictionary
@@ -309,14 +311,14 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                 orchestrator_run.pop("_sa_instance_state", None)
 
             # Execute the task
-            module_type = orchestrator_module['module_type']
-            if module_type == "package":
+            execution_type = orchestrator_module['execution_type']
+            if execution_type == "package":
                 task = run_orchestrator.delay(orchestrator_run)
             else:
                 yield grpc_server_pb2.OrchestratorRun(
                     status="error",
                     error=True,
-                    error_message=f"Invalid module type: {module_type}",
+                    error_message=f"Invalid execution type: {execution_type}",
                     id=orchestrator_run['id'],
                     consumer_id=orchestrator_run['consumer_id'],
                 )

@@ -52,6 +52,14 @@ class LLMConfig(BaseModel):
     temperature: Optional[float] = None
     api_base: Optional[str] = None
 
+class ModuleType(str, Enum):
+    agent = "agent"
+    tool = "tool"
+    environment = "environment"
+    kb = "kb"
+    orchestrator = "orchestrator"
+    persona = "persona"
+
 class ModuleExecutionType(str, Enum):
     package = "package"
     docker = "docker"
@@ -62,9 +70,10 @@ class Module(BaseModel):
     description: str
     author: str
     module_url: str
-    module_type: Optional[ModuleExecutionType] = ModuleExecutionType.package
+    module_type: Optional[ModuleType] = ModuleType.agent
     module_version: Optional[str] = "0.1"
     module_entrypoint: Optional[str] = "run.py"
+    execution_type: Optional[ModuleExecutionType] = ModuleExecutionType.package
 
 class AgentConfig(BaseModel):
     config_name: Optional[str] = None
