@@ -473,7 +473,7 @@ async def load_subdeployments(deployment, main_deployment_default):
     logger.info(f"Loading subdeployments for {main_deployment_default['module']['name']}")
     logger.info(f"Main deployment default: {main_deployment_default}")
 
-    module_path = Path(f"{MODULES_SOURCE_DIR}/{main_deployment_default["module"]["name"]}/{main_deployment_default["module"]["name"]}")
+    module_path = Path(f"{MODULES_SOURCE_DIR}/{main_deployment_default['module']['name']}/{main_deployment_default['module']['name']}")
 
     if hasattr(deployment, "agent_deployments") and deployment.agent_deployments:
         # Update defaults with non-None values from input
