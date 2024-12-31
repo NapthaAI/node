@@ -134,7 +134,11 @@ class NodeServer:
         if self.server_type == "http":
             try:
                 logger.info("Unregistering node from hub")
-                node_id = self.node_config["id"] if isinstance(self.node_config, dict) else self.node_config.id
+
+                if not isinstance(self.node_config, dict):
+                    self.node_config = self.node_config.model_dump()
+
+                node_id = self.node_config["id"]
                 logger.info(f"Attempting to unregister node: {node_id}")
 
                 async with Hub() as hub:
@@ -149,7 +153,7 @@ class NodeServer:
 
                         # Add timeout to delete_node
                         success = await asyncio.wait_for(
-                            hub.delete_node(node_id=node_id, servers=self.node_config.servers),
+                            hub.delete_node(node_id=node_id, servers=self.node_config["servers"]),
                             timeout=10.0
                         )
 
