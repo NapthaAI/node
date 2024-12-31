@@ -352,9 +352,9 @@ class WebSocketServer:
                 agent_run_data = agent_run.model_dump()
 
             # Execute the task
-            if agent_run.agent_deployment.module["module_type"] == "package":
+            if agent_run.agent_deployment.module["execution_type"] == "package":
                 task = run_agent.delay(agent_run_data)
-            elif agent_run.agent_deployment.module["module_type"] == "docker":
+            elif agent_run.agent_deployment.module["execution_type"] == "docker":
                 task = execute_docker_agent.delay(agent_run_data)
             else:
                 raise HTTPException(status_code=400, detail="Invalid agent run type")
@@ -414,9 +414,9 @@ class WebSocketServer:
                     raise ValueError("Failed to create orchestrator run")
                 orchestrator_run_data = orchestrator_run.model_dump()
 
-            if orchestrator_run.orchestrator_deployment.module["module_type"] == "package":
+            if orchestrator_run.orchestrator_deployment.module["execution_type"] == "package":
                 task = run_orchestrator.delay(orchestrator_run_data)
-            elif orchestrator_run.orchestrator_deployment.module["module_type"] == "docker":
+            elif orchestrator_run.orchestrator_deployment.module["execution_type"] == "docker":
                 raise ValueError("Docker orchestrators are not supported")
             else:
                 raise ValueError("Invalid module type")

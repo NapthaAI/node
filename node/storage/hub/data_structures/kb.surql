@@ -11,3 +11,4 @@ DEFINE FIELD module_url ON TABLE kb TYPE string;
 DEFINE FIELD module_type ON TABLE kb TYPE string;
 DEFINE FIELD module_version ON TABLE kb TYPE string;
 DEFINE FIELD module_entrypoint ON TABLE kb TYPE string;
+DEFINE FIELD execution_type ON TABLE kb TYPE string;

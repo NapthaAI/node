@@ -177,22 +177,7 @@ class ModuleRunEngine:
         self.module_run = module_run
         self.deployment = module_run.deployment
         self.module = self.deployment.module
-
-        # Determine module type
-        if isinstance(module_run, AgentRun):
-            self.module_type = "agent"
-        elif isinstance(module_run, MemoryRun):
-            self.module_type = "memory"
-        elif isinstance(module_run, OrchestratorRun):
-            self.module_type = "orchestrator"
-        elif isinstance(module_run, ToolRun):
-            self.module_type = "tool"
-        elif isinstance(module_run, EnvironmentRun):
-            self.module_type = "environment"
-        elif isinstance(module_run, KBRun):
-            self.module_type = "knowledge_base"
-        else:
-            raise ValueError(f"Invalid module run type: {type(module_run)}")
+        self.module_type = module_run.deployment.module['module_type']
 
         self.module_name = self.module["name"]
         self.module_version = f"v{self.module['module_version']}"

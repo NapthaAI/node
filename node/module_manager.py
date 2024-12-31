@@ -423,7 +423,7 @@ async def load_module_metadata(module_type: str, deployment: Union[AgentDeployme
     deployment.module = module_data
 
     if not module_data:
-        raise ValueError(f"Module {module_type} {module_name} not found")
+        raise ValueError(f"Module {module_name} not found")
 
     return module_data
 
@@ -444,26 +444,28 @@ async def load_module_config_data(deployment: Union[AgentDeployment, ToolDeploym
 
     # Iterate over default config and update values of deployment that are not set
     if deployment.config is None:
-        deployment.config = AgentConfig()
-    for key, value in default_deployment["config"].items():
-        if not hasattr(deployment.config, key) or getattr(deployment.config, key) is None:
-            setattr(deployment.config, key, value)
+        deployment.config = default_deployment["config"].copy()
+    else:
+        deployment.config = deployment.config.model_dump()
+        for key, value in default_deployment["config"].items():
+            if key not in deployment.config or deployment.config[key] is None:
+                deployment.config[key] = value
 
     if "llm_config" in default_deployment["config"] and default_deployment["config"]["llm_config"] is not None:
         config_name = default_deployment["config"]["llm_config"]["config_name"]
         config_path = f"{module_path}/configs/llm_configs.json"
         llm_configs = load_llm_configs(config_path)
         llm_config = next(config for config in llm_configs if config.config_name == config_name)
-        deployment.config.llm_config = llm_config
+        deployment.config["llm_config"] = llm_config
     if "persona_module" in default_deployment["config"] and default_deployment["config"]["persona_module"] is not None:
-        if deployment.config.persona_module is not None:
-            persona_module = deployment.config.persona_module
+        if deployment.config["persona_module"] is not None:
+            persona_module = deployment.config["persona_module"]
         else:
             persona_module = default_deployment["config"]["persona_module"]
         persona_module = await list_modules("persona", persona_module["name"])
 
         persona_dir = await download_persona(persona_module)
-        deployment.config.system_prompt["persona"] = load_persona(persona_dir, persona_module)
+        deployment.config["system_prompt"]["persona"] = load_persona(persona_dir, persona_module)
 
     logger.info(f"Module config data loaded {deployment.config}")
 
@@ -520,8 +522,8 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
 
     if deployment.module:
         # Install module from input parameters
-        module = await load_module_metadata(module_type, deployment)
-        await install_module_with_lock(module)
+        deployment.module = await load_module_metadata(module_type, deployment)
+        await install_module_with_lock(deployment.module)
 
     # Load default deployment config from module
     with open(main_deployment_default_path, "r") as file:
@@ -537,9 +539,8 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
 
     if not deployment.module:
         # Install module from default deployment
-        module = await load_module_metadata(module_type, deployment_map[module_type](**default_deployment))
-        deployment.module = module
-        await install_module_with_lock(module)
+        deployment.module = await load_module_metadata(module_type, deployment_map[module_type](**default_deployment))
+        await install_module_with_lock(deployment.module)
 
     # Fill in metadata and config data
     await load_node_metadata(deployment)

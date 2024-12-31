@@ -11,3 +11,4 @@ DEFINE FIELD module_url ON TABLE orchestrator TYPE string;
 DEFINE FIELD module_type ON TABLE orchestrator TYPE string;
 DEFINE FIELD module_version ON TABLE orchestrator TYPE string;
 DEFINE FIELD module_entrypoint ON TABLE orchestrator TYPE string;
+DEFINE FIELD execution_type ON TABLE orchestrator TYPE string;
