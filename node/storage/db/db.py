@@ -3,7 +3,6 @@ import logging
 import threading
 import json
 from contextlib import contextmanager
-from psycopg2.extras import Json
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -418,6 +417,19 @@ class DB:
             logger.error(f"Failed to create table: {str(e)}")
             raise
 
+    async def delete_dynamic_table(self, table_name: str) -> bool:
+        """Delete a dynamically created table"""
+        try:
+            with self.session() as db:
+                # Drop the table if it exists
+                query = text(f"DROP TABLE IF EXISTS {table_name}")
+                db.execute(query)
+                db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete table: {str(e)}")
+            raise
+
     async def add_dynamic_row(self, table_name: str, data: Dict[str, Any], 
                             schema: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
         """Add row to dynamically created table"""
@@ -469,6 +481,35 @@ class DB:
             logger.error(f"Failed to add row: {str(e)}")
             logger.error(f"Data: {data}")
             logger.error(f"Processed data: {processed_data if 'processed_data' in locals() else 'Not processed'}")
+            raise
+
+    async def list_dynamic_rows(self, table_name: str, limit: Optional[int] = None, 
+                              offset: Optional[int] = None) -> List[Dict[str, Any]]:
+        """List rows from dynamically created table"""
+        try:
+            with self.session() as db:
+                # Build query with optional limit and offset
+                query = f"SELECT * FROM {table_name}"
+                if limit is not None:
+                    query += f" LIMIT {limit}"
+                if offset is not None:
+                    query += f" OFFSET {offset}"
+                
+                result = db.execute(text(query))
+                
+                # Convert rows to list of dicts
+                columns = result.keys()
+                rows = []
+                for row in result:
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        row_dict[col] = row[i]
+                    rows.append(row_dict)
+                    
+                return rows
+
+        except Exception as e:
+            logger.error(f"Failed to list rows: {str(e)}")
             raise
 
     async def update_dynamic_row(self, table_name: str, data: Dict[str, Any],

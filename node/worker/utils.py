@@ -14,7 +14,7 @@ from websockets.exceptions import ConnectionClosedError
 import yaml
 import zipfile
 
-from node.storage.storage import get_ipns_record
+from node.storage.storage_provider import get_ipns_record
 
 load_dotenv()
 logger = logging.getLogger(__name__)
