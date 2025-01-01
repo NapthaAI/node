@@ -10,26 +10,41 @@ from pathlib import Path
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.json_format import MessageToDict
 from grpc import ServicerContext
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from google.protobuf import struct_pb2
 from node.storage.db.db import DB
-from node.storage.hub.hub import Hub
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_orchestrator
+from node.worker.template_worker import (
+    run_agent,
+    run_memory,
+    run_tool,
+    run_environment,
+    run_kb
+)
 from node.server import grpc_server_pb2, grpc_server_pb2_grpc
-from node.schemas import AgentDeployment, AgentRunInput
+from node.schemas import (
+    AgentDeployment,
+    MemoryDeployment,
+    ToolDeployment,
+    EnvironmentDeployment,
+    KBDeployment,
+    AgentRunInput,
+    MemoryRunInput,
+    ToolRunInput,
+    EnvironmentRunInput,
+    KBRunInput,
+    ModuleExecutionType
+)
 from node.module_manager import setup_module_deployment
 from node.config import MODULES_SOURCE_DIR
 
 logger = logging.getLogger(__name__)
 
-
 class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
     async def CheckUser(self, request, context):
         logger.info(f"Checking user: {request.public_key}")
         input_data = {"public_key": request.public_key}
-
         _, user_data = await check_user(input_data)
         logger.info(f"User check result: {user_data}")
         return grpc_server_pb2.CheckUserResponse(**user_data)
@@ -37,10 +52,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
     async def RegisterUser(self, request, context):
         logger.info(f"Registering user: {request.public_key}")
         input_data = {"public_key": request.public_key}
-        logger.info(f"Registering user: {input_data}")
-        
         success, user_data = await register_user(input_data)
-        
         if success:
             logger.info(f"User registration result: {user_data}")
             return grpc_server_pb2.RegisterUserResponse(**user_data)
@@ -48,25 +60,42 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details('User registration failed')
             return grpc_server_pb2.RegisterUserResponse()
-    
-    async def create_module(self, module_deployment: AgentDeployment) -> Dict[str, Any]:
+
+    async def create_module(self, module_deployment: Union[AgentDeployment, MemoryDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment]) -> Dict[str, Any]:
         """
         Unified method to create and install any type of module and its sub-modules
         """
         try:
-            # Determine module type and configuration
-            if isinstance(module_deployment, AgentDeployment):
-                module_type = "agent"
-                module_name = module_deployment.module["name"] if isinstance(module_deployment.module, dict) else module_deployment.module.name
-            else:
-                raise HTTPException(status_code=400, detail="Invalid module deployment type")
+            # Map deployment types to module types
+            module_type_map = {
+                AgentDeployment: "agent",
+                MemoryDeployment: "memory",
+                ToolDeployment: "tool",
+                EnvironmentDeployment: "environment",
+                KBDeployment: "kb"
+            }
+
+            # Determine module type based on deployment class
+            module_type = None
+            for deployment_class, type_name in module_type_map.items():
+                if isinstance(module_deployment, deployment_class):
+                    module_type = type_name
+                    break
+
+            if not module_type:
+                raise Exception("Invalid module deployment type")
 
             logger.info(f"Creating {module_type}: {module_deployment}")
 
-            main_module_name = module_deployment.module['name']
+            main_module_name = module_deployment.module['name'] if isinstance(module_deployment.module, dict) else module_deployment.module.name
             main_module_path = Path(f"{MODULES_SOURCE_DIR}/{main_module_name}/{main_module_name}")
 
-            module_deployment = await setup_module_deployment(module_type, main_module_path / "configs/deployment.json", module_deployment.name, module_deployment)
+            module_deployment = await setup_module_deployment(
+                module_type,
+                main_module_path / "configs/deployment.json",
+                module_deployment.name,
+                module_deployment
+            )
 
             return module_deployment
 
@@ -74,164 +103,262 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             logger.error(f"Failed to create module: {str(e)}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise Exception(f"Failed to create module: {str(e)}")
-    
-    async def RunAgent(self, request, context):
+
+    async def RunModule(self, request, context):
         try:
-            logger.info(f"Running task: {request}")
-            
-            # convert proto to dict to AgentRunInput
-            request = MessageToDict(request)
+            module_type = request.module_type
+            module_configs = {
+                "agent": {
+                    "input_class": AgentRunInput,
+                    "db_create": lambda db, input: db.create_agent_run(input),
+                    "db_list": lambda db, id: db.list_agent_runs(id),
+                    "worker": run_agent,
+                    "docker_support": True,
+                    "deployment_class": grpc_server_pb2.AgentDeployment
+                },
+                "memory": {
+                    "input_class": MemoryRunInput,
+                    "db_create": lambda db, input: db.create_memory_run(input),
+                    "db_list": lambda db, id: db.list_memory_runs(id),
+                    "worker": run_memory,
+                    "docker_support": False,
+                    "deployment_class": grpc_server_pb2.BaseDeployment
+                },
+                "tool": {
+                    "input_class": ToolRunInput,
+                    "db_create": lambda db, input: db.create_tool_run(input),
+                    "db_list": lambda db, id: db.list_tool_runs(id),
+                    "worker": run_tool,
+                    "docker_support": False,
+                    "deployment_class": grpc_server_pb2.ToolDeployment
+                },
+                "environment": {
+                    "input_class": EnvironmentRunInput,
+                    "db_create": lambda db, input: db.create_environment_run(input),
+                    "db_list": lambda db, id: db.list_environment_runs(id),
+                    "worker": run_environment,
+                    "docker_support": False,
+                    "deployment_class": grpc_server_pb2.BaseDeployment
+                },
+                "kb": {
+                    "input_class": KBRunInput,
+                    "db_create": lambda db, input: db.create_kb_run(input),
+                    "db_list": lambda db, id: db.list_kb_runs(id),
+                    "worker": run_kb,
+                    "docker_support": False,
+                    "deployment_class": grpc_server_pb2.BaseDeployment
+                }
+            }
 
-            if 'consumerId' in request:
-                request['consumer_id'] = request['consumerId']
-                del request['consumerId']
+            if module_type not in module_configs:
+                raise ValueError(f"Invalid module type: {module_type}")
 
-            logger.info(f"Request: {request}")
-            logger.info(f"Request type: {type(request)}")
+            config = module_configs[module_type]
+            request_dict = MessageToDict(request, preserving_proto_field_name=True)
 
-            # convert dict to AgentRunInput
-            agent_run_input = AgentRunInput(**request)
-            agent_run_input.inputs = request['inputStruct']
+            deployment_field = f"{module_type}_deployment"
+            if deployment_field in request_dict:
+                deployment = request_dict[deployment_field]
+                if 'node_input' in deployment:
+                    deployment['node'] = deployment.pop('node_input')
+                elif 'node_config' in deployment:
+                    deployment['node'] = deployment.pop('node_config')
+                request_dict['deployment'] = deployment
 
-            if not agent_run_input.deployment.initialized == True:
-                agent_deployment = await self.create_module(agent_run_input.deployment)
-                agent_run_input.deployment = agent_deployment           
+            run_input = config["input_class"](**request_dict)
+            run_input.inputs = request_dict.get('inputs', {})
+
+            if not run_input.deployment.initialized:
+                deployment = await self.create_module(run_input.deployment)
+                run_input.deployment = deployment
 
             async with DB() as db:
-                agent_run = await db.create_agent_run(agent_run_input)
-                logger.info(f"Created agent run")
-                agent_run_data = agent_run.model_dump()
+                module_run = await config["db_create"](db, run_input)
+                module_run_data = module_run.model_dump()
 
-            # Initial response
-            yield grpc_server_pb2.AgentRun(
+            yield grpc_server_pb2.ModuleRun(
+                module_type=module_type,
                 status="started",
                 error=False,
-                id=agent_run_data['id'],
-                consumer_id=agent_run_data['consumer_id'],
+                id=module_run_data['id'],
+                consumer_id=module_run_data['consumer_id']
             )
 
-            # execute the task
-            if isinstance(agent_run_input.deployment.module, dict):
-                module_type = agent_run_input.deployment.module['module_type']
+            if isinstance(run_input.deployment.module, dict):
+                execution_type = run_input.deployment.module["execution_type"]
             else:
-                module_type = agent_run_input.deployment.module.module_type
+                execution_type = run_input.deployment.module.execution_type
 
-            if module_type == "package":
-                task = run_agent.delay(agent_run_data)
-            elif module_type == "docker":
-                task = execute_docker_agent.delay(agent_run_data)
+            if execution_type == ModuleExecutionType.package or execution_type == "package":
+                task = config["worker"].delay(module_run_data)
+            elif execution_type == ModuleExecutionType.docker or execution_type == "docker":
+                if config["docker_support"]:
+                    task = execute_docker_agent.delay(module_run_data)
+                else:
+                    raise Exception(f"Docker execution not supported for {module_type}")
             else:
-                yield grpc_server_pb2.AgentRun(
-                    status="error",
-                    error=True,
-                    error_message="Invalid agent run type",
-                    id=agent_run_data['id'],
-                    consumer_id=agent_run_data['consumer_id'],
-                    results=[],
-                )
-                return
-            
-            # Wait for the task to complete, sending updates periodically
+                raise Exception(f"Invalid {module_type} run type")
+
             while not task.ready():
-                yield grpc_server_pb2.AgentRun(
+                yield grpc_server_pb2.ModuleRun(
+                    module_type=module_type,
                     status="running",
                     error=False,
-                    id=agent_run_data['id'],
-                    consumer_id=agent_run_data['consumer_id'],
-                    results=[],
+                    id=module_run_data['id'],
+                    consumer_id=module_run_data['consumer_id'],
+                    results=[]
                 )
                 await asyncio.sleep(5)
-                
-            # Retrieve the updated run from the database
+
             async with DB() as db:
-                updated_run = await db.list_agent_runs(agent_run_data['id'])
+                updated_run = await config["db_list"](db, module_run_data['id'])
                 if isinstance(updated_run, list):
                     updated_run = updated_run[0]
-                    
+
             if isinstance(updated_run, dict):
                 updated_run.pop("_sa_instance_state", None)
             else:
                 updated_run = updated_run.__dict__
                 updated_run.pop("_sa_instance_state", None)
 
-            # Convert timestamps to strings if they exist
-            if 'created_time' in updated_run and isinstance(updated_run['created_time'], datetime):
-                updated_run['created_time'] = updated_run['created_time'].isoformat()
-            if 'start_processing_time' in updated_run and isinstance(updated_run['start_processing_time'], datetime):
-                updated_run['start_processing_time'] = updated_run['start_processing_time'].isoformat()
-            if 'completed_time' in updated_run and isinstance(updated_run['completed_time'], datetime):
-                updated_run['completed_time'] = updated_run['completed_time'].isoformat()
+            for time_field in ['created_time', 'start_processing_time', 'completed_time']:
+                if time_field in updated_run and isinstance(updated_run[time_field], datetime):
+                    updated_run[time_field] = updated_run[time_field].isoformat()
 
-            logger.info(f"Updated agent run: {updated_run}")
-
-            # Create the final response
             inputs = struct_pb2.Struct()
             inputs.update(updated_run.get('inputs', {}))
 
-            agent_deployment = struct_pb2.Struct()
-            agent_deployment.update(updated_run.get('agent_deployment', {}))
+            deployment_data = updated_run.get("deployment", {})
+            DeploymentClass = config["deployment_class"]
 
-            final_response = grpc_server_pb2.AgentRun(
-                consumer_id=updated_run.get("consumer_id", ""),
-                input_struct=inputs,  # Changed from 'inputs' to 'input_struct'
-                deployment=updated_run.get("deployment", {}),
-                status=updated_run.get("status", "completed"),
-                error=False,
-                id=updated_run.get("id", ""),
-                results=updated_run.get("results", []),
-                error_message=updated_run.get("error_message", ""),
-                created_time=updated_run.get("created_time", ""),
-                start_processing_time=updated_run.get("start_processing_time", ""),
-                completed_time=updated_run.get("completed_time", ""),
-                duration=float(updated_run.get("duration", 0.0)),
-                input_schema_ipfs_hash=updated_run.get("input_schema_ipfs_hash", ""),
-            )
+            if 'node' in deployment_data:
+                node_data = deployment_data['node']
+                if 'id' in node_data:
+                    node = grpc_server_pb2.NodeConfig(**node_data)
+                else:
+                    node = grpc_server_pb2.NodeConfigInput(**node_data)
+                
+                module_data = deployment_data.get("module", {})
+                if not isinstance(module_data, dict):
+                    module_data = module_data.__dict__
+                module = grpc_server_pb2.Module(**module_data)
+                
+                config_data = deployment_data.get("config", {})
+                if isinstance(config_data, dict):
+                    config_struct = struct_pb2.Struct()
+                    config_struct.update(config_data)
+                else:
+                    config_struct = config_data
 
-            # logger.info(f"Sending final response: {final_response}")
+                deployment = DeploymentClass(
+                    name=deployment_data.get("name", ""),
+                    module=module,
+                    config=config_struct,
+                    initialized=deployment_data.get("initialized", False)
+                )
+                
+                if isinstance(node, grpc_server_pb2.NodeConfig):
+                    deployment.node_config.CopyFrom(node)
+                else:
+                    deployment.node_input.CopyFrom(node)
+
+            final_response = grpc_server_pb2.ModuleRun()
+
+            # Set basic fields
+            final_response.module_type = str(module_type)
+            final_response.consumer_id = str(updated_run.get("consumer_id", ""))
+            final_response.inputs.CopyFrom(inputs)
+            final_response.status = str(updated_run.get("status", "completed"))
+            final_response.error = bool(updated_run.get("error", False))
+            final_response.id = str(updated_run.get("id", ""))
+
+            # Extend list fields
+            if updated_run.get("results"):
+                final_response.results.extend([str(r) for r in updated_run.get("results", [])])
+
+            # Set optional string fields
+            if updated_run.get("error_message"):
+                final_response.error_message = str(updated_run.get("error_message"))
+            if updated_run.get("created_time"):
+                final_response.created_time = str(updated_run.get("created_time"))
+            if updated_run.get("start_processing_time"):
+                final_response.start_processing_time = str(updated_run.get("start_processing_time"))
+            if updated_run.get("completed_time"):
+                final_response.completed_time = str(updated_run.get("completed_time"))
+            if updated_run.get("duration") is not None:
+                final_response.duration = float(updated_run.get("duration", 0.0))
+
+            # Set deployment
+            if module_type == "agent":
+                final_response.agent_deployment.CopyFrom(deployment)
+            elif module_type == "tool":
+                final_response.tool_deployment.CopyFrom(deployment)
+            elif module_type == "memory":
+                final_response.memory_deployment.CopyFrom(deployment)
+            elif module_type == "kb":
+                final_response.kb_deployment.CopyFrom(deployment)
+            elif module_type == "environment":
+                final_response.environment_deployment.CopyFrom(deployment)
+
             yield final_response
-            logger.info(f"Sent final response")
 
         except Exception as e:
-            logger.error(f"Error running agent: {e}")
+            logger.error(f"Error running {module_type} module: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-            yield grpc_server_pb2.AgentRun(
+            yield grpc_server_pb2.ModuleRun(
+                module_type=module_type,
                 status="error",
                 error=True,
                 error_message=str(e),
-                consumer_id=request.get('consumer_id', ''),  # Fixed: use dict get method
+                consumer_id=request_dict.get('consumer_id', ''),
                 id="",
-                results=[],
+                results=[]
             )
 
-    async def CheckAgentRun(self, request, context):
+    async def CheckModuleRun(self, request, context):
         try:
-            logger.info(f"Checking agent run: {request.id}")
-            
-            async with DB() as db:  
-                agent_run = await db.list_agent_runs(request.id)
-                if isinstance(agent_run, list):
-                    agent_run = agent_run[0]
-                agent_run.pop("_sa_instance_state", None)
+            module_type = request.module_type
+            run_id = request.run_id
+            logger.info(f"Checking {module_type} run: {run_id}")
 
-            if not agent_run:
+            # Map module types to DB list functions
+            module_db_functions = {
+                "agent": lambda db: db.list_agent_runs(run_id),
+                "memory": lambda db: db.list_memory_runs(run_id),
+                "tool": lambda db: db.list_tool_runs(run_id),
+                "environment": lambda db: db.list_environment_runs(run_id),
+                "kb": lambda db: db.list_kb_runs(run_id)
+            }
+
+            if module_type not in module_db_functions:
+                raise ValueError(f"Invalid module type: {module_type}")
+
+            async with DB() as db:
+                module_run = await module_db_functions[module_type](db)
+                if isinstance(module_run, list):
+                    module_run = module_run[0]
+                module_run.pop("_sa_instance_state", None)
+
+            if not module_run:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
-                context.set_details('Agent run not found')
-                return grpc_server_pb2.AgentRun()
+                context.set_details(f'{module_type} run not found')
+                return grpc_server_pb2.ModuleRun()
 
-            return grpc_server_pb2.AgentRun(**agent_run)
+            return grpc_server_pb2.ModuleRun(
+                module_type=module_type,
+                **module_run
+            )
 
         except Exception as e:
-            logger.error(f"Error checking agent run: {e}")
+            logger.error(f"Error checking {module_type} run: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
-            return grpc_server_pb2.AgentRun()
+            return grpc_server_pb2.ModuleRun()
 
     async def is_alive(self, request: Empty, context: ServicerContext) -> grpc_server_pb2.GeneralResponse:
-        """Check whether the server is alive."""
         return grpc_server_pb2.GeneralResponse(ok=True)
 
     async def stop(self, request: Empty, context: ServicerContext) -> grpc_server_pb2.GeneralResponse:
-        """Stop the server."""
         self.stop_event.set()
         return grpc_server_pb2.GeneralResponse(ok=True)
 

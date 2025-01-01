@@ -6,112 +6,18 @@ import "google/protobuf/struct.proto";
 import "google/protobuf/empty.proto";
 
 service GrpcServer {
-    // Health checks
     rpc is_alive (google.protobuf.Empty) returns (GeneralResponse) {}
     rpc stop (google.protobuf.Empty) returns (GeneralResponse) {}
-
-    // User management
     rpc CheckUser (CheckUserRequest) returns (CheckUserResponse) {}
     rpc RegisterUser (RegisterUserRequest) returns (RegisterUserResponse) {}
-
-    // Agent operations
-    rpc RunAgent (AgentRunInput) returns (stream AgentRun) {}
-    rpc CheckAgentRun (AgentRunCheck) returns (AgentRun) {}
+    rpc RunModule (ModuleRunRequest) returns (stream ModuleRun) {}
+    rpc CheckModuleRun (ModuleRunCheck) returns (ModuleRun) {}
 }
 
-// Common responses
+// Common messages
 message GeneralResponse {
     bool ok = 1;
     string message = 2;
-}
-
-// Check user
-message CheckUserRequest {
-    optional string user_id = 1;
-    string public_key = 2;
-}
-
-message CheckUserResponse {
-    bool is_registered = 1;
-    string id = 2;
-    string public_key = 3;
-}
-
-// Register user
-message RegisterUserRequest {
-    string public_key = 1;
-}
-
-message RegisterUserResponse {
-    string id = 1;
-    string public_key = 2;
-}
-
-// Agent run
-message NodeServer {
-    string server_type = 1;
-    int32 port = 2;
-    string node_id = 3;
-}
-
-message NodeConfigInput {
-    string ip = 1;
-    optional int32 http_port = 2;
-    optional string server_type = 3;
-    optional string id = 4;
-    optional string owner = 5;
-    optional string public_key = 6;
-    optional string routing_type = 7;
-    optional string routing_url = 8;
-    optional int32 num_servers = 9;
-    optional string arch = 10;
-    optional string os = 11;
-    optional int64 ram = 12;
-    optional int64 vram = 13;
-    repeated NodeServer servers = 14;
-    repeated string ollama_models = 15;
-    optional bool docker_jobs = 16;
-    repeated int32 ports = 17;
-    optional int32 num_gpus = 18;
-}
-
-message AgentDeployment {
-    NodeConfigInput node = 1;
-    string name = 2;
-    AgentModule module = 3;
-    optional AgentConfig config = 4;
-    optional DataGenerationConfig data_generation_config = 5;
-    repeated ToolDeployment tool_deployments = 6;
-    repeated KBDeployment kb_deployments = 7;
-    repeated EnvironmentDeployment environment_deployments = 8;
-    bool initialized = 9;
-}
-
-message AgentRunInput {
-    string consumer_id = 1;
-    AgentDeployment deployment = 2;
-    google.protobuf.Struct input_struct = 3;
-    repeated google.protobuf.Struct orchestrator_runs = 4;
-}
-
-message AgentModule {
-    string id = 1;
-    string name = 2;
-    string description = 3;
-    string author = 4;
-    string module_url = 5;
-    optional string module_type = 6;
-    optional string module_version = 7;
-    optional string module_entrypoint = 8;
-    repeated string personas_urls = 9;
-}
-
-message AgentConfig {
-    optional string config_name = 1;
-    optional string config_schema = 2;
-    optional LLMConfig llm_config = 3;
-    optional google.protobuf.Struct persona_module = 4;
-    optional google.protobuf.Struct system_prompt = 5;
 }
 
 message LLMConfig {
@@ -123,6 +29,51 @@ message LLMConfig {
     optional string api_base = 6;
 }
 
+message NodeServer {
+    string server_type = 1;
+    int32 port = 2;
+    string node_id = 3;
+}
+
+message NodeConfigInput {
+    string ip = 1;
+    optional int32 http_port = 2;
+    optional string server_type = 3;
+}
+
+message NodeConfig {
+    string id = 1;
+    string owner = 2;
+    string public_key = 3;
+    string ip = 4;
+    string server_type = 5;
+    int32 http_port = 6;
+    int32 num_servers = 7;
+    repeated NodeServer servers = 8;
+    repeated string ollama_models = 9;
+    bool docker_jobs = 10;
+    repeated int32 ports = 11;
+    optional string routing_type = 12;
+    optional string routing_url = 13;
+    optional int32 num_gpus = 14;
+    optional string arch = 15;
+    optional string os = 16;
+    optional int64 ram = 17;
+    optional int64 vram = 18;
+}
+
+message Module {
+    string id = 1;
+    string name = 2;
+    string description = 3;
+    string author = 4;
+    string module_url = 5;
+    optional string module_type = 6;
+    optional string module_version = 7;
+    optional string module_entrypoint = 8;
+    optional string execution_type = 9;
+}
+
 message DataGenerationConfig {
     optional bool save_outputs = 1;
     optional string save_outputs_location = 2;
@@ -132,54 +83,106 @@ message DataGenerationConfig {
     optional string default_filename = 6;
 }
 
+// Module Deployments
+message BaseDeployment {
+   oneof node {
+       NodeConfig node_config = 1;
+       NodeConfigInput node_input = 2;
+   }
+   string name = 3;
+   Module module = 4;
+   google.protobuf.Struct config = 5;
+   bool initialized = 6;
+}
+
 message ToolDeployment {
-    NodeConfigInput node = 1;
-    string name = 2;
-    AgentModule module = 3;
-    optional ToolConfig config = 4;
-    optional DataGenerationConfig data_generation_config = 5;
-    bool initialized = 6;
+   oneof node {
+       NodeConfig node_config = 1;
+       NodeConfigInput node_input = 2;
+   }
+   string name = 3;
+   Module module = 4;
+   google.protobuf.Struct config = 5;
+   optional DataGenerationConfig data_generation_config = 6;
+   bool initialized = 7;
 }
 
-message ToolConfig {
-    optional string config_name = 1;
-    optional string config_schema = 2;
-    optional LLMConfig llm_config = 3;
+message AgentDeployment {
+   oneof node {
+       NodeConfig node_config = 1;
+       NodeConfigInput node_input = 2;
+   }
+   string name = 3;
+   Module module = 4;
+   google.protobuf.Struct config = 5;
+   optional DataGenerationConfig data_generation_config = 6;
+   repeated ToolDeployment tool_deployments = 7;
+   repeated BaseDeployment kb_deployments = 8;
+   repeated BaseDeployment environment_deployments = 9;
+   bool initialized = 10;
 }
 
-message KBDeployment {
-    NodeConfigInput node = 1;
-    string name = 2;
-    AgentModule module = 3;
-    optional google.protobuf.Struct config = 4;
-    bool initialized = 5;
+// Run messages
+message ModuleRunRequest {
+    string module_type = 1;
+    string consumer_id = 2;
+    google.protobuf.Struct inputs = 3;
+    oneof deployment {
+        AgentDeployment agent_deployment = 4;
+        ToolDeployment tool_deployment = 5;
+        BaseDeployment memory_deployment = 6;
+        BaseDeployment kb_deployment = 7;
+        BaseDeployment environment_deployment = 8;
+    }
+    repeated ModuleRun orchestrator_runs = 9;
 }
 
-message EnvironmentDeployment {
-    NodeConfigInput node = 1;
-    string name = 2;
-    AgentModule module = 3;
-    optional google.protobuf.Struct config = 4;
-    bool initialized = 5;
+message ModuleRun {
+    string module_type = 1;
+    string consumer_id = 2;
+    google.protobuf.Struct inputs = 3;
+    oneof deployment {
+        AgentDeployment agent_deployment = 4;
+        ToolDeployment tool_deployment = 5;
+        BaseDeployment memory_deployment = 6;
+        BaseDeployment kb_deployment = 7;
+        BaseDeployment environment_deployment = 8;
+    }
+    repeated ModuleRun orchestrator_runs = 9;
+    string status = 10;
+    bool error = 11;
+    optional string id = 12;
+    repeated string results = 13;
+    optional string error_message = 14;
+    optional string created_time = 15;
+    optional string start_processing_time = 16;
+    optional string completed_time = 17;
+    optional double duration = 18;
+    optional string input_schema_ipfs_hash = 19;
 }
 
-message AgentRun {
-    string consumer_id = 1;
-    AgentDeployment deployment = 2;
-    google.protobuf.Struct input_struct = 3;
-    repeated google.protobuf.Struct orchestrator_runs = 4;
-    string status = 5;
-    bool error = 6;
-    optional string id = 7;
-    repeated string results = 8;
-    optional string error_message = 9;
-    optional string created_time = 10;
-    optional string start_processing_time = 11;
-    optional string completed_time = 12;
-    optional double duration = 13;
-    optional string input_schema_ipfs_hash = 14;
+message ModuleRunCheck {
+    string module_type = 1;
+    string run_id = 2;
 }
 
-message AgentRunCheck {
-    string run_id = 1;
+// User messages
+message CheckUserRequest {
+    optional string user_id = 1;
+    string public_key = 2;
+}
+
+message CheckUserResponse {
+    bool is_registered = 1;
+    string id = 2;
+    string public_key = 3;
+}
+
+message RegisterUserRequest {
+    string public_key = 1;
+}
+
+message RegisterUserResponse {
+    string id = 1;
+    string public_key = 2;
 }
