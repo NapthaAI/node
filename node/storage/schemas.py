@@ -46,6 +46,7 @@ class DatabaseReadOptions(BaseModel):
     limit: Optional[int] = None
     offset: Optional[int] = None
     # Added fields for QA/vector search
+    query_vector: Optional[List[float]] = None
     query_col: Optional[str] = None  # Column to search against
     answer_col: Optional[str] = None  # Column to return as answer
     vector_col: Optional[str] = None  # Column containing vectors
