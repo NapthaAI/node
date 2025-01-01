@@ -113,8 +113,8 @@ class DataGenerationConfig(BaseModel):
 
 class ToolDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "tool_deployment"
-    module: Optional[Union[Dict, Module]] = None
+    name: Optional[str] = None
+    module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[ToolConfig] = None
     data_generation_config: Optional[DataGenerationConfig] = None
     initialized: Optional[bool] = False
@@ -128,22 +128,22 @@ class MemoryDeployment(BaseModel):
 
 class KBDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "kb_deployment"
-    module: Optional[Union[Dict, Module]] = None
+    name: Optional[str] = None
+    module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[Union[Dict, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class EnvironmentDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "environment_deployment"
-    module: Optional[Union[Dict, Module]] = None
+    name: Optional[str] = None
+    module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[Union[Dict, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class AgentDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "agent_deployment"
-    module: Optional[Union[Dict, Module]] = None
+    name: Optional[str] = None
+    module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[AgentConfig] = None
     data_generation_config: Optional[DataGenerationConfig] = None
     tool_deployments: Optional[List[ToolDeployment]] = None
@@ -153,8 +153,8 @@ class AgentDeployment(BaseModel):
 
 class OrchestratorDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "orchestrator_deployment"
-    module: Optional[Union[Dict, Module]] = None
+    name: Optional[str] = None
+    module: Optional[Union[Dict, AgentModule]] = None
     config: Optional[OrchestratorConfig] = None
     agent_deployments: Optional[List[AgentDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
