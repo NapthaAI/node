@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import time
 import traceback
+from pydantic import BaseModel
 from typing import Union, Dict
 import yaml
 from node.schemas import (
@@ -437,36 +438,43 @@ async def load_node_metadata(deployment):
 
 async def load_module_config_data(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment], default_deployment: Dict):
     logger.info(f"Loading module config data for {deployment.module.name}")
-
     module_name = deployment.module.name
     module_type = deployment.module.id.split(":")[0]
     module_path = Path(f"{MODULES_SOURCE_DIR}/{module_name}/{module_name}")
+ 
+    # Start with default config as base
+    merged_config = default_deployment["config"].copy()
+    
+    # If deployment has config, merge with defaults
+    if deployment.config:
+        deployment_config = deployment.config.model_dump()
+        merged_config = merge_config(deployment_config, merged_config)
 
-    # Iterate over default config and update values of deployment that are not set
-    if deployment.config is None:
-        deployment.config = default_deployment["config"].copy()
-    else:
-        deployment.config = deployment.config.model_dump()
-        for key, value in default_deployment["config"].items():
-            if key not in deployment.config or deployment.config[key] is None:
-                deployment.config[key] = value
-
-    if "llm_config" in default_deployment["config"] and default_deployment["config"]["llm_config"] is not None:
-        config_name = default_deployment["config"]["llm_config"]["config_name"]
+    # handle llm_config
+    if "llm_config" in merged_config and merged_config["llm_config"] is not None:
+        # load llm_config from llm_configs.json
         config_path = f"{module_path}/configs/llm_configs.json"
         llm_configs = load_llm_configs(config_path)
-        llm_config = next(config for config in llm_configs if config.config_name == config_name)
-        deployment.config["llm_config"] = llm_config
-    if "persona_module" in default_deployment["config"] and default_deployment["config"]["persona_module"] is not None:
-        if deployment.config["persona_module"] is not None:
-            persona_module = deployment.config["persona_module"]
+        base_llm_config = next(config for config in llm_configs if config.config_name == merged_config["llm_config"]["config_name"])
+        if isinstance(base_llm_config, BaseModel):
+            default_llm_config = base_llm_config.model_dump()
         else:
-            persona_module = default_deployment["config"]["persona_module"]
-        persona_module = await list_modules("persona", persona_module["name"])
+            default_llm_config = base_llm_config
+        merged_config["llm_config"] = merge_config(merged_config["llm_config"], default_llm_config)
 
+    # update deployment with merged config
+    deployment.config = merged_config
+    logger.info(f"Module config data loaded {deployment.config}")
+
+    if 'persona_module' in merged_config and merged_config['persona_module'] is not None:
+        persona_module = merged_config['persona_module']
+        persona_url = persona_module["module_url"]
+        persona_module = await list_modules("persona", persona_module['name'])
         persona_dir = await download_persona(persona_module)
-        deployment.config["system_prompt"]["persona"] = load_persona(persona_dir, persona_module)
+        merged_config["persona_module"] = {"data": load_persona(persona_dir, persona_module)}
 
+    # update deployment with merged config
+    deployment.config = merged_config
     logger.info(f"Module config data loaded {deployment.config}")
 
 async def load_subdeployments(deployment, main_deployment_default):
