@@ -9,6 +9,7 @@ DEFINE FIELD ip ON TABLE node TYPE string;
 DEFINE FIELD server_type ON TABLE node TYPE string;
 DEFINE FIELD http_port ON TABLE node TYPE number;
 DEFINE FIELD num_servers ON TABLE node TYPE number;
+DEFINE FIELD provider_types ON TABLE node TYPE array<string>;
 DEFINE FIELD servers ON TABLE node TYPE array<record<server>>;
 DEFINE FIELD ollama_models ON TABLE node FLEXIBLE TYPE array;
 DEFINE FIELD docker_jobs ON TABLE node TYPE bool;

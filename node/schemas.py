@@ -16,6 +16,7 @@ class NodeConfig(BaseModel):
     server_type: str = Field(default="ws")
     http_port: int = Field(default=7001)
     num_servers: int = Field(default=1)
+    provider_types: List[str] = Field(default=["models", "storage", "modules"])
     servers: List[NodeServer]
     ollama_models: List[str]
     docker_jobs: bool

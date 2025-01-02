@@ -16,6 +16,7 @@ NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
 DEV_MODE=True
+PROVIDER_TYPES=["models", "storage", "modules"]
 
 # Servers
 HTTP_PORT=7001
@@ -71,6 +72,7 @@ def get_node_config():
         server_type=SERVER_TYPE,
         http_port=HTTP_PORT,
         num_servers=NUM_SERVERS,
+        provider_types=PROVIDER_TYPES,
         servers=[NodeServer(server_type=SERVER_TYPE, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
         ollama_models=[OLLAMA_MODELS],
         docker_jobs=DOCKER_JOBS,
