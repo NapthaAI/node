@@ -401,7 +401,7 @@ class WebSocketServer:
         except WebSocketDisconnect:
             self.manager.disconnect(client_id, "register_user")
 
-    async def register_user_direct(self, data: str) -> str:
+    async def register_user(self, data: str) -> str:
         data = json.loads(data)
         _, response = await register_user(data)
         if '_sa_instance_state' in response:
