@@ -114,13 +114,13 @@ class WebSocketServer:
             return {"status": "ok", "server_type": "websocket"}
 
         self.app.add_api_websocket_route(
-            "/ws/check_user/{client_id}", self.check_user_endpoint
+            "/ws/user/check/{client_id}", self.check_user_endpoint
         )
         self.app.add_api_websocket_route(
-            "/ws/register_user/{client_id}", self.register_user_endpoint
+            "/ws/user/register/{client_id}", self.register_user_endpoint
         )
         self.app.add_api_websocket_route(
-            "/ws/run_module/{module_type}/{client_id}", self.run_module_endpoint
+            "/ws/{module_type}/run/{client_id}", self.run_module_endpoint
         )
 
     async def establish_connection(self):
