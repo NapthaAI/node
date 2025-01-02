@@ -29,15 +29,14 @@ class NodeServer:
         self.server: Optional[HTTPServer | WebSocketServer | GrpcServer] = None
         self.server_type = server_type
         self.port = port
-        self.hub = None
+        self.hub = Hub()
         self.shutdown_event = asyncio.Event()
 
     async def register_node(self):
         """Register the node with the hub - only HTTP server does this"""
         if self.server_type == "http":
             try:
-                async with Hub() as hub:
-                    self.hub = hub
+                async with self.hub as hub:
                     success, user, user_id = await hub.signin(
                         os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                     )
@@ -167,6 +166,7 @@ class NodeServer:
                         raise
             except Exception as e:
                 logger.error(f"Error during node unregistration: {e}")
+                logger.error(f"Traceback: {''.join(traceback.format_exc())}")
                 raise
 
     async def graceful_shutdown(self, sig=None):
@@ -225,6 +225,9 @@ async def run_server(server_type: str, port: int):
                 sig, 
                 lambda s=sig: signal_handler(s)
             )
+
+        if "node.naptha.ai" in node_server.hub.hub_url and node_server.node_config.ip == "localhost":
+            raise Exception("Cannot register node on public hub with NODE_IP localhost. Please change NODE_IP in config.py to your public IP address or domain name.")
 
         # Register node (only for HTTP server)
         await node_server.register_node()
