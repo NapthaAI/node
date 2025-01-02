@@ -468,10 +468,9 @@ async def load_module_config_data(deployment: Union[AgentDeployment, ToolDeploym
 
     if 'persona_module' in merged_config and merged_config['persona_module'] is not None:
         persona_module = merged_config['persona_module']
-        persona_url = persona_module["module_url"]
         persona_module = await list_modules("persona", persona_module['name'])
         persona_dir = await download_persona(persona_module)
-        merged_config["persona_module"] = {"data": load_persona(persona_dir, persona_module)}
+        merged_config["system_prompt"]["persona"] = load_persona(persona_dir, persona_module)
 
     # update deployment with merged config
     deployment.config = merged_config
