@@ -32,11 +32,12 @@ CELERY_BROKER_URL="amqp://localhost:5672/"
 
 # LLMs Inference
 LITELLM_URL="http://localhost:4000"
-LLM_BACKEND="vllm"
+LLM_BACKEND="ollama"
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
 OLLAMA_MODELS="phi3:mini"
 # OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
 OPENAI_MODELS="gpt-4o-mini"
+MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
 LOCAL_DB_PORT=3002
@@ -74,7 +75,7 @@ def get_node_config():
         num_servers=NUM_SERVERS,
         provider_types=PROVIDER_TYPES,
         servers=[NodeServer(server_type=SERVER_TYPE, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
-        ollama_models=[OLLAMA_MODELS],
+        models=[MODELS],
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,
         routing_url=ROUTING_URL,
