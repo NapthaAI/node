@@ -168,6 +168,13 @@ class Hub(AsyncMixin):
                 server = await self.surrealdb.select(server_id)
                 servers.append(server)
             node['servers'] = [NodeServer(**server) for server in servers]
+
+            alt_ports = [
+                server['port'] 
+                for server in servers
+                if server['server_type'] in ['ws', 'grpc']
+            ]
+            node['ports'] = alt_ports
             return NodeConfig(**node)
 
     async def delete_node(self, node_id: str, servers: Optional[List[str]]=None) -> bool:
@@ -360,4 +367,6 @@ async def list_nodes(node_ip: str) -> List:
         except Exception as auth_error:
             raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
 
-        return await hub.list_nodes(node_ip=node_ip)
+        node = await hub.list_nodes(node_ip=node_ip)
+        return node
+

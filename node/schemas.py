@@ -20,6 +20,7 @@ class NodeConfig(BaseModel):
     servers: List[NodeServer]
     models: List[str]
     docker_jobs: bool
+    ports: Optional[List[int]] = None
     routing_type: Optional[str] = Field(default="direct")
     routing_url: Optional[str] = Field(default=None)
     num_gpus: Optional[int] = Field(default=None)
@@ -112,7 +113,7 @@ class DataGenerationConfig(BaseModel):
 
 class ToolDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "tool_deployment"
+    name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
     config: Optional[ToolConfig] = None
     data_generation_config: Optional[DataGenerationConfig] = None
@@ -127,21 +128,21 @@ class MemoryDeployment(BaseModel):
 
 class KBDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "kb_deployment"
+    name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
     config: Optional[Union[Dict, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class EnvironmentDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "environment_deployment"
+    name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
     config: Optional[Union[Dict, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class AgentDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "agent_deployment"
+    name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
     config: Optional[AgentConfig] = None
     data_generation_config: Optional[DataGenerationConfig] = None
@@ -152,7 +153,7 @@ class AgentDeployment(BaseModel):
 
 class OrchestratorDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
-    name: Optional[str] = "orchestrator_deployment"
+    name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
     config: Optional[OrchestratorConfig] = None
     agent_deployments: Optional[List[AgentDeployment]] = None

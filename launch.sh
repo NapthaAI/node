@@ -1751,15 +1751,23 @@ startup_summary() {
                 # gRPC health check using is_alive
                 if python3 -c "
 import grpc
+import asyncio
 import sys
 from node.server import grpc_server_pb2_grpc, grpc_server_pb2
 from google.protobuf.empty_pb2 import Empty
-channel = grpc.insecure_channel('localhost:$port')
-stub = grpc_server_pb2_grpc.GrpcServerStub(channel)
-try:
-    response = stub.is_alive(Empty())
-    sys.exit(0 if response.ok else 1)
-except Exception as e:
+
+async def check_health():
+    async with grpc.aio.insecure_channel('localhost:$port') as channel:
+        stub = grpc_server_pb2_grpc.GrpcServerStub(channel)
+        try:
+            response = await stub.is_alive(Empty())
+            return response.ok
+        except Exception as e:
+            return False
+
+if asyncio.run(check_health()):
+    sys.exit(0)
+else:
     sys.exit(1)
 " > /dev/null 2>&1; then
                     statuses+=("✅")
