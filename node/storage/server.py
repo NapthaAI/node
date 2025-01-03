@@ -74,18 +74,7 @@ async def create_storage_object(
 async def read_storage_object(
     storage_type: StorageType,
     path: str = Path(..., description="Storage path/identifier"),
-    columns: Optional[List[str]] = Query(None),
-    conditions: Optional[str] = Query(None, description="JSON string of conditions"),
-    order_by: Optional[str] = Query(None),
-    order_direction: str = Query("asc"),
-    limit: Optional[int] = Query(None),
-    offset: Optional[int] = Query(None),
-    query_vector: Optional[List[float]] = Query(None),
-    query_col: Optional[str] = Query(None),
-    answer_col: Optional[str] = Query(None),
-    vector_col: Optional[str] = Query(None),
-    top_k: int = Query(5),
-    include_similarity: bool = Query(True)
+    options: Optional[str] = Query(None, description="JSON string of options"),
 ):
     """Read from storage (query DB, read file, or fetch IPFS content)"""
 
@@ -100,20 +89,7 @@ async def read_storage_object(
 
     location = StorageLocation(storage_type=storage_type, path=path)
     
-    db_options = DatabaseReadOptions(
-        columns=columns,
-        conditions=conditions,
-        order_by=order_by,
-        order_direction=order_direction,
-        limit=limit,
-        offset=offset,
-        query_vector=query_vector,
-        query_col=query_col,
-        answer_col=answer_col,
-        vector_col=vector_col,
-        top_k=top_k,
-        include_similarity=include_similarity
-    )
+    db_options = DatabaseReadOptions(**(json.loads(options) if options else {}))
 
     try:
         result = await storage_provider.read(location, db_options)
@@ -181,7 +157,7 @@ async def delete_storage_object(
 async def list_storage_objects(
     storage_type: StorageType,
     path: str = Path(..., description="Storage path/identifier"),
-    limit: Optional[int] = Query(None, description="Result limit")
+    options: Optional[str] = Query(None, description="JSON string of options"),
 ):
     """List storage objects (DB tables/rows, directory contents, IPFS directory)"""
 
@@ -196,11 +172,10 @@ async def list_storage_objects(
 
     location = StorageLocation(storage_type=storage_type, path=path)
     
+    db_options = DatabaseReadOptions(**(json.loads(options) if options else {}))
+
     try:
-        options = {
-            "limit": limit
-        }
-        return await storage_provider.list(location, options)
+        return await storage_provider.list(location, db_options)
     except Exception as e:
         raise HTTPException(500, str(e))
 
