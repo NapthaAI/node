@@ -34,10 +34,7 @@ def get_ollama_models() -> List[str]:
 def generate_litellm_config() -> Dict:
     """Generate LiteLLM configuration."""
     config = {
-        'model_list': [],
-        'litellm_settings': {
-            'enable_json_schema_validation': True
-        }
+        'model_list': []
     }
     
     # Add OpenAI models if API key is valid
@@ -45,7 +42,7 @@ def generate_litellm_config() -> Dict:
         openai_models = get_openai_models()
         for model in openai_models:
             config['model_list'].append({
-                'model_name': 'openai:' + model,
+                'model_name': model,
                 'litellm_params': {
                     'model': f'openai/{model}',
                     'api_key': 'os.environ/OPENAI_API_KEY'
