@@ -15,12 +15,29 @@ services:
     restart: unless-stopped
     networks:
       - node_private_network
-    ports:
-      - '5672:5672' # exposed for testing, but should not be in production.
+    # ports:
+      # - '5672:5672' # exposed for testing, but should not be in production.
       # - '15672:15672' # this is the management port, e.g. if you want rabbitmq:4-management
+
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: node-pgvector
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # init SQL script to create databases etc.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
+    restart: unless-stopped
+    networks:
+      - node_private_network
+    # ports:
+      #- '5433:5432' # exposed for testing, but should not be for production
+
 
 networks:
   node_private_network:
 
 volumes:
   rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs
+  postgres_data:
