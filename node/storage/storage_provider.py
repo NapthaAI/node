@@ -141,7 +141,7 @@ class DatabaseStorageProvider(StorageProvider):
     async def list(self, location: StorageLocation, options: DatabaseReadOptions = None) -> List[StorageObject]:
         table_name = location.path.split('/')[0]
         async with DB() as db:
-            result = await db.list_dynamic_rows(table_name, limit=options.get("limit"), offset=options.get("offset"))
+            result = await db.list_dynamic_rows(table_name, limit=options.limit, offset=options.offset)
             return StorageObject(location=location, data=result)
 
     async def search(self, location: StorageLocation, query: Any, options: Dict[str, Any] = None) -> List[StorageObject]:

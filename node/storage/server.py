@@ -177,7 +177,9 @@ async def list_storage_objects(
     try:
         return await storage_provider.list(location, db_options)
     except Exception as e:
-        raise HTTPException(500, str(e))
+        logger.error(f"Storage list error: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{storage_type}/search")
 async def search_storage_objects(
