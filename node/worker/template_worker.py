@@ -214,7 +214,7 @@ class ModuleRunEngine:
         logger.info(f"{self.module_type.title()} deployment: {self.deployment}")
 
         try:
-            kwargs = {"module_run": self.module_run}
+            kwargs = {"module_run": self.module_run.model_dict()}
             response = await maybe_async_call(self.module_func, **kwargs)
         except Exception as e:
             logger.error(f"Error running {self.module_type}: {e}")
