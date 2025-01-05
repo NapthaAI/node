@@ -1,0 +1,26 @@
+# Services required to run & use the Naptha Node, plus the Node container itself.
+# start whichever services you want/need - all, some, or just one.
+
+services:
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    container_name: node-rabbitmq
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
+      RABBITMQ_DEFAULT_VHOST: '/'
+      RABBITMQ_MANAGEMENT_PASSWORD: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
+    restart: unless-stopped
+    networks:
+      - node_private_network
+    ports:
+      - '5672:5672' # exposed for testing, but should not be in production.
+      # - '15672:15672' # this is the management port, e.g. if you want rabbitmq:4-management
+
+networks:
+  node_private_network:
+
+volumes:
+  rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs
