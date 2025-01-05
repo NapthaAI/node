@@ -34,6 +34,15 @@ services:
     # ports:
       #- '5433:5432' # exposed for testing, but should not be for production
 
+  celery-worker:
+    build:
+      dockerfile: celery.Dockerfile
+    environment:
+      RMQ_USER: ${RMQ_USER:?error}
+      RMQ_PASSWORD: ${RMQ_PASSWORD?:error}
+      RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
+      OPENAI_API_KEY: ${OPENAI_API_KEY?:error}
+
 
 networks:
   node_private_network:

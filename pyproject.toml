@@ -8,6 +8,7 @@ version = "0.1.0"
 description = ""
 authors = [ "moarshy <marshath@gmail.com>",]
 readme = "README.md"
+package-mode = false
 [[tool.poetry.packages]]
 include = "node"
 from = "."
