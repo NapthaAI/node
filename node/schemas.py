@@ -1,7 +1,8 @@
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 from pydantic import BaseModel, Field
+from node.storage.schemas import StorageType
 
 class NodeServer(BaseModel):
     server_type: str
@@ -101,6 +102,20 @@ class EnvironmentConfig(BaseModel):
 
 class KBConfig(BaseModel):
     config_name: Optional[str] = None
+    storage_type: StorageType
+    path: str
+    schema: Dict[str, Any]
+    options: Optional[Dict[str, Any]] = None
+
+    def model_dict(self):
+        if isinstance(self.storage_type, StorageType):
+            self.storage_type = self.storage_type.value
+        model_dict = self.dict()
+        model_dict['storage_type'] = self.storage_type
+        return model_dict
+
+class MemoryConfig(BaseModel):
+    config_name: Optional[str] = None
     config_schema: Optional[str] = None
 
 class DataGenerationConfig(BaseModel):
@@ -115,7 +130,7 @@ class ToolDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
-    config: Optional[ToolConfig] = None
+    config: Optional[Union[ToolConfig, BaseModel]] = None
     data_generation_config: Optional[DataGenerationConfig] = None
     initialized: Optional[bool] = False
 
@@ -123,21 +138,21 @@ class MemoryDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = "memory_deployment"
     module: Optional[Union[Dict, Module]] = None
-    config: Optional[Union[Dict, BaseModel]] = None
+    config: Optional[Union[MemoryConfig, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class KBDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
-    config: Optional[Union[Dict, BaseModel]] = None
+    config: Optional[Union[KBConfig, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class EnvironmentDeployment(BaseModel):
     node: Union[NodeConfig, NodeConfigInput]
     name: Optional[str] = None
     module: Optional[Union[Dict, Module]] = None
-    config: Optional[Union[Dict, BaseModel]] = None
+    config: Optional[Union[EnvironmentConfig, BaseModel]] = None
     initialized: Optional[bool] = False
 
 class AgentDeployment(BaseModel):
@@ -210,6 +225,12 @@ class AgentRun(BaseModel):
 
     def model_dict(self):
         model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         for key, value in model_dict.items():
             if isinstance(value, datetime):
                 model_dict[key] = value.isoformat()
@@ -233,6 +254,9 @@ class AgentRunInput(BaseModel):
         if isinstance(self.deployment.config, BaseModel):
             config = self.deployment.config.model_dump()
             model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         return model_dict
 
 class ToolRunInput(BaseModel):
@@ -246,6 +270,9 @@ class ToolRunInput(BaseModel):
         if isinstance(self.deployment.config, BaseModel):
             config = self.deployment.config.model_dump()
             model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         return model_dict
     
 class ToolRun(BaseModel):
@@ -263,6 +290,16 @@ class ToolRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
 class OrchestratorRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -273,6 +310,9 @@ class OrchestratorRunInput(BaseModel):
         if isinstance(self.deployment.config, BaseModel):
             config = self.deployment.config.model_dump()
             model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         return model_dict
     
 class OrchestratorRun(BaseModel):
@@ -291,6 +331,16 @@ class OrchestratorRun(BaseModel):
     agent_runs: List['AgentRun'] = []
     input_schema_ipfs_hash: Optional[str] = None
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
 class EnvironmentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -302,6 +352,9 @@ class EnvironmentRunInput(BaseModel):
         if isinstance(self.deployment.config, BaseModel):
             config = self.deployment.config.model_dump()
             model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         return model_dict
 
 class EnvironmentRun(BaseModel):
@@ -320,6 +373,16 @@ class EnvironmentRun(BaseModel):
     duration: Optional[float] = None
     input_schema_ipfs_hash: Optional[str] = None
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
 class KBRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -331,6 +394,9 @@ class KBRunInput(BaseModel):
         if isinstance(self.deployment.config, BaseModel):
             config = self.deployment.config.model_dump()
             model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         return model_dict
 
 class KBRun(BaseModel):
@@ -348,6 +414,16 @@ class KBRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
 
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
 class MemoryRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -359,6 +435,9 @@ class MemoryRunInput(BaseModel):
         if isinstance(self.deployment.config, BaseModel):
             config = self.deployment.config.model_dump()
             model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         return model_dict
 
 class MemoryRun(BaseModel):
@@ -375,6 +454,16 @@ class MemoryRun(BaseModel):
     start_processing_time: Optional[str] = None
     completed_time: Optional[str] = None
     duration: Optional[float] = None
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class ChatMessage(BaseModel):
     role: str
