@@ -1,24 +1,16 @@
 import asyncio
-import io
-import json
 import httpx
 import logging
 import traceback
 from datetime import datetime
-from typing import Optional, Union, Any, Dict
+from typing import Union, Any, Dict
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Form, Body, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pathlib import Path
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
 
 from node.config import MODULES_SOURCE_DIR
 from node.module_manager import (
@@ -48,18 +40,13 @@ from node.schemas import (
     ToolDeployment,
 )
 from node.storage.db.db import DB
-from node.storage.hub.hub import Hub, list_modules, list_nodes
-from node.storage.storage import (
-    write_to_ipfs,
-    read_from_ipfs_or_ipns,
-    write_storage,
-    read_storage,
-)
+from node.storage.hub.hub import Hub
 from node.user import check_user, register_user
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_memory, run_tool, run_environment, run_orchestrator, run_kb
 from node.client import Node as NodeClient
+from node.storage.server import router as storage_router
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -267,77 +254,6 @@ class HTTPServer:
             """
             return await self.kb_check(kb_run)
 
-        # Storage endpoints
-        @router.post("/storage/write")
-        async def storage_write_endpoint(file: UploadFile = File(...)):
-            """Write files to the storage."""
-            status_code, message_dict = await write_storage(file)
-            return JSONResponse(status_code=status_code, content=message_dict)
-
-        @router.get("/storage/read/{job_id}")
-        async def storage_read_endpoint(job_id: str):
-            """Get the output directory for a job_id and serve it as a tar.gz file."""
-            status_code, message_dict = await read_storage(job_id)
-            if status_code == 200:
-                return FileResponse(
-                    path=message_dict["path"],
-                    media_type=message_dict["media_type"],
-                    filename=message_dict["filename"],
-                    headers=message_dict["headers"],
-                )
-            else:
-                raise HTTPException(
-                    status_code=status_code, detail=message_dict["message"]
-                )
-
-        @router.post("/storage/write_ipfs")
-        async def storage_write_ipfs_endpoint(
-            publish_to_ipns: bool = Form(False),
-            update_ipns_name: Optional[str] = Form(None),
-            file: UploadFile = File(...),
-        ):
-            """Write a file to IPFS, optionally publish to IPNS or update an existing IPNS record."""
-            logger.info(f"Writing to IPFS: {file.filename}")
-            logger.info(f"Publish to IPNS: {publish_to_ipns}")
-            logger.info(f"Update IPNS name: {update_ipns_name}")
-            status_code, message_dict = await write_to_ipfs(
-                file, publish_to_ipns, update_ipns_name
-            )
-            logger.info(f"Status code: {status_code}")
-            logger.info(f"Message dict: {message_dict}")
-
-            if status_code == 201:
-                return JSONResponse(status_code=status_code, content=message_dict)
-            else:
-                raise HTTPException(
-                    status_code=status_code, detail=message_dict["message"]
-                )
-
-        @router.get("/storage/read_ipfs/{hash_or_name}")
-        async def storage_read_ipfs_or_ipns_endpoint(hash_or_name: str):
-            """Read a file from IPFS or IPNS."""
-            status_code, message_dict = await read_from_ipfs_or_ipns(hash_or_name)
-            if status_code == 200:
-                if "content" in message_dict:
-                    # For zipped directory content
-                    return StreamingResponse(
-                        io.BytesIO(message_dict["content"]),
-                        media_type=message_dict["media_type"],
-                        headers=message_dict["headers"],
-                    )
-                else:
-                    # For single file content
-                    return FileResponse(
-                        path=message_dict["path"],
-                        media_type=message_dict["media_type"],
-                        filename=message_dict["filename"],
-                        headers=message_dict["headers"],
-                    )
-            else:
-                raise HTTPException(
-                    status_code=status_code, detail=message_dict["message"]
-                )
-
         # User endpoints
         @router.post("/user/check")
         async def user_check_endpoint(user_input: dict):
@@ -369,84 +285,6 @@ class HTTPServer:
                 logger.error(f"Error getting server connection: {e}")
                 raise
 
-        # Local DB endpoints
-        @router.post("/local-db/create-table")
-        async def create_local_table_endpoint(
-            table_name: str = Body(...),
-            schema: Dict[str, Dict[str, Any]] = Body(...)
-        ) -> Dict[str, Any]:
-            """Create a table in the local database"""
-            logger.info(f"Creating table: {table_name} with schema: {schema}")
-            return await self.create_local_table(table_name, schema)
-
-        @router.post("/local-db/add-row")
-        async def add_local_row_endpoint(
-            table_name: str = Body(...),
-            data: Dict[str, Any] = Body(...),
-            schema: Optional[Dict[str, Dict[str, Any]]] = Body(None)
-        ) -> Dict[str, Any]:
-            """Add a row to a table in the local database"""
-            return await self.add_local_row(table_name, data, schema)
-
-        @router.post("/local-db/update-row")
-        async def update_local_row_endpoint(
-            table_name: str = Body(...),
-            data: Dict[str, Any] = Body(...),
-            condition: Dict[str, Any] = Body(...),
-            schema: Optional[Dict[str, Dict[str, Any]]] = Body(None)  # Make schema optional
-        ) -> Dict[str, Any]:
-            """Update rows in a table in the local database"""
-            return await self.update_local_row(table_name, data, condition, schema)
-
-        @router.post("/local-db/delete-row")
-        async def delete_local_row_endpoint(
-            table_name: str = Body(...),
-            condition: Dict[str, Any] = Body(...)
-        ) -> Dict[str, Any]:
-            """Delete rows from a table in the local database"""
-            return await self.delete_local_row(table_name, condition)
-
-        @router.get("/local-db/tables")
-        async def list_tables_endpoint() -> Dict[str, Any]:
-            """Get list of all tables in the local database"""
-            return await self.list_local_tables()
-
-        @router.get("/local-db/table/{table_name}")
-        async def get_table_schema_endpoint(table_name: str) -> Dict[str, Any]:
-            """Get schema information for a specific table"""
-            return await self.get_local_table_schema(table_name)
-
-        @router.get("/local-db/table/{table_name}/rows")
-        async def query_table_rows_endpoint(
-            table_name: str,
-            columns: Optional[str] = None,
-            condition: Optional[str] = None,
-            order_by: Optional[str] = None,
-            limit: Optional[int] = None
-        ) -> Dict[str, Any]:
-            """Query rows from a table with optional filters"""
-            return await self.query_local_table(
-                table_name, columns, condition, order_by, limit
-            )
-
-        @router.post("/local-db/vector_search")
-        async def local_db_vector_search_endpoint(
-            table_name: str = Body(...),
-            vector_column: str = Body(...),
-            query_vector: list[float] = Body(...),
-            columns: Optional[list[str]] = Body(None),
-            top_k: int = Body(5),
-            include_similarity: bool = Body(True),
-        ):
-            return await self.local_db_vector_search(
-                table_name,
-                vector_column,
-                query_vector,
-                columns or ["text"],
-                top_k,
-                include_similarity,
-            )
-
         ####### Inference endpoints #######
         @router.post("/inference/chat")
         async def chat_endpoint(request: ChatCompletionRequest):
@@ -472,6 +310,7 @@ class HTTPServer:
 
         # Include the router
         self.app.include_router(router)
+        self.app.include_router(storage_router)
 
         self.app.add_middleware(
             CORSMiddleware,
@@ -748,118 +587,6 @@ class HTTPServer:
     async def kb_check(self, kb_run: KBRun) -> KBRun:
         return await self.check_module(kb_run)
 
-    async def create_local_table(self, table_name: str, 
-                            schema: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Create a table in the local database"""
-        try:
-            async with DB() as db:
-                result = await db.create_dynamic_table(table_name, schema)
-                return {"success": result, "message": f"Table {table_name} created successfully"}
-        except Exception as e:
-            logger.error(f"Failed to create table: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def add_local_row(self, table_name: str, data: Dict[str, Any], 
-                        schema: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
-        """Add a row to the local database"""
-        try:
-            async with DB() as db:
-                result = await db.add_dynamic_row(table_name, data)
-                return {"success": result, "message": "Row added successfully"}
-        except Exception as e:
-            logger.error(f"Failed to add row: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def update_local_row(
-        self, 
-        table_name: str, 
-        data: Dict[str, Any],
-        condition: Dict[str, Any], 
-        schema: Optional[Dict[str, Dict[str, Any]]] = None
-    ) -> Dict[str, Any]:
-        """Update rows in the local database"""
-        try:
-            async with DB() as db:
-                rows_updated = await db.update_dynamic_row(table_name, data, condition)
-                return {"success": True, "rows_updated": rows_updated}
-        except Exception as e:
-            logger.error(f"Failed to update row: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def delete_local_row(self, table_name: str, 
-                            condition: Dict[str, Any]) -> Dict[str, Any]:
-        """Delete rows from the local database"""
-        try:
-            async with DB() as db:
-                rows_deleted = await db.delete_dynamic_row(table_name, condition)
-                return {"success": True, "rows_deleted": rows_deleted}
-        except Exception as e:
-            logger.error(f"Failed to delete row: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def list_local_tables(self) -> Dict[str, Any]:
-        """Get list of all tables"""
-        try:
-            async with DB() as db:
-                tables = await db.list_dynamic_tables()
-                return {"success": True, "tables": tables}
-        except Exception as e:
-            logger.error(f"Failed to list tables: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def get_local_table_schema(self, table_name: str) -> Dict[str, Any]:
-        """Get schema for a specific table"""
-        try:
-            async with DB() as db:
-                schema = await db.get_dynamic_table_schema(table_name)
-                return {"success": True, "table_name": table_name, "schema": schema}
-        except Exception as e:
-            logger.error(f"Failed to get table schema: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def query_local_table(self, table_name: str, 
-                            columns: Optional[str] = None,
-                            condition: Optional[str] = None, 
-                            order_by: Optional[str] = None,
-                            limit: Optional[int] = None) -> Dict[str, Any]:
-        """Query rows from a table"""
-        try:
-            column_list = columns.split(',') if columns else None
-            condition_dict = json.loads(condition) if condition else None
-            
-            async with DB() as db:
-                rows = await db.query_dynamic_table(
-                    table_name=table_name,
-                    columns=column_list,
-                    condition=condition_dict,
-                    order_by=order_by,
-                    limit=limit
-                )
-                return {"success": True, "rows": rows}
-        except Exception as e:
-            logger.error(f"Failed to query table: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    async def local_db_vector_search(
-        self,
-        table_name: str,
-        vector_column: str,
-        query_vector: list[float],
-        columns: list[str],
-        top_k: int,
-        include_similarity: bool,
-    ) -> Dict[str, Any]:
-        async with DB() as db:
-            results = await db.vector_similarity_search(
-                table_name=table_name,
-                vector_column=vector_column,
-                query_vector=query_vector,
-                columns=columns,
-                top_k=top_k,
-                include_similarity=include_similarity,
-            )
-        return {"success": True, "results": results}
-        
     async def stop(self):
         """Handle graceful server shutdown"""
         if self.server and self._started:
