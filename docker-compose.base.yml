@@ -8,15 +8,15 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?error}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
       RABBITMQ_DEFAULT_VHOST: '/'
       RABBITMQ_MANAGEMENT_PASSWORD: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
     restart: unless-stopped
     networks:
       - node_private_network
-    # ports:
-      # - '5672:5672' # exposed for testing, but should not be in production.
+    ports:
+      - '5672:5672' # exposed for testing, but should not be in production.
       # - '15672:15672' # this is the management port, e.g. if you want rabbitmq:4-management
 
   pgvector:
@@ -37,12 +37,15 @@ services:
   celery-worker:
     build:
       dockerfile: celery.Dockerfile
+    depends_on:
+      - rabbitmq
     environment:
-      RMQ_USER: ${RMQ_USER:?error}
-      RMQ_PASSWORD: ${RMQ_PASSWORD?:error}
+      RMQ_USER: ${RABBITMQ_USER:?error}
+      RMQ_PASSWORD: ${RABBITMQ_PASSWORD?:error}
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY?:error}
-
+    networks:
+      - node_private_network
 
 networks:
   node_private_network:
