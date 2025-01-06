@@ -135,6 +135,15 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
+    async def get_public_key_by_id(self, user_id: str) -> Optional[Dict]:
+        try:
+            with self.session() as db:
+                user = db.query(User).filter_by(id=user_id).first()
+                return user.__dict__["public_key"] if user else None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get user: {str(e)}")
+            raise
+
     async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, MemoryRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema]:
         model_map = {
             'agent': (AgentRun, AgentRunSchema),

@@ -41,7 +41,7 @@ from node.schemas import (
 )
 from node.storage.db.db import DB
 from node.storage.hub.hub import Hub
-from node.user import check_user, register_user
+from node.user import check_user, register_user, get_user_public_key, verify_signature
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_memory, run_tool, run_environment, run_orchestrator, run_kb
@@ -411,6 +411,11 @@ class HTTPServer:
 
             logger.info(f"Received request to run {module_type}: {module_run_input}")
 
+            user_public_key = await get_user_public_key(module_run_input.consumer_id)
+
+            if not verify_signature(module_run_input.consumer_id, module_run_input.signature, user_public_key):
+                raise HTTPException(status_code=401, detail="Unauthorized: Invalid signature")
+
             # Create module run record in DB
             async with DB() as db:
                 module_run = await create_func(db)(module_run_input)
@@ -447,6 +452,10 @@ class HTTPServer:
                 raise HTTPException(status_code=400, detail=f"Invalid {module_type} run type")
 
             return module_run_data
+        
+        except HTTPException as e:
+            logger.error(f"Error: {str(e.detail)}")
+            raise e
 
         except Exception as e:
             logger.error(f"Failed to run module: {str(e)}")

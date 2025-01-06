@@ -27,6 +27,7 @@ class AgentRun(Base):
     start_processing_time = Column(DateTime)
     completed_time = Column(DateTime)
     duration = Column(Integer)
+    signature = Column(String)
 
     consumer = relationship("User", back_populates="agent_runs")
 
@@ -65,6 +66,7 @@ class OrchestratorRun(Base):
     completed_time = Column(DateTime)
     duration = Column(Integer)  # Changed from float to integer for consistency with AgentRun
     input_schema_ipfs_hash = Column(String)
+    signature = Column(String)
 
     consumer = relationship("User", back_populates="orchestrator_runs")
 
@@ -85,6 +87,7 @@ class EnvironmentRun(Base):
     completed_time = Column(DateTime)
     duration = Column(Integer)
     input_schema_ipfs_hash = Column(String)
+    signature = Column(String)
 
     consumer = relationship("User", back_populates="environment_runs")
 
@@ -104,6 +107,7 @@ class KBRun(Base):
     start_processing_time = Column(DateTime)
     completed_time = Column(DateTime)
     duration = Column(Integer)
+    signature = Column(String)
 
     consumer = relationship("User", back_populates="kb_runs")
 
@@ -123,6 +127,7 @@ class ToolRun(Base):
     start_processing_time = Column(DateTime)
     completed_time = Column(DateTime)
     duration = Column(Integer)
+    signature = Column(String)
 
     consumer = relationship("User", back_populates="tool_runs")
 
