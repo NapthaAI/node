@@ -216,6 +216,7 @@ class AgentRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
     input_schema_ipfs_hash: Optional[str] = None
+    signature: str
 
     class Config:
         allow_mutation = True
@@ -291,6 +292,7 @@ class ToolRun(BaseModel):
     start_processing_time: Optional[str] = None
     completed_time: Optional[str] = None
     duration: Optional[float] = None
+    signature: str
 
     def model_dict(self):
         model_dict = self.dict()
@@ -333,6 +335,7 @@ class OrchestratorRun(BaseModel):
     duration: Optional[float] = None
     agent_runs: List['AgentRun'] = []
     input_schema_ipfs_hash: Optional[str] = None
+    signature: str
 
     def model_dict(self):
         model_dict = self.dict()
@@ -376,6 +379,7 @@ class EnvironmentRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
     input_schema_ipfs_hash: Optional[str] = None
+    signature: str
 
     def model_dict(self):
         model_dict = self.dict()
@@ -418,6 +422,7 @@ class KBRun(BaseModel):
     start_processing_time: Optional[str] = None
     completed_time: Optional[str] = None
     duration: Optional[float] = None
+    signature: str
 
     def model_dict(self):
         model_dict = self.dict()
@@ -434,6 +439,7 @@ class MemoryRunInput(BaseModel):
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
     deployment: MemoryDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
+    signature: str
 
     def model_dict(self):
         model_dict = self.dict()
@@ -459,7 +465,8 @@ class MemoryRun(BaseModel):
     start_processing_time: Optional[str] = None
     completed_time: Optional[str] = None
     duration: Optional[float] = None
-
+    signature: str
+    
     def model_dict(self):
         model_dict = self.dict()
         if isinstance(self.deployment.config, BaseModel):
