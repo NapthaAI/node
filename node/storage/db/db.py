@@ -7,7 +7,6 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import QueuePool
-from tenacity import retry, stop_after_attempt, wait_exponential
 from typing import Dict, List, Optional, Union, Any
 
 from node.config import LOCAL_DB_URL
@@ -712,10 +711,6 @@ class DB:
             logger.error(f"Failed to get connection stats: {str(e)}")
             return {}
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=2)
-    )
     async def connect(self):
         self.is_authenticated = await self.check_connection_health()
         return self.is_authenticated, None, None
