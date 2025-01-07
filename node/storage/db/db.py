@@ -438,12 +438,19 @@ class DB:
             logger.error(f"Failed to delete table: {str(e)}")
             raise
 
-    async def add_dynamic_row(self, table_name: str, data: Dict[str, Any], 
+    async def add_dynamic_row(self, table_name: str, 
+                            data: Union[Dict[str, Any], List[Dict[str, Any]]], 
                             schema: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
-        """Add row to dynamically created table"""
+        """Add one or multiple rows to dynamically created table"""
         try:
+            # Convert single dict to list for consistent processing
+            data_rows = [data] if isinstance(data, dict) else data
+            
+            if not data_rows:
+                return True
+                
             with self.session() as db:
-                # First, get the column types from the database
+                # Get column types once for all rows
                 type_query = text("""
                     SELECT column_name, data_type, udt_name 
                     FROM information_schema.columns 
@@ -452,29 +459,34 @@ class DB:
                 result = db.execute(type_query, {"table_name": table_name})
                 column_types = {row[0]: (row[1], row[2]) for row in result}
 
-                # Process the data based on column types
-                processed_data = {}
-                for key, value in data.items():
-                    if key in column_types:
-                        data_type, udt_name = column_types[key]
-                        
-                        if udt_name == 'vector':
-                            # Handle vector type - ensure it's a list of floats
-                            if not isinstance(value, list):
-                                raise ValueError(f"Vector field {key} must be a list")
-                            processed_data[key] = value
-                        elif data_type == 'jsonb':
-                            processed_data[key] = json.dumps(value)
-                        elif data_type.startswith('_'):
-                            # Array types
-                            processed_data[key] = value
-                        else:
-                            processed_data[key] = value
+                # Process all rows
+                processed_rows = []
+                for row_data in data_rows:
+                    processed_data = {}
+                    for key, value in row_data.items():
+                        if key in column_types:
+                            data_type, udt_name = column_types[key]
+                            
+                            if udt_name == 'vector':
+                                if not isinstance(value, list):
+                                    raise ValueError(f"Vector field {key} must be a list")
+                                processed_data[key] = value
+                            elif data_type == 'jsonb':
+                                processed_data[key] = json.dumps(value)
+                            elif data_type.startswith('_'):
+                                processed_data[key] = value
+                            else:
+                                processed_data[key] = value
+                    processed_rows.append(processed_data)
 
-                # Construct and execute query
-                columns = list(processed_data.keys())
+                if not processed_rows:
+                    return True
+
+                # Get columns from the first row
+                columns = list(processed_rows[0].keys())
                 placeholders = [f":{col}" for col in columns]
-                
+
+                # Construct insert query
                 query = text(f"""
                     INSERT INTO {table_name} 
                     ({', '.join(columns)}) 
@@ -482,13 +494,20 @@ class DB:
                     ({', '.join(placeholders)})
                 """)
 
-                db.execute(query, processed_data)
+                # Execute inserts
+                if len(processed_rows) == 1:
+                    # Single row insert
+                    db.execute(query, processed_rows[0])
+                else:
+                    # Batch insert
+                    db.execute(query, processed_rows)
+                    
                 return True
 
         except Exception as e:
-            logger.error(f"Failed to add row: {str(e)}")
-            logger.error(f"Data: {data}")
-            logger.error(f"Processed data: {processed_data if 'processed_data' in locals() else 'Not processed'}")
+            logger.error(f"Failed to add row(s): {str(e)}")
+            logger.error(f"Input data: {data}")
+            logger.error(f"Processed rows: {processed_rows if 'processed_rows' in locals() else 'Not processed'}")
             raise
 
     async def list_dynamic_rows(self, table_name: str, limit: Optional[int] = None, 
