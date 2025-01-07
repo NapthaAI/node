@@ -234,3 +234,27 @@ async def search_storage_objects(
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@router.put("/{storage_type}/update/{path:path}")
+async def update_storage_object(
+    storage_type: StorageType,
+    path: str = Path(..., description="Storage path/identifier"),
+    request_data: Optional[str] = Form(None, alias="data"),
+    condition: Optional[str] = Query(None, description="Update condition (JSON string)")
+):
+    """Update storage objects (currently only supports database)"""
+    request_data = json.loads(request_data) if request_data else None
+    condition_dict = json.loads(condition) if condition else None
+
+    logger.info(f"Received update data: {request_data}")
+    logger.info(f"Received condition: {condition_dict}")
+
+    location = StorageLocation(storage_type=storage_type, path=path)
+    
+    if storage_type == StorageType.DATABASE:
+        storage_provider = DatabaseStorageProvider()
+        if not request_data:
+            raise HTTPException(400, "Database storage requires update data")
+        options = {"condition": condition_dict} if condition_dict else None
+        return await storage_provider.update(location, request_data, options)
+    else:
+        raise HTTPException(400, "Update currently only supports database storage")
