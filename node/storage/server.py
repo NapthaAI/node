@@ -1,18 +1,16 @@
-from fastapi import APIRouter, HTTPException, Body, Query, Path
+from fastapi import APIRouter, HTTPException, Body, Query, Path, File, UploadFile, Response, Form   
 from typing import Optional, Dict, Any, Union, List
 import logging
 import json
-import io
 import traceback
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
-
+from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from node.storage.storage_provider import (
     DatabaseStorageProvider,
     FilesystemStorageProvider,
     IPFSStorageProvider
 )
-from node.storage.schemas import StorageLocation, StorageType, DatabaseReadOptions
-from node.storage.storage_provider import write_to_ipfs
+from node.storage.schemas import StorageLocation, StorageType, DatabaseReadOptions, IPFSOptions
 
 logger = logging.getLogger(__name__)
 
@@ -22,53 +20,38 @@ router = APIRouter(prefix="/storage", tags=["storage"])
 async def create_storage_object(
     storage_type: StorageType,
     path: str = Path(..., description="Storage path/identifier"),
-    request_data: Dict[str, Any] = Body(..., description="Request data containing file content or database data")
+    file: Optional[UploadFile] = File(None),
+    request_data: Optional[str] = Form(None, alias="data")  # Use alias to match form field name
 ):
     """Create new storage objects (table, file, or IPFS content)"""
-    
-    if storage_type == StorageType.DATABASE:
-        storage_provider = DatabaseStorageProvider()
-    elif storage_type == StorageType.FILESYSTEM:
-        storage_provider = FilesystemStorageProvider()
-    elif storage_type == StorageType.IPFS:
-        storage_provider = IPFSStorageProvider()
-    else:
-        raise HTTPException(400, "Invalid storage type")
+    request_data = json.loads(request_data) if request_data else None
+
+    logger.info(f"Received data: {request_data}")
+    logger.info(f"Received file: {file}")
 
     location = StorageLocation(storage_type=storage_type, path=path)
     
-    try:
-        if storage_type == StorageType.DATABASE:
-            return await storage_provider.create(location, request_data, {"type": "table"})
-        elif storage_type == StorageType.FILESYSTEM:
-            if "file" in request_data:
-                return await storage_provider.create(location, request_data["file"], {"type": "file"})
-            else:
-                raise HTTPException(400, "Filesystem storage requires file upload")
-
-        elif storage_type == StorageType.IPFS:
-            """Write a file to IPFS, optionally publish to IPNS or update an existing IPNS record."""
-            logger.info(f"Writing to IPFS: {request_data['file'].filename}")
-            logger.info(f"Publish to IPNS: {request_data['publish_to_ipns']}")
-            logger.info(f"Update IPNS name: {request_data['update_ipns_name']}")
-            status_code, message_dict = await write_to_ipfs(
-                request_data['file'], request_data['publish_to_ipns'], request_data['update_ipns_name']
-            )
-            logger.info(f"Status code: {status_code}")
-            logger.info(f"Message dict: {message_dict}")
-
-            if status_code == 201:
-                return JSONResponse(status_code=status_code, content=message_dict)
-            else:
-                raise HTTPException(
-                    status_code=status_code, detail=message_dict["message"]
-                )
-
-
-    except Exception as e:
-        logger.error(f"Storage create error: {str(e)}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if storage_type == StorageType.DATABASE:
+        storage_provider = DatabaseStorageProvider()
+        if not request_data:
+            raise HTTPException(400, "Database storage requires schema data")
+        return await storage_provider.create(location, request_data, {"type": "table"})
+        
+    elif storage_type == StorageType.FILESYSTEM:
+        storage_provider = FilesystemStorageProvider()
+        if not file:
+            raise HTTPException(400, "Filesystem storage requires file upload")
+        return await storage_provider.create(location, file, {"type": "file"})
+        
+    elif storage_type == StorageType.IPFS:
+        storage_provider = IPFSStorageProvider()
+        if not file:
+            raise HTTPException(400, "IPFS storage requires file upload")
+            
+        ipfs_options = IPFSOptions(**(request_data or {}))
+        return await storage_provider.create(location, file, ipfs_options)
+        
+    raise HTTPException(400, "Invalid storage type")
 
 @router.get("/{storage_type}/read/{path:path}")
 async def read_storage_object(
@@ -78,44 +61,74 @@ async def read_storage_object(
 ):
     """Read from storage (query DB, read file, or fetch IPFS content)"""
 
-    if storage_type == StorageType.DATABASE:
-        storage_provider = DatabaseStorageProvider()
-    elif storage_type == StorageType.FILESYSTEM:
-        storage_provider = FilesystemStorageProvider()
-    elif storage_type == StorageType.IPFS:
-        storage_provider = IPFSStorageProvider()
-    else:
+    # Provider selection
+    if storage_type not in StorageType:
         raise HTTPException(400, "Invalid storage type")
-
+        
+    providers = {
+        StorageType.DATABASE: DatabaseStorageProvider,
+        StorageType.FILESYSTEM: FilesystemStorageProvider,
+        StorageType.IPFS: IPFSStorageProvider
+    }
+    storage_provider = providers[storage_type]()
     location = StorageLocation(storage_type=storage_type, path=path)
     
-    db_options = DatabaseReadOptions(**(json.loads(options) if options else {}))
-
     try:
-        result = await storage_provider.read(location, db_options)
-
-        # Handle different response types
         if storage_type == StorageType.DATABASE:
+            parsed_options = json.loads(options) if options else {}
+            db_options = DatabaseReadOptions(**parsed_options)
+            result = await storage_provider.read(location, db_options)
             return result.data
+            
         elif storage_type == StorageType.FILESYSTEM:
-            status_code, message_dict = await storage_provider.read(location, db_options)
-            if status_code == 200:
+            result = await storage_provider.read(location, None)
+            if isinstance(result.data, dict) and "path" in result.data:
                 return FileResponse(
-                    path=message_dict["path"],
-                    media_type=message_dict["media_type"],
-                    filename=message_dict["filename"],
-                    headers=message_dict["headers"],
+                    path=result.data["path"],
+                    media_type=result.data.get("media_type", "application/octet-stream"),
+                    filename=result.data.get("filename"),
+                    headers=result.data.get("headers", {})
                 )
             else:
-                raise HTTPException(
-                    status_code=status_code, detail=message_dict["message"]
+                return Response(
+                    content=result.data,
+                    media_type="application/octet-stream",
+                    headers={"Content-Disposition": f"attachment; filename={path.split('/')[-1]}"}
                 )
+                
         elif storage_type == StorageType.IPFS:
-            return StreamingResponse(
-                io.BytesIO(result.data),
-                media_type=result.content_type
-            )
+            try:
+                parsed_options = json.loads(options) if options else {}
+                ipfs_options = IPFSOptions(**parsed_options)
+            except json.JSONDecodeError:
+                raise HTTPException(400, "Invalid options JSON format")
+            except ValidationError:
+                raise HTTPException(400, "Invalid IPFS options")
+                
+            result = await storage_provider.read(location, ipfs_options.dict())
             
+            # Handle both file and directory responses
+            if result.data.get("is_directory"):
+                return Response(
+                    content=result.data["content"],
+                    media_type="application/zip",
+                    headers={
+                        "Content-Disposition": f"attachment; filename={result.data['filename']}"
+                    }
+                )
+            else:
+                return Response(
+                    content=result.data["content"],
+                    media_type=result.data.get("media_type", "application/octet-stream"),
+                    headers={
+                        "Content-Disposition": f"attachment; filename={result.data['filename']}"
+                    }
+                )
+            
+    except FileNotFoundError:
+        raise HTTPException(404, "File or directory not found")
+    except PermissionError:
+        raise HTTPException(403, "Permission denied accessing file")
     except Exception as e:
         logger.error(f"Storage read error: {str(e)}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
