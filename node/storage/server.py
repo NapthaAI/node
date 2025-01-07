@@ -159,7 +159,7 @@ async def delete_storage_object(
 
         if storage_type == StorageType.DATABASE and condition_dict:
             options_dict = {"condition": condition_dict, **(options_dict or {})}
-        return await storage_provider.delete(storage_type, location, options_dict)
+        return await storage_provider.delete(location, options_dict)  # Removed storage_type argument
     
     except Exception as e:
         logger.error(f"Storage delete error: {str(e)}")
@@ -185,10 +185,17 @@ async def list_storage_objects(
 
     location = StorageLocation(storage_type=storage_type, path=path)
     
-    db_options = DatabaseReadOptions(**(json.loads(options) if options else {}))
-
     try:
-        return await storage_provider.list(location, db_options)
+        parsed_options = json.loads(options) if options else {}
+        
+        if storage_type == StorageType.DATABASE:
+            options_obj = DatabaseReadOptions(**parsed_options)
+        else:
+            options_obj = parsed_options
+
+        return await storage_provider.list(location, options_obj)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid options JSON format")
     except Exception as e:
         logger.error(f"Storage list error: {str(e)}")
         logger.error(f"Full traceback: {traceback.format_exc()}")

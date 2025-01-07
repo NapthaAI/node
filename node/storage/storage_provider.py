@@ -13,8 +13,8 @@ from io import BytesIO
 from typing import Any, Dict, Union, BinaryIO, List
 
 from node.storage.db.db import DB
-from node.storage.schemas import StorageLocation, StorageObject, StorageType, DatabaseReadOptions, IPFSOptions
-from node.storage.utils import zip_dir, zip_directory, get_api_url
+from node.storage.schemas import StorageLocation, StorageObject, StorageType, DatabaseReadOptions, IPFSOptions, StorageMetadata
+from node.storage.utils import zip_directory, get_api_url
 from node.config import IPFS_GATEWAY_URL
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ class DatabaseStorageProvider(StorageProvider):
             except Exception as e:
                 raise ValueError(f"Database read failed: {str(e)}")
 
-    async def delete(self, storage_type: StorageType, location: StorageLocation, options: Dict[str, Any] = None) -> bool:
+    async def delete(self, location: StorageLocation, options: Dict[str, Any] = None) -> bool:
         table_name = location.path.split('/')[0]
 
         async with DB() as db:
@@ -222,16 +222,127 @@ class FilesystemStorageProvider(StorageProvider):
                 data=data
             )
 
-    async def update(self, location: StorageLocation, data: Union[Dict, bytes, BinaryIO], options: Dict[str, Any] = None) -> StorageObject:
-        """Update not implemented yet"""
-        pass
-
     async def delete(self, location: StorageLocation, options: Dict[str, Any] = None) -> bool:
-        """Delete not implemented yet"""
-        pass
+        """Delete a file or directory from filesystem storage
+        
+        Args:
+            location: StorageLocation object containing the path to delete
+            options: Optional dictionary that can contain:
+                - recursive: bool (default False) - Whether to recursively delete directories
+                - ignore_missing: bool (default False) - Don't raise error if path doesn't exist
+        
+        Returns:
+            bool: True if deletion was successful
+            
+        Raises:
+            FileNotFoundError: If path doesn't exist and ignore_missing is False
+            PermissionError: If permission denied when trying to delete
+            OSError: For other filesystem-related errors
+        """
+        try:
+            options = options or {}
+            recursive = options.get('recursive', False)
+            ignore_missing = options.get('ignore_missing', False)
+            
+            path = Path(BASE_OUTPUT_DIR) / location.path
+
+            if not path.exists():
+                if ignore_missing:
+                    return True
+                raise FileNotFoundError(f"Path does not exist: {path}")
+
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                if recursive:
+                    shutil.rmtree(path)
+                else:
+                    # Only delete if directory is empty
+                    try:
+                        path.rmdir()
+                    except OSError as e:
+                        if "Directory not empty" in str(e):
+                            raise ValueError("Directory not empty. Use recursive=True to delete non-empty directories")
+                        raise
+            
+            return True
+
+        except PermissionError:
+            logger.error(f"Permission denied when trying to delete: {path}")
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting from filesystem: {str(e)}")
+            raise
 
     async def list(self, location: StorageLocation, options: Dict[str, Any] = None) -> List[StorageObject]:
-        """List not implemented yet"""
+        """List contents of a directory in filesystem storage
+        
+        Args:
+            location: StorageLocation containing the directory path
+            options: Optional dictionary containing:
+                - recursive: bool (default False) - List contents recursively
+                - include_dirs: bool (default True) - Include directories in results
+                - pattern: str (default None) - Filter files by glob pattern
+        
+        Returns:
+            List[StorageObject]: List of storage objects representing the contents
+            
+        Raises:
+            FileNotFoundError: If directory doesn't exist
+            NotADirectoryError: If path is not a directory
+        """
+        try:
+            options = options or {}
+            recursive = options.get('recursive', False)
+            include_dirs = options.get('include_dirs', True)
+            pattern = options.get('pattern', None)
+            
+            path = Path(BASE_OUTPUT_DIR) / location.path
+            
+            if not path.exists():
+                raise FileNotFoundError(f"Path does not exist: {path}")
+            
+            if not path.is_dir():
+                raise NotADirectoryError(f"Path is not a directory: {path}")
+
+            results = []
+            
+            if recursive:
+                iterator = path.rglob(pattern) if pattern else path.rglob('*')
+            else:
+                iterator = path.glob(pattern) if pattern else path.glob('*')
+                
+            for item in iterator:
+                if not include_dirs and item.is_dir():
+                    continue
+                    
+                # Get relative path from base directory
+                rel_path = str(item.relative_to(Path(BASE_OUTPUT_DIR)))
+                
+                # Create metadata
+                metadata = StorageMetadata(
+                    content_type="directory" if item.is_dir() else None,
+                    created_at=str(item.stat().st_ctime),
+                    modified_at=str(item.stat().st_mtime),
+                    size=item.stat().st_size if item.is_file() else None
+                )
+                
+                results.append(StorageObject(
+                    location=StorageLocation(
+                        storage_type=StorageType.FILESYSTEM,
+                        path=rel_path
+                    ),
+                    metadata=metadata
+                ))
+                
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error listing directory contents: {str(e)}")
+            raise
+    
+    async def update(self, location: StorageLocation, data: Union[Dict, bytes, BinaryIO], options: Dict[str, Any] = None) -> StorageObject:
+        """Update not implemented yet"""
         pass
 
     async def search(self, location: StorageLocation, query: Any, options: Dict[str, Any] = None) -> List[StorageObject]:
