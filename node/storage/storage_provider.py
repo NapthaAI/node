@@ -343,11 +343,11 @@ class FilesystemStorageProvider(StorageProvider):
     
     async def update(self, location: StorageLocation, data: Union[Dict, bytes, BinaryIO], options: Dict[str, Any] = None) -> StorageObject:
         """Update not implemented yet"""
-        pass
+        raise NotImplementedError("Update not implemented yet for filesystem storage")
 
     async def search(self, location: StorageLocation, query: Any, options: Dict[str, Any] = None) -> List[StorageObject]:
         """Search not implemented yet"""
-        pass
+        raise NotImplementedError("Search not implemented yet for filesystem storage")
 
 class IPFSStorageProvider(StorageProvider):
     """Implementation for IPFS storage with enhanced functionality"""
@@ -540,13 +540,13 @@ class IPFSStorageProvider(StorageProvider):
 
     # Implement remaining abstract methods
     async def update(self, location: StorageLocation, data: Union[Dict, bytes, BinaryIO], options: Dict[str, Any] = None) -> StorageObject:
-        pass
+        raise NotImplementedError("Update not implemented yet for filesystem storage")
 
     async def delete(self, location: StorageLocation, options: Dict[str, Any] = None) -> bool:
-        pass
+        raise NotImplementedError("Delete not implemented yet for filesystem storage")
 
     async def list(self, location: StorageLocation, options: Dict[str, Any] = None) -> List[StorageObject]:
-        pass
+        raise NotImplementedError("List not implemented yet for filesystem storage")
 
     async def search(self, location: StorageLocation, query: Any, options: Dict[str, Any] = None) -> List[StorageObject]:
-        pass
+        raise NotImplementedError("Search not implemented yet for filesystem storage")
