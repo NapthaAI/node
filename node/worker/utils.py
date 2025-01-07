@@ -13,8 +13,8 @@ from typing import Dict, Optional, Union
 from websockets.exceptions import ConnectionClosedError
 import yaml
 import zipfile
-
-from node.storage.storage_provider import get_ipns_record
+import requests
+from node.storage.utils import get_api_url
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -79,6 +79,11 @@ def upload_json_string_to_ipfs(json_string: str) -> str:
     client.pin.add(res)
     return res
 
+def get_ipns_record(ipns_name: str) -> str:
+    api_url = get_api_url()
+    params = {"arg": ipns_name}
+    ipns_get = requests.post(f"{api_url}/name/resolve", params=params)
+    return ipns_get.json()["Path"].split("/")[-1]
 
 def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
     def decorator(func):
