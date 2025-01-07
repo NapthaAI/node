@@ -146,11 +146,45 @@ class DatabaseStorageProvider(StorageProvider):
             result = await db.list_dynamic_rows(table_name, limit=options.limit, offset=options.offset)
             return StorageObject(location=location, data=result)
 
-    async def search(self, location: StorageLocation, query: Any, options: Dict[str, Any] = None) -> List[StorageObject]:
-        pass
+    async def update(
+        self, 
+        location: StorageLocation, 
+        data: Union[Dict, bytes, BinaryIO], 
+        options: Dict[str, Any] = None
+    ) -> StorageObject:
+        """Update rows in a database table"""
+        table_name = location.path.split('/')[0]
+        
+        async with DB() as db:
+            try:
+                if not isinstance(data, Dict):
+                    raise ValueError("Data must be a dictionary for database updates")
+                
+                if "data" not in data:
+                    raise ValueError("Update data must contain a 'data' key")
 
-    async def update(self, location: StorageLocation, data: Union[Dict, bytes, BinaryIO], options: Dict[str, Any] = None) -> StorageObject:
-        pass
+                condition = options.get("condition") if options else None
+                if not condition:
+                    raise ValueError("Update requires a condition in options")
+
+                logger.info(f"Updating row(s) in table {table_name} with data {data['data']} where {condition}")
+                result = await db.update_dynamic_row(
+                    table_name,
+                    data=data["data"],
+                    condition=condition
+                )
+                
+                return StorageObject(
+                    location=location,
+                    data=result
+                )
+
+            except Exception as e:
+                raise ValueError(f"Database update failed: {str(e)}")
+
+    async def search(self, location: StorageLocation, query: Any, options: Dict[str, Any] = None) -> List[StorageObject]:
+        raise NotImplementedError("Search not implemented yet for database storage")
+
 
 class FilesystemStorageProvider(StorageProvider):
     """Implementation for filesystem storage"""
