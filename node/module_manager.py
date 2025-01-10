@@ -156,9 +156,10 @@ def verify_module_installation(module_name: str) -> bool:
         importlib.import_module(f"{module_name}.run")
         return True
     except ImportError as e:
-        logger.error(f"Error importing module {module_name}: {str(e)}")
+        error_msg = f"Error importing module {module_name}: {str(e)}"
+        logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return False
+        raise RuntimeError(error_msg) from e
     
 
 async def download_persona(persona_module: str):
