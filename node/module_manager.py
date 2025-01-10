@@ -283,11 +283,13 @@ def run_poetry_command(command):
         )
         return result.stdout
     except subprocess.CalledProcessError as e:
-        error_msg = f"Poetry command failed: {e.cmd}"
+        error_msg = (
+            f"Poetry command failed: {e.cmd}\n"
+            f"Stdout: {e.stdout}\n"
+            f"Stderr: {e.stderr}"
+        )
         logger.error(error_msg)
-        logger.error(f"Stdout: {e.stdout}")
-        logger.error(f"Stderr: {e.stderr}")
-        raise RuntimeError(error_msg)
+        raise RuntimeError(error_msg) from e
 
 def install_module(module_name: str, module_version: str, module_source_url: str):
     logger.info(f"Installing/updating module {module_name} version {module_version}")
