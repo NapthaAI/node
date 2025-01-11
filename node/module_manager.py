@@ -119,6 +119,9 @@ async def install_module_with_lock(module: Union[Dict, Module]):
     if module_name in INSTALLED_MODULES:
         installed_version = INSTALLED_MODULES[module_name]
         if installed_version == run_version:
+            logger.info("Running poetry update")
+            update_output = run_poetry_command(["update", f"{module_name}"])
+            logger.info(f"Update output: {update_output}")
             logger.info(f"Module {module_name} version {run_version} is already installed")
             return True
 
