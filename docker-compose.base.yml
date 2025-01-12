@@ -47,6 +47,14 @@ services:
     networks:
       - node_private_network
 
+
+# TODO list:
+  # - Surreal DB (local hub)
+  # - node app
+  # - ollama / vllm
+  # -
+
+
 networks:
   node_private_network:
 
