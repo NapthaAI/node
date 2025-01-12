@@ -320,41 +320,41 @@ class HTTPServer:
             allow_headers=["*"],
         )
 
-    async def register_user_on_agent_nodes(self, module_run: Union[AgentRun, OrchestratorRun]):
+    async def register_user_on_worker_nodes(self, module_run: Union[AgentRun, OrchestratorRun]):
         """
         Registers user on worker nodes.
         """
         logger.info(f"Validating user {module_run.consumer_id} access on worker nodes")
 
-        agent_nodes = []
+        node_clients = []
         if hasattr(module_run, "agent_deployments"):
             for deployment in module_run.agent_deployments:
                 if deployment.agent_node:
-                    agent_nodes.append(NodeClient(deployment.agent_node))
+                    node_clients.append(NodeClient(deployment.agent_node))
         elif hasattr(module_run, "tool_deployments"):
             for deployment in module_run.tool_deployments:
                 if deployment.tool_node:
-                    agent_nodes.append(NodeClient(deployment.tool_node))
+                    node_clients.append(NodeClient(deployment.tool_node))
         elif hasattr(module_run, "environment_deployments"):
             for deployment in module_run.environment_deployments:
                 if deployment.environment_node:
-                    agent_nodes.append(NodeClient(deployment.environment_node))
+                    node_clients.append(NodeClient(deployment.environment_node))
         elif hasattr(module_run, "kb_deployments"):
             for deployment in module_run.kb_deployments:
                 if deployment.kb_node:
-                    agent_nodes.append(NodeClient(deployment.kb_node))
+                    node_clients.append(NodeClient(deployment.kb_node))
 
-        for agent_node_client in agent_nodes:
-            async with agent_node_client as node_client:
+        for node_client in node_clients:
+            async with node_client as node_client:
                 consumer = await node_client.check_user(user_input=self.consumer)
                 
                 if consumer["is_registered"]:
-                    logger.info(f"User validated on worker node: {node_client.node_schema}")
+                    logger.info(f"User validated on node: {node_client.node_schema}")
                     return
                 
-                logger.info(f"Registering new user on worker node: {node_client.node_schema}")
+                logger.info(f"Registering new user on node: {node_client.node_schema}")
                 consumer = await node_client.register_user(user_input=consumer)
-                logger.info(f"User registration complete on worker node: {node_client.node_schema}")
+                logger.info(f"User registration complete on node: {node_client.node_schema}")
 
     async def create_module(self, module_deployment: Union[AgentDeployment, MemoryDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
         """
@@ -425,7 +425,7 @@ class HTTPServer:
 
                 logger.info(f"{module_type.capitalize()} run data: {module_run_data}")
 
-            await self.register_user_on_agent_nodes(module_run)
+            await self.register_user_on_worker_nodes(module_run)
 
             # Execute the task based on module type
             if module_run_input.deployment.module.execution_type == ModuleExecutionType.package:
