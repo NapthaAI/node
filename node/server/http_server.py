@@ -326,35 +326,35 @@ class HTTPServer:
         """
         logger.info(f"Validating user {module_run.consumer_id} access on worker nodes")
 
-        worker_nodes = []
+        node_clients = []
         if hasattr(module_run, "agent_deployments"):
             for deployment in module_run.agent_deployments:
-                if deployment.worker_node:
-                    worker_nodes.append(NodeClient(deployment.worker_node))
+                if deployment.agent_node:
+                    node_clients.append(NodeClient(deployment.agent_node))
         elif hasattr(module_run, "tool_deployments"):
             for deployment in module_run.tool_deployments:
                 if deployment.tool_node:
-                    worker_nodes.append(NodeClient(deployment.tool_node))
+                    node_clients.append(NodeClient(deployment.tool_node))
         elif hasattr(module_run, "environment_deployments"):
             for deployment in module_run.environment_deployments:
                 if deployment.environment_node:
-                    worker_nodes.append(NodeClient(deployment.environment_node))
+                    node_clients.append(NodeClient(deployment.environment_node))
         elif hasattr(module_run, "kb_deployments"):
             for deployment in module_run.kb_deployments:
                 if deployment.kb_node:
-                    worker_nodes.append(NodeClient(deployment.kb_node))
+                    node_clients.append(NodeClient(deployment.kb_node))
 
-        for worker_node_client in worker_nodes:
-            async with worker_node_client as node_client:
+        for node_client in node_clients:
+            async with node_client as node_client:
                 consumer = await node_client.check_user(user_input=self.consumer)
                 
                 if consumer["is_registered"]:
-                    logger.info(f"User validated on worker node: {node_client.node_schema}")
+                    logger.info(f"User validated on node: {node_client.node_schema}")
                     return
                 
-                logger.info(f"Registering new user on worker node: {node_client.node_schema}")
+                logger.info(f"Registering new user on node: {node_client.node_schema}")
                 consumer = await node_client.register_user(user_input=consumer)
-                logger.info(f"User registration complete on worker node: {node_client.node_schema}")
+                logger.info(f"User registration complete on node: {node_client.node_schema}")
 
     async def create_module(self, module_deployment: Union[AgentDeployment, MemoryDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
         """

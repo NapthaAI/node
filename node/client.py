@@ -245,7 +245,7 @@ class Node:
                     agent_name=agent_run_input.agent_name,
                     consumer_id=agent_run_input.consumer_id,
                     agent_run_params=agent_run_params,
-                    worker_nodes=agent_run_input.worker_nodes,
+                    agent_nodes=agent_run_input.agent_nodes,
                 )
 
                 timeout = 60 * 60  # 60 minutes in seconds
