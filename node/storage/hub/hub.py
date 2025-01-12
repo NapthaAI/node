@@ -3,7 +3,8 @@ import jwt
 import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
-from node.schemas import AgentModule, NodeConfig
+from node.schemas import Module, NodeConfig, NodeServer
+import os
 from surrealdb import Surreal
 import traceback
 from typing import Dict, List, Optional, Tuple
@@ -109,12 +110,39 @@ class Hub(AsyncMixin):
             return result[0]["result"][0]
         return None
 
-    async def create_node(self, node_config: NodeConfig) -> Dict:
+    async def get_server(self, server_name: str=None, server_id: str=None) -> Optional[Dict]:
+        if server_name:
+            result = await self.surrealdb.query("SELECT * FROM server WHERE name = $server_name LIMIT 1", {"name": server_name})
+        elif server_id:
+            result = await self.surrealdb.select(server_id)
+        return result
+
+    async def create_server(self, server_config: NodeServer):
+        """Create a server record in the database"""
+        logger.info(f"Creating server: {server_config}")
+        server = await self.surrealdb.create("server", server_config)
+        logger.info(f"created server: {server}")
+        if isinstance(server, dict):
+            return server
+        return server[0]
+    
+    async def create_node(self, node_config: NodeConfig, servers: Optional[List[str]]=None) -> Dict:
         node_config.owner = self.user_id
         node_id = node_config.id
+
+        # Create server records first
+        server_records = []
+        if servers:
+            for server in servers:
+                s = await self.create_server(server)
+                server_records.append(s['id'])
+            # Add server records to node_config
+            node_config.servers = server_records
+
         logger.info(f"Creating node: {node_config}")
         self.node_config = await self.surrealdb.create(node_id, node_config)
         logger.info(f"Created node: {self.node_config}")
+        
         if self.node_config is None:
             raise Exception("Failed to register node")
         if isinstance(self.node_config, dict):
@@ -127,11 +155,41 @@ class Hub(AsyncMixin):
     async def update_node(self, node_id: str, node: Dict) -> bool:
         return await self.surrealdb.update(node_id, node)
 
-    async def list_nodes(self) -> List:
-        return await self.surrealdb.select("node")
+    async def list_nodes(self, node_ip=None) -> List:
+        if not node_ip:
+            nodes = await self.surrealdb.query("SELECT * FROM node;")
+            return nodes[0]['result']
+        else:
+            nodes = await self.surrealdb.query("SELECT * FROM node WHERE ip=$node_ip;", {"node_ip": node_ip})
+            node = nodes[0]['result'][0]
+            server_ids = node['servers']
+            servers = []
+            for server_id in server_ids:
+                server = await self.surrealdb.select(server_id)
+                servers.append(server)
+            node['servers'] = [NodeServer(**server) for server in servers]
 
-    async def delete_node(self, node_id: str) -> bool:
+            alt_ports = [
+                server['port'] 
+                for server in servers
+                if server['server_type'] in ['ws', 'grpc']
+            ]
+            node['ports'] = alt_ports
+            return NodeConfig(**node)
+
+    async def delete_node(self, node_id: str, servers: Optional[List[str]]=None) -> bool:
+        # Delete server records first
+        if servers:
+            for server in servers:
+                try:
+                    await self.delete_server(server)
+                except Exception as e:
+                    logger.error(f"Error deleting server: {e}")
+                    return False
         return await self.surrealdb.delete(node_id)
+    
+    async def delete_server(self, server_id: str) -> bool:
+        return await self.surrealdb.delete(server_id)
 
     async def list_agents(self, agent_name=None) -> List:
         try:
@@ -139,7 +197,7 @@ class Hub(AsyncMixin):
                 result = await self.surrealdb.query("SELECT * FROM agent;")
                 if not result or not result[0].get("result"):
                     return []
-                return [AgentModule(**agent) for agent in result[0]["result"]]
+                return [Module(**agent) for agent in result[0]["result"]]
             else:
                 if ':' in agent_name:
                     agent_name = agent_name.split(':')[1]
@@ -149,15 +207,36 @@ class Hub(AsyncMixin):
                 )
                 if not result or not result[0].get("result") or not result[0]["result"]:
                     return None
-                return AgentModule(**result[0]["result"][0])
+                return Module(**result[0]["result"][0])
         except Exception as e:
             logger.error(f"Error querying agents from database: {e}")
             return [] if not agent_name else None
 
+    async def list_tools(self, tool_name=None) -> List:
+        try:
+            if not tool_name:
+                result = await self.surrealdb.query("SELECT * FROM tool;")
+                if not result or not result[0].get("result"):
+                    return []
+                return [Module(**tool) for tool in result[0]["result"]]
+            else:
+                if ':' in tool_name:
+                    tool_name = tool_name.split(':')[1]
+                result = await self.surrealdb.query(
+                    "SELECT * FROM tool WHERE name = $tool_name;",
+                    {"tool_name": tool_name}
+                )
+                if not result or not result[0].get("result") or not result[0]["result"]:
+                    return None
+                return Module(**result[0]["result"][0])
+        except Exception as e:
+            logger.error(f"Error querying tools from database: {e}")
+            return [] if not tool_name else None
+
     async def list_orchestrators(self, orchestrator_name=None) -> List:
         if not orchestrator_name:
             orchestrators = await self.surrealdb.query("SELECT * FROM orchestrator;")
-            return [AgentModule(**orchestrator) for orchestrator in orchestrators[0]["result"]]
+            return [Module(**orchestrator) for orchestrator in orchestrators[0]["result"]]
         else:
             if ':' in orchestrator_name:
                 orchestrator_name = orchestrator_name.split(':')[1]
@@ -165,29 +244,50 @@ class Hub(AsyncMixin):
                 "SELECT * FROM orchestrator WHERE name=$orchestrator_name;", 
                 {"orchestrator_name": orchestrator_name}
             )
-            return AgentModule(**orchestrator[0]["result"][0])
+            return Module(**orchestrator[0]["result"][0])
 
     async def list_environments(self, environment_name=None) -> List:
         if not environment_name:
             environments = await self.surrealdb.query("SELECT * FROM environment;")
-            return [AgentModule(**environment) for environment in environments[0]["result"]]
+            return [Module(**environment) for environment in environments[0]["result"]]
         else:
             if ':' in environment_name:
                 environment_name = environment_name.split(':')[1]
             environment = await self.surrealdb.query("SELECT * FROM environment WHERE name=$environment_name;", {"environment_name": environment_name})
-            return AgentModule(**environment[0]["result"][0])
+            return Module(**environment[0]["result"][0])
+
+    async def list_personas(self, persona_name=None) -> List:
+        try:
+            if not persona_name:
+                result = await self.surrealdb.query("SELECT * FROM persona;")
+                if not result or not result[0].get("result"):
+                    return []
+                return [Module(**persona) for persona in result[0]["result"]]
+            else:
+                if ':' in persona_name:
+                    persona_name = persona_name.split(':')[1]
+                result = await self.surrealdb.query(
+                    "SELECT * FROM persona WHERE name = $persona_name;",
+                    {"persona_name": persona_name}
+                )
+                if not result or not result[0].get("result") or not result[0]["result"]:
+                    return None
+                return Module(**result[0]["result"][0])
+        except Exception as e:
+            logger.error(f"Error querying personas from database: {e}")
+            return [] if not persona_name else None
 
     async def list_knowledge_bases(self, knowledge_base_name=None) -> List:
 
         if not knowledge_base_name:
             knowledge_bases = await self.surrealdb.query("SELECT * FROM kb;")
-            return [AgentModule(**knowledge_base) for knowledge_base in knowledge_bases[0]["result"]]
+            return [Module(**knowledge_base) for knowledge_base in knowledge_bases[0]["result"]]
         else:
             if ':' in knowledge_base_name:
                 knowledge_base_name = knowledge_base_name.split(':')[1]
             knowledge_base = await self.surrealdb.query("SELECT * FROM kb WHERE name=$knowledge_base_name;", {"knowledge_base_name": knowledge_base_name})
             logger.info(f"Knowledge base: {knowledge_base}")
-            return AgentModule(**knowledge_base[0]["result"][0])
+            return Module(**knowledge_base[0]["result"][0])
 
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
@@ -213,3 +313,60 @@ class Hub(AsyncMixin):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async exit method for context manager"""
         await self.close()
+
+async def list_modules(module_type: str, module_name: str) -> List:
+
+    if module_type == "agent":
+        list_func = lambda hub: hub.list_agents(module_name)
+    elif module_type == "tool":
+        list_func = lambda hub: hub.list_tools(module_name)
+    elif module_type == "orchestrator":
+        list_func = lambda hub: hub.list_orchestrators(module_name)
+    elif module_type == "environment":
+        list_func = lambda hub: hub.list_environments(module_name)
+    elif module_type == "kb":
+        list_func = lambda hub: hub.list_knowledge_bases(module_name)
+    elif module_type == "persona":
+        list_func = lambda hub: hub.list_personas(module_name)
+
+    hub_username = os.getenv("HUB_USERNAME")
+    hub_password = os.getenv("HUB_PASSWORD")
+    if not hub_username or not hub_password:
+        raise ValueError("Missing Hub authentication credentials - HUB_USERNAME and HUB_PASSWORD environment variables must be set")
+
+    if module_type not in ["agent", "tool", "orchestrator", "environment", "kb", "persona"]:
+        raise ValueError(f"Invalid module type: {module_type}. Must be one of: agent, tool, orchestrator, environment, kb")
+
+    if not module_name:
+        raise ValueError("Module name cannot be empty")
+
+    async with Hub() as hub:
+        try:
+            _, _, _ = await hub.signin(hub_username, hub_password)
+        except Exception as auth_error:
+            raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
+
+        try:
+            module = await list_func(hub)
+        except Exception as list_error:
+            raise RuntimeError(f"Failed to list {module_type} module: {str(list_error)}")
+
+        if not module:
+            raise ValueError(f"{module_type.capitalize()} module '{module_name}' not found")
+
+        return module
+    
+async def list_nodes(node_ip: str) -> List:
+
+    hub_username = os.getenv("HUB_USERNAME")
+    hub_password = os.getenv("HUB_PASSWORD")
+
+    async with Hub() as hub:
+        try:
+            _, _, _ = await hub.signin(hub_username, hub_password)
+        except Exception as auth_error:
+            raise ConnectionError(f"Failed to authenticate with Hub: {str(auth_error)}")
+
+        node = await hub.list_nodes(node_ip=node_ip)
+        return node
+

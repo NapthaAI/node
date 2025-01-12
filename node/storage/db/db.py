@@ -3,25 +3,27 @@ import logging
 import threading
 import json
 from contextlib import contextmanager
-from psycopg2.extras import Json
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.pool import QueuePool
-from tenacity import retry, stop_after_attempt, wait_exponential
 from typing import Dict, List, Optional, Union, Any
 
 from node.config import LOCAL_DB_URL
-from node.storage.db.models import AgentRun, OrchestratorRun, EnvironmentRun, User, KBRun
+from node.storage.db.models import AgentRun, MemoryRun, OrchestratorRun, EnvironmentRun, User, KBRun, ToolRun
 from node.schemas import (
-    AgentRun as AgentRunSchema, 
+    AgentRun as AgentRunSchema,
+    MemoryRunInput,
+    MemoryRun as MemoryRunSchema,
     OrchestratorRun as OrchestratorRunSchema,
     EnvironmentRun as EnvironmentRunSchema,
     AgentRunInput,
     OrchestratorRunInput,
     EnvironmentRunInput,
     KBRunInput,
-    KBRun as KBRunSchema
+    KBRun as KBRunSchema,
+    ToolRunInput,
+    ToolRun as ToolRunSchema
 )
 
 logger = logging.getLogger(__name__)
@@ -132,19 +134,30 @@ class DB:
             logger.error(f"Failed to get user: {str(e)}")
             raise
 
-    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema]:
+    async def get_public_key_by_id(self, user_id: str) -> Optional[Dict]:
+        try:
+            with self.session() as db:
+                user = db.query(User).filter_by(id=user_id).first()
+                return user.__dict__["public_key"] if user else None
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get user: {str(e)}")
+            raise
+
+    async def create_module_run(self, run_input: Union[Dict, any], run_type: str) -> Union[AgentRunSchema, MemoryRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema]:
         model_map = {
             'agent': (AgentRun, AgentRunSchema),
+            'memory': (MemoryRun, MemoryRunSchema),
             'orchestrator': (OrchestratorRun, OrchestratorRunSchema),
             'environment': (EnvironmentRun, EnvironmentRunSchema),
-            'knowledge_base': (KBRun, KBRunSchema)
+            'knowledge_base': (KBRun, KBRunSchema),
+            'tool': (ToolRun, ToolRunSchema)
         }
         
         try:
             Model, Schema = model_map[run_type]
             with self.session() as db:
-                if hasattr(run_input, 'model_dump'):
-                    run = Model(**run_input.model_dump())
+                if hasattr(run_input, 'model_dict'):
+                    run = Model(**run_input.model_dict())
                 else:
                     run = Model(**run_input)
                 db.add(run)
@@ -158,6 +171,12 @@ class DB:
 
     async def create_agent_run(self, agent_run_input: Union[AgentRunInput, Dict]) -> AgentRunSchema:
         return await self.create_module_run(agent_run_input, 'agent')
+    
+    async def create_memory_run(self, memory_run_input: Union[MemoryRunInput, Dict]) -> MemoryRunSchema:
+        return await self.create_module_run(memory_run_input, 'memory')
+
+    async def create_tool_run(self, tool_run_input: Union[ToolRunInput, Dict]) -> ToolRunSchema:
+        return await self.create_module_run(tool_run_input, 'tool')
 
     async def create_orchestrator_run(self, orchestrator_run_input: Union[OrchestratorRunInput, Dict]) -> OrchestratorRunSchema:
         return await self.create_module_run(orchestrator_run_input, 'orchestrator')
@@ -168,12 +187,14 @@ class DB:
     async def create_kb_run(self, kb_run_input: Union[KBRunInput, Dict]) -> KBRunSchema:
         return await self.create_module_run(kb_run_input, 'knowledge_base')
 
-    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, OrchestratorRunSchema, EnvironmentRunSchema], run_type: str) -> bool:
+    async def update_run(self, run_id: int, run_data: Union[AgentRunSchema, MemoryRunSchema, OrchestratorRunSchema, EnvironmentRunSchema, ToolRunSchema], run_type: str) -> bool:
         model_map = {
             'agent': AgentRun,
+            'memory': MemoryRun,
             'orchestrator': OrchestratorRun,
             'environment': EnvironmentRun,
-            'knowledge_base': KBRun
+            'knowledge_base': KBRun,
+            'tool': ToolRun
         }
         
         try:
@@ -194,6 +215,12 @@ class DB:
 
     async def update_agent_run(self, run_id: int, run_data: AgentRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'agent')
+    
+    async def update_memory_run(self, run_id: int, run_data: MemoryRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'memory')
+
+    async def update_tool_run(self, run_id: int, run_data: ToolRunSchema) -> bool:
+        return await self.update_run(run_id, run_data, 'tool')
 
     async def update_orchestrator_run(self, run_id: int, run_data: OrchestratorRunSchema) -> bool:
         return await self.update_run(run_id, run_data, 'orchestrator')
@@ -207,9 +234,11 @@ class DB:
     async def list_module_runs(self, run_type: str, run_id: Optional[int] = None) -> Union[Dict, List[Dict], None]:
         model_map = {
             'agent': AgentRun,
+            'memory': MemoryRun,
             'orchestrator': OrchestratorRun,
             'environment': EnvironmentRun,
-            'knowledge_base': KBRun
+            'knowledge_base': KBRun,
+            'tool': ToolRun
         }
         
         max_retries = 3
@@ -235,14 +264,18 @@ class DB:
                     raise
                 await asyncio.sleep(retry_delay)
 
-    # Replace existing list functions with these wrapper methods
     async def list_agent_runs(self, agent_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('agent', agent_run_id)
+    
+    async def list_memory_runs(self, memory_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('memory', memory_run_id)
+
+    async def list_tool_runs(self, tool_run_id=None) -> Union[Dict, List[Dict], None]:
+        return await self.list_module_runs('tool', tool_run_id)
 
     async def list_orchestrator_runs(self, orchestrator_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('orchestrator', orchestrator_run_id)
 
-    # Optional: Add environment runs support
     async def list_environment_runs(self, environment_run_id=None) -> Union[Dict, List[Dict], None]:
         return await self.list_module_runs('environment', environment_run_id)
 
@@ -288,33 +321,65 @@ class DB:
             logger.error(f"Failed to execute query: {str(e)}")
             raise
 
-    def _get_sqlalchemy_type(self, pg_type: str):
+    def _get_sqlalchemy_type(self, pg_type: str, dimension: Optional[int] = None):
         """Convert PostgreSQL type to SQLAlchemy type"""
         from sqlalchemy import String, Integer, Float, Boolean, ARRAY, TIMESTAMP, JSON
         from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy.types import TypeDecorator, UserDefinedType
+        
+        # Custom Vector type for PostgreSQL
+        class Vector(UserDefinedType):
+            def __init__(self, dimension=None):
+                self.dimension = dimension
+
+            def get_col_spec(self, **kw):
+                if self.dimension is None:
+                    raise ValueError("Vector dimension must be specified")
+                return f"vector({self.dimension})"
+
+            def bind_processor(self, dialect):
+                def process(value):
+                    if value is None:
+                        return None
+                    if not isinstance(value, list):
+                        raise ValueError("Vector value must be a list of floats")
+                    if len(value) != self.dimension:
+                        raise ValueError(f"Vector must have exactly {self.dimension} dimensions")
+                    return value
+                return process
+
+            def result_processor(self, dialect, coltype):
+                def process(value):
+                    if value is None:
+                        return None
+                    return value
+                return process
         
         type_map = {
             'text': String,
             'integer': Integer,
             'float': Float,
             'boolean': Boolean,
-            'jsonb': JSONB,  # Use PostgreSQL-specific JSONB
-            'timestamp': TIMESTAMP
+            'jsonb': JSONB,
+            'timestamp': TIMESTAMP,
+            'vector': Vector
         }
         
-        # Handle array types
-        if pg_type.endswith('[]'):
-            base_type = pg_type[:-2]
-            if base_type == 'text':
-                return ARRAY(String)
-            elif base_type == 'integer':
-                return ARRAY(Integer)
-            elif base_type == 'float':
-                return ARRAY(Float)
+        def create_type(type_str: str):
+            """Helper function to create the appropriate SQLAlchemy type"""
+            if type_str == 'vector':
+                if dimension is None:
+                    raise ValueError("Dimension must be specified for vector type")
+                return Vector(dimension)
+            elif type_str.endswith('[]'):
+                base_type = type_str[:-2]
+                if base_type not in type_map:
+                    raise ValueError(f"Unsupported array type: {base_type}")
+                return ARRAY(type_map[base_type]())
             else:
-                raise ValueError(f"Unsupported array type: {base_type}")
-                
-        return type_map.get(pg_type)
+                return type_map[type_str]()
+
+        return create_type(pg_type)
 
     async def create_dynamic_table(self, table_name: str, schema: Dict[str, Dict[str, Any]]) -> bool:
         """Create table dynamically using SQLAlchemy"""
@@ -323,18 +388,24 @@ class DB:
             metadata = MetaData()
             columns = []
             
+            # Create pgvector extension if not exists
+            with self.session() as db:
+                db.execute(text('CREATE EXTENSION IF NOT EXISTS vector;'))
+                db.commit()
+            
             for field_name, properties in schema.items():
                 # Convert type to lowercase
                 field_type_str = properties['type'].lower()
-                field_type = self._get_sqlalchemy_type(field_type_str)
                 
-                if not field_type:
-                    raise ValueError(f"Unsupported type: {field_type_str}")
-                    
-                # For non-array types, we need to call the type
-                if not field_type_str.endswith('[]'):
-                    field_type = field_type()
-                    
+                # Get the SQL type
+                if field_type_str == 'vector':
+                    dimension = properties.get('dimension')
+                    if dimension is None:
+                        raise ValueError(f"Dimension must be specified for vector field {field_name}")
+                    field_type = self._get_sqlalchemy_type(field_type_str, dimension)
+                else:
+                    field_type = self._get_sqlalchemy_type(field_type_str)
+                
                 column_args = {
                     'primary_key': properties.get('primary_key', False),
                     'nullable': not properties.get('required', False)
@@ -345,52 +416,77 @@ class DB:
                     
                 columns.append(Column(field_name, field_type, **column_args))
 
+            # Create the table
             Table(table_name, metadata, *columns)
             metadata.create_all(self.pool.engine)
             return True
-            
+                
         except Exception as e:
             logger.error(f"Failed to create table: {str(e)}")
             raise
 
-    async def add_dynamic_row(self, table_name: str, data: Dict[str, Any], 
-                            schema: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
-        """Add row to dynamically created table"""
+    async def delete_dynamic_table(self, table_name: str) -> bool:
+        """Delete a dynamically created table"""
         try:
             with self.session() as db:
-                # First, get the column types from the database
+                # Drop the table if it exists
+                query = text(f"DROP TABLE IF EXISTS {table_name}")
+                db.execute(query)
+                db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to delete table: {str(e)}")
+            raise
+
+    async def add_dynamic_row(self, table_name: str, 
+                            data: Union[Dict[str, Any], List[Dict[str, Any]]], 
+                            schema: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
+        """Add one or multiple rows to dynamically created table"""
+        try:
+            # Convert single dict to list for consistent processing
+            data_rows = [data] if isinstance(data, dict) else data
+            
+            if not data_rows:
+                return True
+                
+            with self.session() as db:
+                # Get column types once for all rows
                 type_query = text("""
-                    SELECT column_name, data_type 
+                    SELECT column_name, data_type, udt_name 
                     FROM information_schema.columns 
                     WHERE table_name = :table_name
                 """)
                 result = db.execute(type_query, {"table_name": table_name})
-                column_types = {row[0]: row[1] for row in result}
+                column_types = {row[0]: (row[1], row[2]) for row in result}
 
-                # Process the data based on column types
-                processed_data = {}
-                for key, value in data.items():
-                    if key in column_types:
-                        col_type = column_types[key].lower()
-                        
-                        # Handle different types
-                        if col_type == 'jsonb':
-                            # Convert dict/list to JSON string
-                            processed_data[key] = json.dumps(value)
-                        elif col_type.startswith('_float'):
-                            # Handle float array
-                            processed_data[key] = value
-                        elif col_type.startswith('_'):
-                            # Other arrays
-                            processed_data[key] = value
-                        else:
-                            # Regular values
-                            processed_data[key] = value
+                # Process all rows
+                processed_rows = []
+                for row_data in data_rows:
+                    processed_data = {}
+                    for key, value in row_data.items():
+                        if key in column_types:
+                            data_type, udt_name = column_types[key]
+                            
+                            if udt_name == 'vector':
+                                if not isinstance(value, list):
+                                    raise ValueError(f"Vector field {key} must be a list")
+                                processed_data[key] = value
+                            elif data_type == 'jsonb':
+                                processed_data[key] = json.dumps(value)
+                            elif data_type.startswith('_'):
+                                processed_data[key] = value
+                            else:
+                                processed_data[key] = value
+                    processed_rows.append(processed_data)
 
-                # Construct and execute query
-                columns = list(processed_data.keys())
+                if not processed_rows:
+                    return True
+
+                # Get columns from the first row
+                columns = list(processed_rows[0].keys())
                 placeholders = [f":{col}" for col in columns]
-                
+
+                # Construct insert query
                 query = text(f"""
                     INSERT INTO {table_name} 
                     ({', '.join(columns)}) 
@@ -398,14 +494,49 @@ class DB:
                     ({', '.join(placeholders)})
                 """)
 
-                # Execute with processed data
-                db.execute(query, processed_data)
+                # Execute inserts
+                if len(processed_rows) == 1:
+                    # Single row insert
+                    db.execute(query, processed_rows[0])
+                else:
+                    # Batch insert
+                    db.execute(query, processed_rows)
+                    
                 return True
 
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add row: {str(e)}")
-            logger.error(f"Data: {data}")
-            logger.error(f"Processed data: {processed_data if 'processed_data' in locals() else 'Not processed'}")
+        except Exception as e:
+            logger.error(f"Failed to add row(s): {str(e)}")
+            logger.error(f"Input data: {data}")
+            logger.error(f"Processed rows: {processed_rows if 'processed_rows' in locals() else 'Not processed'}")
+            raise
+
+    async def list_dynamic_rows(self, table_name: str, limit: Optional[int] = None, 
+                              offset: Optional[int] = None) -> List[Dict[str, Any]]:
+        """List rows from dynamically created table"""
+        try:
+            with self.session() as db:
+                # Build query with optional limit and offset
+                query = f"SELECT * FROM {table_name}"
+                if limit is not None:
+                    query += f" LIMIT {limit}"
+                if offset is not None:
+                    query += f" OFFSET {offset}"
+                
+                result = db.execute(text(query))
+                
+                # Convert rows to list of dicts
+                columns = result.keys()
+                rows = []
+                for row in result:
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        row_dict[col] = row[i]
+                    rows.append(row_dict)
+                    
+                return rows
+
+        except Exception as e:
+            logger.error(f"Failed to list rows: {str(e)}")
             raise
 
     async def update_dynamic_row(self, table_name: str, data: Dict[str, Any],
@@ -415,39 +546,41 @@ class DB:
             with self.session() as db:
                 # Get schema information
                 schema_query = text("""
-                    SELECT column_name, data_type
+                    SELECT column_name, data_type, udt_name
                     FROM information_schema.columns
                     WHERE table_name = :table_name
                 """)
                 result = db.execute(schema_query, {"table_name": table_name})
-                schema = {row[0]: {"type": row[1]} for row in result}
+                column_types = {row[0]: (row[1], row[2]) for row in result}
 
-                # Prepare data based on column types
-                prepared_data = {}
+                # Process the data based on column types
+                processed_data = {}
                 for key, value in data.items():
-                    if key in schema:
-                        col_type = schema[key].get('type', '').lower()
-                        if col_type == 'jsonb' and isinstance(value, (dict, list)):
-                            prepared_data[key] = json.dumps(value)
-                        elif col_type.endswith('[]') and isinstance(value, list):
-                            if col_type == 'text[]':
-                                prepared_data[key] = value
-                            else:
-                                # Convert list elements to appropriate type
-                                prepared_data[key] = value
+                    if key in column_types:
+                        data_type, udt_name = column_types[key]
+                        
+                        if udt_name == 'vector':
+                            if not isinstance(value, list):
+                                raise ValueError(f"Vector field {key} must be a list")
+                            processed_data[key] = value
+                        elif data_type == 'jsonb':
+                            processed_data[key] = json.dumps(value)
+                        elif data_type.startswith('_'):
+                            processed_data[key] = value
                         else:
-                            prepared_data[key] = value
+                            processed_data[key] = value
 
-                set_clause = ", ".join([f"{k} = :{k}" for k in prepared_data.keys()])
+                set_clause = ", ".join([f"{k} = :{k}" for k in processed_data.keys()])
                 where_clause = " AND ".join([f"{k} = :condition_{k}" for k in condition.keys()])
                 
-                # Merge prepared data and condition with prefixed condition keys
-                params = {**prepared_data, **{f"condition_{k}": v for k, v in condition.items()}}
+                # Merge processed data and condition with prefixed condition keys
+                params = {**processed_data, **{f"condition_{k}": v for k, v in condition.items()}}
                 
-                query = f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}"
-                result = db.execute(text(query), params)
+                query = text(f"UPDATE {table_name} SET {set_clause} WHERE {where_clause}")
+                result = db.execute(query, params)
                 return result.rowcount
-        except SQLAlchemyError as e:
+
+        except Exception as e:
             logger.error(f"Failed to update row: {str(e)}")
             raise
 
@@ -456,10 +589,10 @@ class DB:
         try:
             with self.session() as db:
                 where_clause = " AND ".join([f"{k} = :{k}" for k in condition.keys()])
-                query = f"DELETE FROM {table_name} WHERE {where_clause}"
-                result = db.execute(text(query), condition)
+                query = text(f"DELETE FROM {table_name} WHERE {where_clause}")
+                result = db.execute(query, condition)
                 return result.rowcount
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to delete row: {str(e)}")
             raise
 
@@ -471,7 +604,7 @@ class DB:
         order_by: Optional[str] = None,
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Query dynamically created table"""
+        """Query rows from a table"""
         try:
             with self.session() as db:
                 select_clause = "*" if not columns else ", ".join(columns)
@@ -490,14 +623,42 @@ class DB:
                     query += f" LIMIT {limit}"
                 
                 result = db.execute(text(query), params)
-                # Convert results to dictionaries properly
                 return [dict(row._mapping) for row in result]
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to query table: {str(e)}")
             raise
 
+    async def vector_similarity_search(
+        self,
+        table_name: str,
+        vector_column: str,
+        query_vector: List[float],
+        columns: List[str] = ["text"],
+        top_k: int = 5,
+        include_similarity: bool = True
+    ) -> List[Dict[str, Any]]:
+        vector_str = "[" + ",".join(str(x) for x in query_vector) + "]"
+        # Inline the vector literal in the query to avoid ':qvec::vector' syntax issues
+        vector_literal = f"'{vector_str}'::vector"
+
+        select_items = columns[:]
+        if include_similarity:
+            select_items.append(f"{vector_column} <-> {vector_literal} AS distance")
+        select_clause = ", ".join(select_items)
+
+        query_str = f"""
+            SELECT {select_clause}
+            FROM {table_name}
+            ORDER BY {vector_column} <-> {vector_literal}
+            LIMIT :limit
+        """
+
+        with self.session() as db:
+            result = db.execute(text(query_str), {"limit": top_k})
+            return [dict(row._mapping) for row in result]
+
     async def list_dynamic_tables(self) -> List[str]:
-        """Get list of all tables using SQLAlchemy"""
+        """Get list of all tables"""
         try:
             with self.session() as db:
                 query = text("""
@@ -508,32 +669,44 @@ class DB:
                 """)
                 result = db.execute(query)
                 return [row[0] for row in result]
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to list tables: {str(e)}")
             raise
 
     async def get_dynamic_table_schema(self, table_name: str) -> Dict[str, Dict[str, Any]]:
-        """Get schema information for a specific table using SQLAlchemy"""
+        """Get schema information for a specific table without casting 'vector[]' to int."""
         try:
             with self.session() as db:
                 query = text("""
-                    SELECT column_name, data_type, is_nullable, column_default
+                    SELECT 
+                        column_name, 
+                        data_type,
+                        udt_name,
+                        is_nullable,
+                        column_default
                     FROM information_schema.columns
                     WHERE table_name = :table_name
                 """)
+
                 result = db.execute(query, {"table_name": table_name})
-                
+
                 schema = {}
                 for row in result:
-                    schema[row[0]] = {
-                        "type": row[1],
-                        "required": row[2] == 'NO',
-                        "default": row[3]
+                    # For a pgvector column, just store 'vector' as the type (no dimension parsing).
+                    # 'udt_name' will often just be 'vector'.
+                    col_type = row.udt_name if row.udt_name == 'vector' else row.data_type
+
+                    schema[row.column_name] = {
+                        "type": col_type,
+                        "required": (row.is_nullable == 'NO'),
+                        "default": row.column_default
                     }
+
                 return schema
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to get table schema: {str(e)}")
             raise
+
 
     async def check_connection_health(self) -> bool:
         try:
@@ -557,10 +730,6 @@ class DB:
             logger.error(f"Failed to get connection stats: {str(e)}")
             return {}
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.5, min=0.5, max=2)
-    )
     async def connect(self):
         self.is_authenticated = await self.check_connection_health()
         return self.is_authenticated, None, None

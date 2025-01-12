@@ -1,10 +1,9 @@
 import logging
-from ecdsa import SigningKey, SECP256k1
+from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from node.storage.db.db import DB
 from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
-
 
 async def register_user(user_input: Dict) -> Tuple[bool, Dict]:
     logger.info("Registering user.")
@@ -40,7 +39,16 @@ async def check_user(user_input: Dict) -> Tuple[bool, Dict]:
         user_data = user_input.copy()
         user_data["is_registered"] = False
         return False, user_data
+    
+async def get_user_public_key(user_id: str) -> str | None:
+    async with DB() as db:
+        public_key = await db.get_public_key_by_id(user_id)
 
+    if public_key:
+        return public_key
+    else:
+        logger.info("No user found.")
+        return None
 
 def get_public_key(private_key_hex):
     private_key = SigningKey.from_string(
@@ -55,4 +63,12 @@ def generate_user():
     public_key = get_public_key(private_key)
     return public_key, private_key
 
-
+def verify_signature(consumer_id, signature_hex, public_key_hex):
+    public_key = VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=SECP256k1)
+    consumer_id_bytes = consumer_id.encode('utf-8')
+    signature = bytes.fromhex(signature_hex)
+    try:
+        if public_key.verify(signature, consumer_id_bytes):
+            return True
+    except:
+        return False

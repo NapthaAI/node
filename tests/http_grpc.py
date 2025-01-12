@@ -99,10 +99,9 @@ class TestHTTPServer(unittest.TestCase):
                     "agent_deployment": {
                         'name': 'hello_world_agent',
                         'module': {'name': 'hello_world_agent'},
-                        'worker_node_url': '',
+                        'agent_node_url': '',
                         'agent_config': {}
                     },
-                    "personas_urls": None
                 }
                 self.response = await client.post(f"{self.base_url}/agent/run", json=agent_run_input)
                 logger.debug(f"Run agent response: {self.response.json()}")
@@ -270,7 +269,7 @@ class TestHTTPServer(unittest.TestCase):
                     "agent_deployment": {
                         'name': 'generate_image',
                         'module': {'name': 'generate_image'},
-                        'worker_node_url': '',
+                        'agent_node_url': '',
                         'agent_config': {}
                     },
                 }
@@ -312,7 +311,7 @@ class TestHTTPServer(unittest.TestCase):
                     "agent_deployment": {
                         'name': 'image_to_image',
                         'module': {'name': 'image_to_image'},
-                        'worker_node_url': '',
+                        'agent_node_url': '',
                         'agent_config': {}
                     },
                 }
@@ -349,7 +348,7 @@ class TestHTTPServer(unittest.TestCase):
                 "agent_deployment": {
                     'name': 'simple_chat_agent',
                     'module': {'name': 'simple_chat_agent'},
-                    'worker_node_url': '',
+                    'agent_node_url': '',
                     'agent_config': {}
                 },
             }
@@ -391,8 +390,8 @@ class TestHTTPServer(unittest.TestCase):
                     'orchestrator_node_url': self.base_url
                 },
                 "agent_deployments": [
-                    {'worker_node_url': 'grpc://localhost:7002'},
-                    {'worker_node_url': 'grpc://localhost:7002'}
+                    {'agent_node_url': 'grpc://localhost:7002'},
+                    {'agent_node_url': 'grpc://localhost:7002'}
                 ],
                 "environment_deployments": [{'environment_node_url': 'http://localhost:7001'}]
             }
@@ -440,7 +439,7 @@ class TestHTTPServer(unittest.TestCase):
                 "agent_deployment": {
                     'name': 'random_number_agent',
                     'module': {'name': 'random_number_agent'},
-                    'worker_node_url': '',
+                    'agent_node_url': '',
                     'agent_config': {}
                 },
             }
@@ -481,7 +480,7 @@ class TestHTTPServer(unittest.TestCase):
                     'module': {'name': 'keynesian_beauty_contest'},
                     'orchestrator_node_url': self.base_url
                 },
-                "agent_deployments": [{'worker_node_url': 'grpc://localhost:7002'} for _ in range(2)],
+                "agent_deployments": [{'agent_node_url': 'grpc://localhost:7002'} for _ in range(2)],
                 "environment_deployments": [{'environment_node_url': 'http://localhost:7001'}]
             }
 
@@ -520,7 +519,7 @@ class TestHTTPServer(unittest.TestCase):
                 "agent_deployment": {
                     'name': 'test_personas',
                     'module': {'name': 'test_personas'},
-                    'worker_node_url': '',
+                    'agent_node_url': '',
                     'agent_config': {}
                 },
             }

@@ -4,7 +4,7 @@ from functools import wraps
 import ipfshttpclient
 import logging
 from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
-from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun
+from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun, ToolRun
 from node.storage.db.db import DB
 import os
 from pathlib import Path
@@ -13,8 +13,8 @@ from typing import Dict, Optional, Union
 from websockets.exceptions import ConnectionClosedError
 import yaml
 import zipfile
-
-from node.storage.storage import get_ipns_record
+import requests
+from node.storage.utils import get_api_url
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -79,6 +79,11 @@ def upload_json_string_to_ipfs(json_string: str) -> str:
     client.pin.add(res)
     return res
 
+def get_ipns_record(ipns_name: str) -> str:
+    api_url = get_api_url()
+    params = {"arg": ipns_name}
+    ipns_get = requests.post(f"{api_url}/name/resolve", params=params)
+    return ipns_get.json()["Path"].split("/")[-1]
 
 def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
     def decorator(func):
@@ -102,10 +107,10 @@ def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
 
 
 @with_retry()
-async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun]) -> None:
+async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> None:
     """
     Update the DB with the module run status synchronously
-    param module_run: AgentRun, OrchestratorRun, or EnvironmentRun data to update
+    param module_run: AgentRun, OrchestratorRun, EnvironmentRun, KBRun or ToolRun data to update
     """
     logger.info(f"Updating DB with {type(module_run).__name__}")
 
@@ -114,6 +119,9 @@ async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun
             if isinstance(module_run, AgentRun):
                 updated_run = await db.update_agent_run(module_run.id, module_run)
                 logger.info(f"Updated agent run: {updated_run}")
+            elif isinstance(module_run, ToolRun):
+                updated_run = await db.update_tool_run(module_run.id, module_run)
+                logger.info(f"Updated tool run: {updated_run}")
             elif isinstance(module_run, OrchestratorRun):
                 updated_run = await db.update_orchestrator_run(module_run.id, module_run)
                 logger.info(f"Updated orchestrator run: {updated_run}")
@@ -124,7 +132,7 @@ async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun
                 updated_run = await db.update_kb_run(module_run.id, module_run)
                 logger.info(f"Updated KB run: {updated_run}")
             else:
-                raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, or KBRun")
+                raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, KBRun, or ToolRun")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
         raise

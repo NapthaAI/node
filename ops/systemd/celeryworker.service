@@ -1,0 +1,14 @@
+[Unit]
+Description=Celery Worker
+After=network.target
+
+[Service]
+User=danny
+WorkingDirectory=/home/danny/source/naptha/node
+ExecStart=/home/danny/source/naptha/node/celery_worker_start.sh
+Restart=always
+EnvironmentFile=/home/danny/source/naptha/node/.env
+
+
+[Install]
+WantedBy=multi-user.target

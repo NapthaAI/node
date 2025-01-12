@@ -1,30 +1,42 @@
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Union
-
+from typing import Dict, List, Optional, Union, Any
 from pydantic import BaseModel, Field
+from node.storage.schemas import StorageType
 
+class NodeServer(BaseModel):
+    server_type: str
+    port: int
+    node_id: str
 
 class NodeConfig(BaseModel):
     id: str
+    owner: str
     public_key: str
-    num_gpus: int
-    vram: int
-    os: str
-    arch: str
-    ram: int
-    ollama_models: List[str]
-    docker_jobs: bool
-    ip: Union[str, None] = Field(default=None)
-    ports: List[int] = Field(default_factory=list)
-    routing: Union[str, None] = Field(default=None)
-    owner: Union[str, None] = Field(default=None)
+    ip: str = Field(default="localhost")
+    server_type: str = Field(default="ws")
+    http_port: int = Field(default=7001)
     num_servers: int = Field(default=1)
-    node_type: str = Field(default="direct")
-    server_type: str = Field(default="http")
+    provider_types: List[str] = Field(default=["models", "storage", "modules"])
+    servers: List[NodeServer]
+    models: List[str]
+    docker_jobs: bool
+    ports: Optional[List[int]] = None
+    routing_type: Optional[str] = Field(default="direct")
+    routing_url: Optional[str] = Field(default=None)
+    num_gpus: Optional[int] = Field(default=None)
+    arch: Optional[str] = Field(default=None)
+    os: Optional[str] = Field(default=None)
+    ram: Optional[int] = Field(default=None)
+    vram: Optional[int] = Field(default=None)
 
     class Config:
         allow_mutation = True
+
+class NodeConfigInput(BaseModel):
+    ip: str
+    http_port: Optional[int] = None
+    server_type: Optional[str] = None
 
 class LLMClientType(str, Enum):
     OPENAI = "openai"
@@ -33,6 +45,7 @@ class LLMClientType(str, Enum):
     VLLM = "vllm"
     LITELLM = "litellm"
     OLLAMA = "ollama"
+    STABILITY = "stability"
 
 class LLMConfig(BaseModel):
     config_name: Optional[str] = None
@@ -42,34 +55,68 @@ class LLMConfig(BaseModel):
     temperature: Optional[float] = None
     api_base: Optional[str] = None
 
-class AgentModuleType(str, Enum):
+class ModuleType(str, Enum):
+    agent = "agent"
+    tool = "tool"
+    environment = "environment"
+    kb = "kb"
+    orchestrator = "orchestrator"
+    persona = "persona"
+
+class ModuleExecutionType(str, Enum):
     package = "package"
     docker = "docker"
 
-class AgentModule(BaseModel):
+class Module(BaseModel):
     id: str
     name: str
     description: str
     author: str
     module_url: str
-    module_type: Optional[AgentModuleType] = AgentModuleType.package
+    module_type: Optional[ModuleType] = ModuleType.agent
     module_version: Optional[str] = "0.1"
     module_entrypoint: Optional[str] = "run.py"
-    personas_urls: Optional[List[str]] = None
+    execution_type: Optional[ModuleExecutionType] = ModuleExecutionType.package
 
 class AgentConfig(BaseModel):
     config_name: Optional[str] = None
+    config_schema: Optional[str] = None
     llm_config: Optional[LLMConfig] = None
-    persona_module: Optional[Union[Dict, BaseModel]] = None
+    persona_module: Optional[Union[Dict, Module]] = None
     system_prompt: Optional[Union[Dict, BaseModel]] = None
+
+class ToolConfig(BaseModel):
+    config_name: Optional[str] = None
+    config_schema: Optional[str] = None
+    llm_config: Optional[LLMConfig] = None
 
 class OrchestratorConfig(BaseModel):
     config_name: Optional[str] = "orchestrator_config"
+    config_schema: Optional[str] = None
     max_rounds: Optional[int] = 5
 
 class EnvironmentConfig(BaseModel):
     config_name: Optional[str] = None
+    config_schema: Optional[str] = None
     environment_type: Optional[str] = None
+
+class KBConfig(BaseModel):
+    config_name: Optional[str] = None
+    storage_type: StorageType
+    path: str
+    schema: Dict[str, Any]
+    options: Optional[Dict[str, Any]] = None
+
+    def model_dict(self):
+        if isinstance(self.storage_type, StorageType):
+            self.storage_type = self.storage_type.value
+        model_dict = self.dict()
+        model_dict['storage_type'] = self.storage_type
+        return model_dict
+
+class MemoryConfig(BaseModel):
+    config_name: Optional[str] = None
+    config_schema: Optional[str] = None
 
 class DataGenerationConfig(BaseModel):
     save_outputs: Optional[bool] = None
@@ -77,34 +124,57 @@ class DataGenerationConfig(BaseModel):
     save_outputs_path: Optional[str] = None
     save_inputs: Optional[bool] = None
     save_inputs_location: Optional[str] = None
+    default_filename: Optional[str] = None
+
+class ToolDeployment(BaseModel):
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = None
+    module: Optional[Union[Dict, Module]] = None
+    config: Optional[Union[ToolConfig, BaseModel]] = None
+    data_generation_config: Optional[DataGenerationConfig] = None
+    initialized: Optional[bool] = False
+
+class MemoryDeployment(BaseModel):
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = "memory_deployment"
+    module: Optional[Union[Dict, Module]] = None
+    config: Optional[Union[MemoryConfig, BaseModel]] = None
+    initialized: Optional[bool] = False
 
 class KBDeployment(BaseModel):
-    name: Optional[str] = "kb_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    kb_node_url: Optional[str] = "http://localhost:7001"
-    kb_config: Optional[Dict] = None
-
-class AgentDeployment(BaseModel):
-    name: Optional[str] = "agent_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    worker_node_url: Optional[str] = None
-    agent_config: Optional[AgentConfig] = AgentConfig()
-    data_generation_config: Optional[DataGenerationConfig] = DataGenerationConfig()
-    kb_deployments: Optional[List[KBDeployment]] = None
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = None
+    module: Optional[Union[Dict, Module]] = None
+    config: Optional[Union[KBConfig, BaseModel]] = None
+    initialized: Optional[bool] = False
 
 class EnvironmentDeployment(BaseModel):
-    name: Optional[str] = "environment_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    environment_node_url: str
-    environment_config: Optional[Union[Dict, BaseModel]] = EnvironmentConfig()
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = None
+    module: Optional[Union[Dict, Module]] = None
+    config: Optional[Union[EnvironmentConfig, BaseModel]] = None
+    initialized: Optional[bool] = False
+
+class AgentDeployment(BaseModel):
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = None
+    module: Optional[Union[Dict, Module]] = None
+    config: Optional[AgentConfig] = None
+    data_generation_config: Optional[DataGenerationConfig] = None
+    tool_deployments: Optional[List[ToolDeployment]] = None
+    kb_deployments: Optional[List[KBDeployment]] = None
+    environment_deployments: Optional[List[EnvironmentDeployment]] = None
+    initialized: Optional[bool] = False
 
 class OrchestratorDeployment(BaseModel):
-    name: Optional[str] = "orchestrator_deployment"
-    module: Optional[Union[Dict, AgentModule]] = None
-    orchestrator_node_url: Optional[str] = "http://localhost:7001"
-    orchestrator_config: Optional[OrchestratorConfig] = OrchestratorConfig()
-    environment_deployments: Optional[List[EnvironmentDeployment]] = None
+    node: Union[NodeConfig, NodeConfigInput]
+    name: Optional[str] = None
+    module: Optional[Union[Dict, Module]] = None
+    config: Optional[OrchestratorConfig] = None
     agent_deployments: Optional[List[AgentDeployment]] = None
+    environment_deployments: Optional[List[EnvironmentDeployment]] = None
+    kb_deployments: Optional[List[KBDeployment]] = None
+    initialized: Optional[bool] = False
 
 class DockerParams(BaseModel):
     docker_image: str
@@ -134,7 +204,7 @@ class DockerParams(BaseModel):
 class AgentRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    agent_deployment: AgentDeployment
+    deployment: AgentDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
     error: bool = False
@@ -146,6 +216,7 @@ class AgentRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
     input_schema_ipfs_hash: Optional[str] = None
+    signature: str
 
     class Config:
         allow_mutation = True
@@ -155,10 +226,16 @@ class AgentRun(BaseModel):
 
     def model_dict(self):
         model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
         for key, value in model_dict.items():
             if isinstance(value, datetime):
                 model_dict[key] = value.isoformat()
-            elif isinstance(value, AgentModuleType):
+            elif isinstance(value, ModuleExecutionType):
                 model_dict[key] = value.value
         for i, orchestrator_run in enumerate(model_dict['orchestrator_runs']):
             for key, value in orchestrator_run.items():
@@ -170,18 +247,83 @@ class AgentRun(BaseModel):
 class AgentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    agent_deployment: AgentDeployment = AgentDeployment()
+    deployment: AgentDeployment = None
     orchestrator_runs: List['OrchestratorRun'] = []
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
+class ToolRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    deployment: ToolDeployment
+    agent_run: Optional[AgentRun] = None
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
     
+class ToolRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    deployment: ToolDeployment
+    agent_run: Optional[AgentRun] = None
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[str] = []
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
 class OrchestratorRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    orchestrator_deployment: OrchestratorDeployment
+    deployment: OrchestratorDeployment
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class OrchestratorRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    orchestrator_deployment: OrchestratorDeployment
+    deployment: OrchestratorDeployment
     status: str = "pending"
     error: bool = False
     id: Optional[str] = None
@@ -193,17 +335,39 @@ class OrchestratorRun(BaseModel):
     duration: Optional[float] = None
     agent_runs: List['AgentRun'] = []
     input_schema_ipfs_hash: Optional[str] = None
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class EnvironmentRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    environment_deployment: EnvironmentDeployment
+    deployment: EnvironmentDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class EnvironmentRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    environment_deployment: EnvironmentDeployment
+    deployment: EnvironmentDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
     error: bool = False
@@ -215,17 +379,39 @@ class EnvironmentRun(BaseModel):
     completed_time: Optional[str] = None
     duration: Optional[float] = None
     input_schema_ipfs_hash: Optional[str] = None
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class KBRunInput(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    kb_deployment: KBDeployment
+    deployment: KBDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class KBRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
-    kb_deployment: KBDeployment
+    deployment: KBDeployment
     orchestrator_runs: List['OrchestratorRun'] = []
     status: str = "pending"
     error: bool = False
@@ -236,6 +422,60 @@ class KBRun(BaseModel):
     start_processing_time: Optional[str] = None
     completed_time: Optional[str] = None
     duration: Optional[float] = None
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
+class MemoryRunInput(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    deployment: MemoryDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
+    signature: str
+
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
+
+class MemoryRun(BaseModel):
+    consumer_id: str
+    inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
+    deployment: MemoryDeployment
+    orchestrator_runs: List['OrchestratorRun'] = []
+    status: str = "pending"
+    error: bool = False
+    id: Optional[str] = None
+    results: list[Optional[str]] = []   
+    error_message: Optional[str] = None
+    created_time: Optional[str] = None
+    start_processing_time: Optional[str] = None
+    completed_time: Optional[str] = None
+    duration: Optional[float] = None
+    signature: str
+    
+    def model_dict(self):
+        model_dict = self.dict()
+        if isinstance(self.deployment.config, BaseModel):
+            config = self.deployment.config.model_dump()
+            model_dict['deployment']['config'] = config
+        if isinstance(self.inputs, BaseModel):
+            inputs = self.inputs.model_dump()
+            model_dict['inputs'] = inputs
+        return model_dict
 
 class ChatMessage(BaseModel):
     role: str
@@ -251,3 +491,11 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
     stream: Optional[bool] = None
+    stream_options: Optional[dict] = None
+    n: Optional[int] = None
+    response_format: Optional[dict] = None
+    seed: Optional[int] = None
+    tools: Optional[List] = None
+    tool_choice: Optional[str] = None
+    parallel_tool_calls: Optional[bool] = None
+

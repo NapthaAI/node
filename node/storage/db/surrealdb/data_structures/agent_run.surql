@@ -27,7 +27,7 @@ DEFINE FIELD status ON agent_run TYPE string DEFAULT "created";
 DEFINE FIELD agent_run_type ON agent_run TYPE string DEFAULT "docker"; -- Can be 'docker' or 'package' 
 DEFINE FIELD error ON agent_run TYPE option<bool> DEFAULT false;
 DEFINE FIELD error_message ON agent_run TYPE option<string | null>;
-DEFINE FIELD worker_nodes ON agent_run FLEXIBLE TYPE option<array | null>;
+DEFINE FIELD agent_nodes ON agent_run FLEXIBLE TYPE option<array | null>;
 DEFINE FIELD child_runs ON agent_run FLEXIBLE TYPE array DEFAULT [];
 DEFINE FIELD parent_runs ON agent_run FLEXIBLE TYPE array DEFAULT [];
 DEFINE FIELD created_time ON agent_run FLEXIBLE TYPE option<string | null>;

@@ -127,10 +127,39 @@ If using docker:
 bash stop_docker.sh
 ```
 
-## To cleanup
+## To restart the node
+
+As an alternative to stopping and re-launching the node, you can use the `make restart-node` command to perform a complete restart of various node components:
+
+1. Cleans up by removing (you can do this individually using `make remove`):
+   - All `__pycache__` directories
+   - `.venv` virtual environment directory 
+   - `node/storage/hub/modules` directory
+
+2. Cleans the pyproject.toml file
+
+3. Rebuilds dependencies:
+   - Runs `poetry lock`
+   - Runs `poetry install` 
+
+4. Restarts all services in parallel:
+   - Restarts all node servers (HTTP and secondary servers)
+   - Restarts the Celery worker
+
+This is useful when you want to do a complete reset and restart of the node, especially after making code changes or if you're experiencing issues.
+
+## To reset the databases
+
+If you are having issues related to the databases, you may want to reset them. Be warned, this will delete all data in the databases. For the hub DB, you can reset it by running:
 
 ```
-make remove
+make remove-hub
+```
+
+For the local DB, you can reset it by running (this one should be run before running `bash stop_service.sh`):
+
+```
+make local-db-reset
 ```
 
 ## Cross-Platform Dockerfile

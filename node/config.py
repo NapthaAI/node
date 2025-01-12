@@ -1,7 +1,7 @@
 import os
 import platform
 import psutil
-from node.schemas import NodeConfig
+from node.schemas import NodeConfig, NodeServer
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -16,25 +16,28 @@ NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
 DEV_MODE=True
+PROVIDER_TYPES=["models", "storage", "modules"]
 
 # Servers
-NODE_TYPE="direct"
-SERVER_TYPE="ws" # grpc or ws
-NODE_IP="http://localhost"
-NODE_PORT=7002
-NODE_ROUTING="ws://node.naptha.ai:8765"
+HTTP_PORT=7001
 NUM_SERVERS=1
+SERVER_TYPE="ws" # grpc or ws
+NODE_IP="localhost"
+NODE_PORT=7002
+ROUTING_TYPE="direct"
+ROUTING_URL="ws://node.naptha.ai:8765"
 
 # MQ
 CELERY_BROKER_URL="amqp://localhost:5672/"
 
 # LLMs Inference
 LITELLM_URL="http://localhost:4000"
-LLM_BACKEND="vllm"
+LLM_BACKEND="ollama"
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
 OLLAMA_MODELS="phi3:mini"
 # OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
 OPENAI_MODELS="gpt-4o-mini"
+MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
 LOCAL_DB_PORT=3002
@@ -58,28 +61,27 @@ HUB_DB_PORT=3001
 HUB_NS="naptha"
 HUB_DB="naptha"
 
-# LiteLLM
-
-
 def get_node_config():
     """Get the node configuration."""
     from node.user import get_public_key
     public_key = get_public_key(os.getenv("PRIVATE_KEY"))
     return NodeConfig(
         id=f"node:{public_key}",
+        owner=os.getenv("HUB_USERNAME"),
         public_key=public_key,
         ip=NODE_IP,
-        ports=[NODE_PORT+i for i in range(NUM_SERVERS)],
-        routing=NODE_ROUTING,
-        ollama_models=[OLLAMA_MODELS],
-        num_gpus=NUM_GPUS,
-        vram=VRAM,
-        os=platform.system(),
-        arch=platform.machine(),
-        ram=psutil.virtual_memory().total,
-        docker_jobs=DOCKER_JOBS,
-        owner=os.getenv("HUB_USERNAME"),
-        num_servers=NUM_SERVERS,
-        node_type=NODE_TYPE,
         server_type=SERVER_TYPE,
+        http_port=HTTP_PORT,
+        num_servers=NUM_SERVERS,
+        provider_types=PROVIDER_TYPES,
+        servers=[NodeServer(server_type=SERVER_TYPE, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
+        models=[MODELS],
+        docker_jobs=DOCKER_JOBS,
+        routing_type=ROUTING_TYPE,
+        routing_url=ROUTING_URL,
+        num_gpus=NUM_GPUS,
+        arch=platform.machine(),
+        os=platform.system(),
+        ram=psutil.virtual_memory().total,
+        vram=VRAM,
     )
