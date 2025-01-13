@@ -1,2 +1,11 @@
+# .dockerignore
+
+# Ignore virtual environment
+.venv/
+venv/
+.env
 *.env
 .env*
+.venv
+.git
+.idea
