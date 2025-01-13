@@ -23,6 +23,6 @@ ENV POETRY_NO_INTERACTION=1 \
 RUN pip install poetry
 
 # install
-RUN poetry install --only=main --no-interaction --no-ansi --no-root
+RUN poetry lock && poetry install --only=main --no-interaction --no-ansi --no-root
 
 CMD poetry run celery -A node.worker.main:app worker --loglevel=info
