@@ -47,6 +47,20 @@ services:
     networks:
       - node_private_network
 
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    user: root # stupid surreal configuration
+    #pull_policy: always
+    command: ['start', 'rocksdb:/surreal_data/hub.db']
+    networks:
+      - node_private_network
+    volumes:
+      - surreal_data:/surreal_data
+    ports:
+      - '3001:8000'
+
+  # TODO - litellm will be in vllm / ollama docker-compose files since it needs to know about those services.
+
   node-app:
     # can replace this with naptha image once it's published to hub, then we just
     # need to use the .env file UNLESS config.py is modified
@@ -57,13 +71,16 @@ services:
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
-
-# TODO list:
-  # - Surreal DB (local hub)
-  # - node app
-  # - ollama / vllm
-  # - litellm
-
+    networks:
+      - node_private_network
+    # restart: unless-stopped
+    depends_on:
+      - pgvector
+      - rabbitmq
+      - celery-worker
+      - surrealdb
+    ports:
+      - '7001:7001'
 
 networks:
   node_private_network:
@@ -71,3 +88,4 @@ networks:
 volumes:
   rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs
   postgres_data:
+  surreal_data:

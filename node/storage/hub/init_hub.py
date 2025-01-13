@@ -94,7 +94,6 @@ async def init_hub():
         raise
 
     time.sleep(5)
-    logger.info("Database initialized")
     import_surql()
 
 
