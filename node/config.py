@@ -41,10 +41,7 @@ MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
 LOCAL_DB_PORT=3002
-LOCAL_DB_USER="naptha"
-LOCAL_DB_PASSWORD="napthapassword"
 LOCAL_DB_NAME="naptha"
-LOCAL_DB_URL=f"postgresql://{LOCAL_DB_USER}:{LOCAL_DB_PASSWORD}@localhost:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}"
 
 # Storage
 file_path = Path(__file__).resolve()

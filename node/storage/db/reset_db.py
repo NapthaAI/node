@@ -1,7 +1,14 @@
-from node.config import LOCAL_DB_NAME, LOCAL_DB_USER, LOCAL_DB_PASSWORD, LOCAL_DB_PORT
-import subprocess
+from dotenv import load_dotenv
+import os
 import platform
+import subprocess
 import sys
+from node.config import LOCAL_DB_NAME, LOCAL_DB_PORT
+
+load_dotenv()
+
+LOCAL_DB_USER = os.getenv("LOCAL_DB_USER")
+LOCAL_DB_PASSWORD = os.getenv("LOCAL_DB_PASSWORD")
 
 def reset_db():
     print("Starting database reset...")
