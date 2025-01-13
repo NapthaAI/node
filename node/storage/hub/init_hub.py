@@ -68,33 +68,7 @@ def import_surql():
 
 async def init_hub():
     """Initialize the database"""
-    logger.info("Initializing database")
-
-    # use file storage
-    command = f"""surreal start -A \
-                  --user {os.getenv('HUB_ROOT_USER')} \
-                  --bind 0.0.0.0:{HUB_DB_PORT} \
-                  --pass {os.getenv('HUB_ROOT_PASS')} \
-                  rocksdb://./node/storage/hub/hub.db"""
-
-    try:
-        # Start the command in a new process and detach it
-        _ = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            preexec_fn=os.setsid,
-        )
-        logger.info("Database initialization command executed")
-    except Exception as e:
-        logger.error("Error initializing database")
-        logger.error(str(e))
-        raise
-
     time.sleep(5)
-    logger.info("Database initialized")
     import_surql()
 
 

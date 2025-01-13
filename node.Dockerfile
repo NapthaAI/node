@@ -25,6 +25,10 @@ RUN poetry config virtualenvs.in-project true
 RUN poetry lock
 RUN poetry install --only main
 
+
 EXPOSE 7001
 
-CMD poetry run python -m node.server.server --server-type http --port 7001
+# run db migrations / config & server
+CMD poetry run python node/storage/db/init_db.py && \
+    poetry run python node/storage/surreal && \
+    poetry run python -m node.server.server --server-type http --port 7001
