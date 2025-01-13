@@ -41,7 +41,7 @@ def import_surql():
 
     for file in import_files:
         command = f"""surreal import \
-                      --conn http://localhost:{HUB_DB_PORT} \
+                      --conn http://surrealdb:{HUB_DB_PORT} \
                       --user {os.getenv('HUB_ROOT_USER')} \
                       --pass {os.getenv('HUB_ROOT_PASS')} \
                       --ns {HUB_NS} \

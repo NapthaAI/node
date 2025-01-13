@@ -29,6 +29,6 @@ RUN poetry install --only main
 EXPOSE 7001
 
 # run db migrations / config & server
-CMD poetry run python node/storage/db/init_db.py && \
-    poetry run python node/storage/surreal && \
+CMD poetry run python -m node.storage.db.init_db && \
+    poetry run python -m node.storage.hub.init_hub && \
     poetry run python -m node.server.server --server-type http --port 7001
