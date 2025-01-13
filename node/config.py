@@ -57,6 +57,8 @@ HUB_DB_SURREAL_PORT=3001
 HUB_DB_SURREAL_NS="naptha"
 HUB_DB_SURREAL_NAME="naptha"
 
+print('GOT NODE IP:', NODE_IP)
+
 def get_node_config():
     """Get the node configuration."""
     from node.user import get_public_key
