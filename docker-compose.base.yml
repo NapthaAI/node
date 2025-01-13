@@ -35,6 +35,7 @@ services:
       #- '5433:5432' # exposed for testing, but should not be for production
 
   celery-worker:
+    container_name: celery
     build:
       dockerfile: celery.Dockerfile
     depends_on:
@@ -48,6 +49,7 @@ services:
       - node_private_network
 
   surrealdb:
+    container_name: surrealdb
     image: surrealdb/surrealdb:latest
     user: root # stupid surreal configuration
     #pull_policy: always
@@ -64,6 +66,7 @@ services:
   node-app:
     # can replace this with naptha image once it's published to hub, then we just
     # need to use the .env file UNLESS config.py is modified
+    container_name: node-app
     build:
       dockerfile: ./node.Dockerfile
     env_file:
