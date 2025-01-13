@@ -28,7 +28,7 @@ ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # MQ
-CELERY_BROKER_URL="amqp://localhost:5672/"
+CELERY_BROKER_URL="amqp://rabbitmq:password@rabbitmq:5672/"
 
 # LLMs Inference
 LITELLM_URL="http://localhost:4000"
@@ -40,11 +40,11 @@ OPENAI_MODELS="gpt-4o-mini"
 MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
-LOCAL_DB_PORT=3002
-LOCAL_DB_USER="naptha"
-LOCAL_DB_PASSWORD="napthapassword"
-LOCAL_DB_NAME="naptha"
-LOCAL_DB_URL=f"postgresql://{LOCAL_DB_USER}:{LOCAL_DB_PASSWORD}@localhost:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}"
+LOCAL_DB_PORT=5432
+LOCAL_DB_USER="postgres"
+LOCAL_DB_PASSWORD="password"
+LOCAL_DB_NAME="postgres"
+LOCAL_DB_URL=f"postgresql://{LOCAL_DB_USER}:{LOCAL_DB_PASSWORD}@pgvector:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}"
 
 # Storage
 file_path = Path(__file__).resolve()
@@ -55,11 +55,13 @@ IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
 LOCAL_HUB=False
-LOCAL_HUB_URL="ws://localhost:3001/rpc"
+LOCAL_HUB_URL="ws://surrealdb:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_PORT=3001
 HUB_NS="naptha"
 HUB_DB="naptha"
+
+print('GOT NODE IP:', NODE_IP)
 
 def get_node_config():
     """Get the node configuration."""
