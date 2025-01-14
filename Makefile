@@ -118,7 +118,7 @@ restart-node:
 	@wait
 	@echo "All node components have been restarted."
 
-remove-postgres:
+hard-remove-db:
 	@echo "Removing PostgreSQL..."
 	@make local-db-reset
 	@if [ "$$(uname)" = "Darwin" ]; then \
