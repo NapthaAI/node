@@ -117,3 +117,25 @@ restart-node:
 	@$(MAKE) restart-servers & $(MAKE) restart-celery
 	@wait
 	@echo "All node components have been restarted."
+
+remove-postgres:
+	@echo "Removing PostgreSQL..."
+	@make local-db-reset
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		brew services stop postgresql@17 || true; \
+		brew uninstall postgresql@17 --force || true; \
+		brew uninstall pgvector --force || true; \
+		rm -rf /opt/homebrew/var/postgresql@17; \
+		rm -rf ~/Library/LaunchAgents/homebrew.mxcl.postgresql@17.plist; \
+	else \
+		sudo systemctl stop postgresql || true; \
+		sudo apt-get remove --purge -y postgresql* || true; \
+		sudo apt-get remove --purge -y postgresql-16-pgvector || true; \
+		sudo apt-get autoremove -y; \
+		sudo rm -rf /etc/postgresql/; \
+		sudo rm -rf /var/lib/postgresql/; \
+		sudo rm -rf /var/log/postgresql/; \
+		sudo userdel -r postgres || true; \
+		sudo groupdel postgres || true; \
+	fi
+	@echo "PostgreSQL removed completely."
