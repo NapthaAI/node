@@ -27,9 +27,6 @@ NODE_PORT=7002
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
-# MQ
-CELERY_BROKER_URL="amqp://localhost:5672/"
-
 # LLMs Inference
 LITELLM_URL="http://localhost:4000"
 LLM_BACKEND="ollama"
