@@ -14,6 +14,7 @@ import time
 import traceback
 from pydantic import BaseModel
 from typing import Union, Dict
+import uuid
 import yaml
 from node.schemas import (
     AgentDeployment, 
@@ -347,30 +348,16 @@ def load_persona(persona_dir: str, persona_module: Module):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
-async def load_data_generation_config(agent_run, data_generation_config_path):
-    run_config = agent_run.deployment.data_generation_config
-    if run_config is None:
-        run_config = DataGenerationConfig()
-
-    if isinstance(run_config, DataGenerationConfig):
-        run_config = run_config.model_dump()
-    
-    if os.path.exists(data_generation_config_path):    
-        with open(data_generation_config_path, "r") as file:
-            file_config = json.loads(file.read())
-            if file_config:
-                # Start with run config as base
-                config_dict = run_config.copy()
-                
-                # Fill in None values from file config
-                for key, run_value in run_config.items():
-                    if run_value is None and key in file_config:
-                        config_dict[key] = file_config[key]
-                        
-                return DataGenerationConfig(**config_dict)
-    
-    # If no file exists or file is empty, use run config
-    return agent_run.deployment.data_generation_config
+async def load_data_generation_config(deployment, default_deployment):
+    logger.info(f"Loading data generation config for {deployment.name}")
+    if not deployment.data_generation_config:
+        deployment.data_generation_config = DataGenerationConfig()
+    incoming_config = deployment.data_generation_config.model_dump()
+    merged_config = merge_config(incoming_config, default_deployment["data_generation_config"])
+    if "save_outputs_path" in merged_config:
+        merged_config["save_outputs_path"] = f"{BASE_OUTPUT_DIR}/{str(uuid.uuid4())}/{merged_config['save_outputs_path']}"
+    deployment.data_generation_config = merged_config
+    return deployment
 
 def merge_config(input_config, default_config):
     """
@@ -566,6 +553,9 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
         # Install module from default deployment
         deployment.module = await load_module_metadata(module_type, deployment_map[module_type](**default_deployment))
         await install_module_with_lock(deployment.module)
+
+    if deployment.data_generation_config or "data_generation_config" in default_deployment:
+        await load_data_generation_config(deployment, default_deployment)
 
     # Fill in metadata and config data
     await load_node_metadata(deployment)
