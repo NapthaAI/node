@@ -136,7 +136,7 @@ CREATE persona:one_million_personas_0000013 SET name="one_million_personas_00000
 
 -- KNOWLEDGE BASES
 CREATE kb:wikipedia_kb SET name="wikipedia_kb", description="Knowledge base for Wikipedia content", parameters='{"function_name": "str", "function_input_data": "Optional[Dict[str, Any]]"}', author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_kb", module_type="kb", execution_type="package", module_version="v0.4", module_entrypoint="run.py";
-CREATE kb:embedding_kb SET name="test_embedding_kb", description="Knowledge base for testing embedding", parameters='{"function_name": "str", "function_input_data": "Optional[Dict[str, Any]]"}', author=user:naptha, module_url="https://github.com/NapthaAI/embedding_kb", module_type="kb", execution_type="package", module_version="v0.2", module_entrypoint="run.py";
+CREATE kb:embedding_kb SET name="embedding_kb", description="Knowledge base for testing embedding", parameters='{"function_name": "str", "function_input_data": "Optional[Dict[str, Any]]"}', author=user:naptha, module_url="https://github.com/NapthaAI/embedding_kb", module_type="kb", execution_type="package", module_version="v0.3", module_entrypoint="run.py";
 CREATE kb:groupchat_kb SET name="groupchat_kb", description="Knowledge base for groupchat", parameters='{"func_name": "str", "func_input_data": "Optional[Dict[str, Any]]"}', author=user:naptha, module_url="https://github.com/NapthaAI/groupchat_kb", module_type="kb", execution_type="package", module_version="v0.1", module_entrypoint="run.py";
 
 -- MEMORIES
