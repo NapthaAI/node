@@ -140,5 +140,5 @@ CREATE kb:embedding_kb SET name="test_embedding_kb", description="Knowledge base
 CREATE kb:groupchat_kb SET name="groupchat_kb", description="Knowledge base for groupchat", parameters='{"func_name": "str", "func_input_data": "Optional[Dict[str, Any]]"}', author=user:naptha, module_url="https://github.com/NapthaAI/groupchat_kb", module_type="kb", execution_type="package", module_version="v0.1", module_entrypoint="run.py";
 
 -- MEMORIES
-CREATE memory:test_memory SET name="test_memory", description="Test memory", parameters='{"mode": "str", "query": "str", "data": "str"}', author=user:naptha, module_url="https://github.com/NapthaAI/test_memory", module_type="memory", execution_type="package", module_version="0.1", module_entrypoint="run.py";
+CREATE memory:cognitive_memory SET name="cognitive_memory", description="Cognitive memory", parameters='{"func_name": "str", "func_input_data": "Optional[Dict[str, Any]]"}', author=user:naptha, module_url="https://github.com/NapthaAI/cognitive_memory", module_type="memory", execution_type="package", module_version="v0.1", module_entrypoint="run.py";
 

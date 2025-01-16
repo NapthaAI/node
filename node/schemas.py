@@ -60,6 +60,7 @@ class ModuleType(str, Enum):
     tool = "tool"
     environment = "environment"
     kb = "kb"
+    memory = "memory"
     orchestrator = "orchestrator"
     persona = "persona"
 
@@ -116,7 +117,17 @@ class KBConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     config_name: Optional[str] = None
-    config_schema: Optional[str] = None
+    storage_type: StorageType
+    path: str
+    schema: Dict[str, Any]
+    options: Optional[Dict[str, Any]] = None
+
+    def model_dict(self):
+        if isinstance(self.storage_type, StorageType):
+            self.storage_type = self.storage_type.value
+        model_dict = self.dict()
+        model_dict['storage_type'] = self.storage_type
+        return model_dict
 
 class DataGenerationConfig(BaseModel):
     save_outputs: Optional[bool] = None
@@ -163,6 +174,7 @@ class AgentDeployment(BaseModel):
     data_generation_config: Optional[DataGenerationConfig] = None
     tool_deployments: Optional[List[ToolDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
+    memory_deployments: Optional[List[MemoryDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
     initialized: Optional[bool] = False
 
@@ -174,6 +186,7 @@ class OrchestratorDeployment(BaseModel):
     agent_deployments: Optional[List[AgentDeployment]] = None
     environment_deployments: Optional[List[EnvironmentDeployment]] = None
     kb_deployments: Optional[List[KBDeployment]] = None
+    memory_deployments: Optional[List[MemoryDeployment]] = None
     initialized: Optional[bool] = False
 
 class DockerParams(BaseModel):
