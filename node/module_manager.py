@@ -553,9 +553,14 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
         # Install module from default deployment
         deployment.module = await load_module_metadata(module_type, deployment_map[module_type](**default_deployment))
         await install_module_with_lock(deployment.module)
-
-    if deployment.data_generation_config or "data_generation_config" in default_deployment:
-        await load_data_generation_config(deployment, default_deployment)
+    
+    if 'data_generation_config' in deployment_map[module_type].__fields__:
+        if "data_generation_config" not in default_deployment:
+            default_deployment["data_generation_config"] = DataGenerationConfig().model_dump()
+        if "data_generation_config" in default_deployment and default_deployment["data_generation_config"] is None:
+            default_deployment["data_generation_config"] = DataGenerationConfig().model_dump()
+        if hasattr(deployment, "data_generation_config") or "data_generation_config" in default_deployment:
+            await load_data_generation_config(deployment, default_deployment)
 
     # Fill in metadata and config data
     await load_node_metadata(deployment)
