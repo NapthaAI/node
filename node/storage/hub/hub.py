@@ -289,6 +289,18 @@ class Hub(AsyncMixin):
             logger.info(f"Knowledge base: {knowledge_base}")
             return Module(**knowledge_base[0]["result"][0])
 
+    async def list_memory_modules(self, memory_module_name=None) -> List:
+
+        if not memory_module_name:
+            memory_modules = await self.surrealdb.query("SELECT * FROM memory;")
+            return [Module(**memory_module) for memory_module in memory_modules[0]["result"]]
+        else:
+            if ':' in memory_module_name:
+                memory_module_name = memory_module_name.split(':')[1]
+            memory_module = await self.surrealdb.query("SELECT * FROM memory WHERE name=$memory_module_name;", {"memory_module_name": memory_module_name})
+            logger.info(f"Memory module: {memory_module}")
+            return Module(**memory_module[0]["result"][0])
+
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
 
@@ -326,6 +338,8 @@ async def list_modules(module_type: str, module_name: str) -> List:
         list_func = lambda hub: hub.list_environments(module_name)
     elif module_type == "kb":
         list_func = lambda hub: hub.list_knowledge_bases(module_name)
+    elif module_type == "memory":
+        list_func = lambda hub: hub.list_memory_modules(module_name)
     elif module_type == "persona":
         list_func = lambda hub: hub.list_personas(module_name)
 
@@ -334,8 +348,8 @@ async def list_modules(module_type: str, module_name: str) -> List:
     if not hub_username or not hub_password:
         raise ValueError("Missing Hub authentication credentials - HUB_USERNAME and HUB_PASSWORD environment variables must be set")
 
-    if module_type not in ["agent", "tool", "orchestrator", "environment", "kb", "persona"]:
-        raise ValueError(f"Invalid module type: {module_type}. Must be one of: agent, tool, orchestrator, environment, kb")
+    if module_type not in ["agent", "tool", "orchestrator", "environment", "kb", "memory", "persona"]:
+        raise ValueError(f"Invalid module type: {module_type}. Must be one of: agent, tool, orchestrator, environment, kb, memory")
 
     if not module_name:
         raise ValueError("Module name cannot be empty")
