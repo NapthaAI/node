@@ -4,7 +4,7 @@ from functools import wraps
 import ipfshttpclient
 import logging
 from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
-from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun, ToolRun
+from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun, MemoryRun, ToolRun
 from node.storage.db.db import DB
 import os
 from pathlib import Path
@@ -107,10 +107,10 @@ def with_retry(max_retries=MAX_RETRIES, delay=RETRY_DELAY):
 
 
 @with_retry()
-async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> None:
+async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun, ToolRun]) -> None:
     """
     Update the DB with the module run status synchronously
-    param module_run: AgentRun, OrchestratorRun, EnvironmentRun, KBRun or ToolRun data to update
+    param module_run: AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun or ToolRun data to update
     """
     logger.info(f"Updating DB with {type(module_run).__name__}")
 
@@ -118,21 +118,24 @@ async def update_db_with_status_sync(module_run: Union[AgentRun, OrchestratorRun
         async with DB() as db:
             if isinstance(module_run, AgentRun):
                 updated_run = await db.update_agent_run(module_run.id, module_run)
-                logger.info(f"Updated agent run: {updated_run}")
+                logger.info(f"Updated agent module run: {updated_run}")
             elif isinstance(module_run, ToolRun):
                 updated_run = await db.update_tool_run(module_run.id, module_run)
-                logger.info(f"Updated tool run: {updated_run}")
+                logger.info(f"Updated tool module run: {updated_run}")
             elif isinstance(module_run, OrchestratorRun):
                 updated_run = await db.update_orchestrator_run(module_run.id, module_run)
-                logger.info(f"Updated orchestrator run: {updated_run}")
+                logger.info(f"Updated orchestrator module run: {updated_run}")
             elif isinstance(module_run, EnvironmentRun):
                 updated_run = await db.update_environment_run(module_run.id, module_run)
-                logger.info(f"Updated environment run: {updated_run}")
+                logger.info(f"Updated environment module run: {updated_run}")
             elif isinstance(module_run, KBRun):
                 updated_run = await db.update_kb_run(module_run.id, module_run)
-                logger.info(f"Updated KB run: {updated_run}")
+                logger.info(f"Updated KB module run: {updated_run}")
+            elif isinstance(module_run, MemoryRun):
+                updated_run = await db.update_memory_run(module_run.id, module_run)
+                logger.info(f"Updated memory module run: {updated_run}")
             else:
-                raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, KBRun, or ToolRun")
+                raise ValueError("module_run must be either AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun or ToolRun")
     except ConnectionClosedError:
         # This will be caught by the retry decorator
         raise
