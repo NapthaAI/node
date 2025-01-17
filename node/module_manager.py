@@ -13,6 +13,7 @@ import subprocess
 import time
 import traceback
 from pydantic import BaseModel
+import sys
 from typing import Union, Dict
 import uuid
 import yaml
@@ -75,20 +76,20 @@ def file_lock(lock_file, timeout=30):
 
 def is_module_installed(module_name: str, required_version: str) -> bool:
     try:
-        modules_source_dir = os.path.join(MODULES_SOURCE_DIR, module_name)
-        
+        modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+
         # First check if the directory exists
-        if not Path(modules_source_dir).exists():
+        if not modules_source_dir.exists():
             logger.warning(f"Module directory for {module_name} does not exist")
             return False
 
         # Check if pyproject.toml exists (indicates a valid poetry project)
-        if not Path(modules_source_dir) / "pyproject.toml".exists():
+        if not (modules_source_dir / "pyproject.toml").exists():
             logger.warning(f"No pyproject.toml found for {module_name}")
             return False
 
         # Check if .venv exists (indicates installed dependencies)
-        if not (Path(modules_source_dir) / ".venv").exists():
+        if not (modules_source_dir / ".venv").exists():
             logger.warning(f"No virtual environment found for {module_name}")
             return False
 
@@ -171,20 +172,25 @@ async def install_module_with_lock(module: Union[Dict, Module]):
 def verify_module_installation(module_name: str) -> bool:
     try:
         modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+        venv_dir = modules_source_dir / ".venv"
         
-        # Run python through poetry to verify module import
+        # Get python path from the module's venv
+        if os.name == 'nt':  # Windows
+            python_path = venv_dir / "Scripts" / "python"
+        else:  # Unix
+            python_path = venv_dir / "bin" / "python"
+        
+        # Try to import the module using the venv's Python
         result = subprocess.run(
-            ["poetry", "run", "python", "-c", f"import {module_name}.run"],
-            cwd=modules_source_dir,
+            [str(python_path), "-c", f"import {module_name}.run"],
             capture_output=True,
             text=True,
-            check=False  # Don't raise exception on non-zero return code
+            check=False
         )
         
         if result.returncode != 0:
             error_msg = f"Error importing module {module_name}: {result.stderr}"
             logger.error(error_msg)
-            logger.error(f"Command output: {result.stdout}")
             raise RuntimeError(error_msg)
             
         return True
@@ -350,38 +356,32 @@ def install_module(module_name: str, module_version: str, module_source_url: str
             install_module_from_ipfs(module_name, module_version, module_source_url)
         else:
             install_module_from_git(module_name, module_version, module_source_url)
-        
-        # Create or update poetry.toml to set in-project virtualenv
-        poetry_config = modules_source_dir / "poetry.toml"
-        poetry_config_content = """[virtualenvs]
-in-project = true
-create = true"""
-        
-        poetry_config.write_text(poetry_config_content)
-        
-        # Run poetry install in the module directory
-        logger.info(f"Installing/Reinstalling {module_name}")
-        installation_output = subprocess.run(
-            ["poetry", "install"], 
-            cwd=modules_source_dir,
-            check=True,
-            capture_output=True,
-            text=True
+
+        # Create virtualenv directly
+        venv_dir = modules_source_dir / ".venv"
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            check=True
         )
-        logger.info(f"Installation output: {installation_output.stdout}")
+
+        # Get pip path in new venv
+        pip_path = venv_dir / "bin" / "pip"
+        
+        # Install dependencies from pyproject.toml using pip
+        subprocess.run(
+            [str(pip_path), "install", "-e", str(modules_source_dir)],
+            check=True,
+            capture_output=True
+        )
 
         if not verify_module_installation(module_name):
             raise RuntimeError(f"Module {module_name} failed verification after installation")
 
-        logger.info(f"Successfully installed and verified {module_name} version {module_version}")
         return {"name": module_name, "module_version": module_version, "status": "success"}
 
     except Exception as e:
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
-        logger.info(f"Traceback: {traceback.format_exc()}")
-        if "Dependency conflict detected" in str(e):
-            error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
         raise RuntimeError(error_msg) from e
 
 def load_persona(persona_dir: str, persona_module: Module):
@@ -438,17 +438,35 @@ def merge_config(input_config, default_config):
 
 async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun, ToolRun]:
     module_name = module_run.deployment.module['name']
-
-    # Replace hyphens with underscores in module name
     module_name = module_name.replace("-", "_")
     
-    # Import and validate schema
-    schemas_module = importlib.import_module(f"{module_name}.schemas")
-    InputSchema = getattr(schemas_module, "InputSchema")
+    # Get python path from module's venv
+    modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+    venv_dir = modules_source_dir / ".venv"
+    python_path = venv_dir / "bin" / "python"
 
-    module_run.inputs = InputSchema(**module_run.inputs)
+    # Run validation in module's venv
+    validation_code = f"""
+import json
+from {module_name}.schemas import InputSchema
+inputs = json.loads('{json.dumps(module_run.inputs)}')
+validated = InputSchema(**inputs).model_dump()
+print(json.dumps(validated))
+"""
     
-    return module_run
+    try:
+        result = subprocess.run(
+            [str(python_path), "-c", validation_code],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        validated_inputs = json.loads(result.stdout.strip())
+        module_run.inputs = validated_inputs
+        return module_run
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error validating inputs: {e.stderr}")
+        raise RuntimeError(f"Failed to validate inputs: {e.stderr}")
 
 def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, MemoryDeployment]):
     if "config_schema" in deployment.config and deployment.config["config_schema"] is not None:

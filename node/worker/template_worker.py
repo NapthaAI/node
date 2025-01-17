@@ -6,14 +6,15 @@ import logging
 import os
 import pytz
 import sys
+import subprocess
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from typing import Union
+from pathlib import Path
 
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
-from node.module_manager import install_module_with_lock, load_module
+from node.module_manager import install_module_with_lock, load_and_validate_input_schema
 from node.schemas import AgentRun, MemoryRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
@@ -203,7 +204,7 @@ class ModuleRunEngine:
             )
 
         # Load the module
-        self.module_func, self.module_run = await load_module(self.module_run)
+        self.module_run = await load_and_validate_input_schema(self.module_run)
 
     async def start_run(self):
         """Executes the module run"""
@@ -214,30 +215,57 @@ class ModuleRunEngine:
         logger.info(f"{self.module_type.title()} deployment: {self.deployment}")
 
         try:
-            kwargs = {"module_run": self.module_run.model_dict()}
-            response = await maybe_async_call(self.module_func, **kwargs)
+            modules_source_dir = Path(MODULES_SOURCE_DIR) / self.module_name
+            venv_dir = modules_source_dir / ".venv"
+            python_path = venv_dir / "bin" / "python"
+            
+            entrypoint = self.module['module_entrypoint'].split('.')[0] if 'module_entrypoint' in self.module else 'run'
+            
+            kwargs = json.dumps({"module_run": self.module_run.model_dict()})
+            
+            # Fixed indentation in execution command
+            execution_cmd = (
+                "import json, asyncio, inspect; "
+                f"from {self.module_name}.run import {entrypoint}; "
+                f"kwargs = json.loads('{kwargs}'); "
+                f"func = {entrypoint}; "
+                "result = asyncio.run(func(**kwargs)) if inspect.iscoroutinefunction(func) else func(**kwargs); "
+                "print(json.dumps(result))"
+            )
+            
+            try:
+                result = subprocess.run(
+                    [str(python_path), "-c", execution_cmd],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    cwd=modules_source_dir
+                )
+                
+                response = result.stdout.strip()
+                
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Module execution failed with code {e.returncode}")
+                logger.error(f"Module stdout: {e.stdout}")
+                logger.error(f"Module stderr: {e.stderr}")
+                raise RuntimeError(f"Module execution failed: {e.stderr}")
+
+            logger.info(f"{self.module_type.title()} run response: {response}")
+
+            if not isinstance(response, str):
+                raise ValueError(f"{self.module_type.title()} response is not a string: {response}")
+
+            self.module_run.results = [response]
+            
+            if self.module_type == "agent":
+                await self.handle_output(self.module_run, response)
+                
+            self.module_run.status = "completed"
+
         except Exception as e:
             logger.error(f"Error running {self.module_type}: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
-
-        logger.info(f"{self.module_type.title()} run response: {response}")
-
-        if isinstance(response, (dict, list, tuple)):
-            response = json.dumps(response)
-        elif isinstance(response, BaseModel):
-            response = response.model_dump_json()
-
-        if not isinstance(response, str):
-            raise ValueError(f"{self.module_type.title()} response is not a string: {response}. Current response type: {type(response)}")
-
-        self.module_run.results = [response]
-        
-        # Handle output for agent runs
-        if self.module_type == "agent":
-            await self.handle_output(self.module_run, response)
-            
-        self.module_run.status = "completed"
 
     async def handle_output(self, module_run, results):
         """Handles the output of the module run (only for agent and tool runs)"""
