@@ -75,11 +75,21 @@ def file_lock(lock_file, timeout=30):
 
 def is_module_installed(module_name: str, required_version: str) -> bool:
     try:
-        importlib.import_module(module_name)
         modules_source_dir = os.path.join(MODULES_SOURCE_DIR, module_name)
-
+        
+        # First check if the directory exists
         if not Path(modules_source_dir).exists():
-            logger.warning(f"Modules source directory for {module_name} does not exist")
+            logger.warning(f"Module directory for {module_name} does not exist")
+            return False
+
+        # Check if pyproject.toml exists (indicates a valid poetry project)
+        if not Path(modules_source_dir) / "pyproject.toml".exists():
+            logger.warning(f"No pyproject.toml found for {module_name}")
+            return False
+
+        # Check if .venv exists (indicates installed dependencies)
+        if not (Path(modules_source_dir) / ".venv").exists():
+            logger.warning(f"No virtual environment found for {module_name}")
             return False
 
         try:
@@ -87,7 +97,7 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
             if repo.head.is_detached:
                 current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
             else:
-                current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit),None)
+                current_tag = next((tag.name for tag in repo.tags if tag.commit == repo.head.commit), None)
 
             if current_tag:
                 logger.info(f"Module {module_name} is at tag: {current_tag}")
@@ -101,12 +111,13 @@ def is_module_installed(module_name: str, required_version: str) -> bool:
             else:
                 logger.warning(f"No tag found for current commit in {module_name}")
                 return False
+                
         except (InvalidGitRepositoryError, GitCommandError) as e:
             logger.error(f"Git error for {module_name}: {str(e)}")
             return False
 
-    except ImportError:
-        logger.warning(f"Module {module_name} not found")
+    except Exception as e:
+        logger.warning(f"Error checking module {module_name}: {str(e)}")
         return False
 
 async def install_module_with_lock(module: Union[Dict, Module]):
@@ -159,10 +170,27 @@ async def install_module_with_lock(module: Union[Dict, Module]):
 
 def verify_module_installation(module_name: str) -> bool:
     try:
-        importlib.import_module(f"{module_name}.run")
+        modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+        
+        # Run python through poetry to verify module import
+        result = subprocess.run(
+            ["poetry", "run", "python", "-c", f"import {module_name}.run"],
+            cwd=modules_source_dir,
+            capture_output=True,
+            text=True,
+            check=False  # Don't raise exception on non-zero return code
+        )
+        
+        if result.returncode != 0:
+            error_msg = f"Error importing module {module_name}: {result.stderr}"
+            logger.error(error_msg)
+            logger.error(f"Command output: {result.stdout}")
+            raise RuntimeError(error_msg)
+            
         return True
-    except ImportError as e:
-        error_msg = f"Error importing module {module_name}: {str(e)}"
+        
+    except Exception as e:
+        error_msg = f"Error verifying module {module_name}: {str(e)}"
         logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise RuntimeError(error_msg) from e
@@ -283,11 +311,24 @@ def install_module_from_git(module_name: str, module_version: str, module_source
             error_msg += "\nThis is likely due to a mismatch in naptha-sdk versions between the module and the main project."
         raise RuntimeError(error_msg) from e
     
-def run_poetry_command(command):
+def run_poetry_command(command, module_name=None):
     try:
-        result = subprocess.run(
-            ["poetry"] + command, check=True, capture_output=True, text=True
-        )
+        if module_name:
+            modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
+            result = subprocess.run(
+                ["poetry"] + command,
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=modules_source_dir
+            )
+        else:
+            result = subprocess.run(
+                ["poetry"] + command,
+                check=True,
+                capture_output=True,
+                text=True
+            )
         return result.stdout
     except subprocess.CalledProcessError as e:
         error_msg = (
@@ -309,11 +350,25 @@ def install_module(module_name: str, module_version: str, module_source_url: str
             install_module_from_ipfs(module_name, module_version, module_source_url)
         else:
             install_module_from_git(module_name, module_version, module_source_url)
-            
-        # Reinstall the module
+        
+        # Create or update poetry.toml to set in-project virtualenv
+        poetry_config = modules_source_dir / "poetry.toml"
+        poetry_config_content = """[virtualenvs]
+in-project = true
+create = true"""
+        
+        poetry_config.write_text(poetry_config_content)
+        
+        # Run poetry install in the module directory
         logger.info(f"Installing/Reinstalling {module_name}")
-        installation_output = run_poetry_command(["add", f"{modules_source_dir}"])
-        logger.info(f"Installation output: {installation_output}")
+        installation_output = subprocess.run(
+            ["poetry", "install"], 
+            cwd=modules_source_dir,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        logger.info(f"Installation output: {installation_output.stdout}")
 
         if not verify_module_installation(module_name):
             raise RuntimeError(f"Module {module_name} failed verification after installation")
