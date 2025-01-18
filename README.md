@@ -162,49 +162,8 @@ For the local DB, you can reset it by running (this one should be run before run
 make local-db-reset
 ```
 
-## Cross-Platform Dockerfile
-The Naptha node uses a cross-platform Dockerfile intended for use with `docker buildx`. This is automatically used by 
-Naptha's CI/CD, so when you pull the image, the right architecture will be used. To build the image 
-with `docker buildx` yourself, you must first install Docker on your system. Once you have done that, complete the following
-steps to enable the `buildx` plugin:
-
-
-```shell 
-docker buildx install # install the buildx plugin
-docker buildx create --name builder --use # create a builder 
-docker build use builder
-```
-
-Once you have done this, you can build the `buildx.Dockerfile` for your platform of choice.
-
-Note that if you are specifying a _single_ target platform with `--platform`, you can use `--load` to load the image
-into your local docker cache. If you are building for multiple platforms with `--platform`, you must use `--push` to 
-push the manifests up to your dockerhub / other container repo, since the local docker cache
-does not support manifest lists for multi-platform builds. In that case, you need to specify a full container tag of 
-`account/repository:tag`
-
-```shell
-# for ARM CPUs only:
-docker buildx build \
-  --platform linux/arm64 \
-  -t example-docker-tag \
-  -f buildx.Dockerfile \
-  --load . 
-  
-# for multiple target platforms:
-docker buildx build \
-  --platform linux/arm64,linux/amd64 \
-  -t account/repository:tag \
-  -f buildx.Dockerfile \ 
-  --push .
-
-
-# for GPU-accelerated inference with ollama or vLLM; use an nvidia/cuda base image. replace 12.4.1 with your CUDA version;
-# see https://hub.docker.com/r/nvidia/cuda/tags for a list of supported images.
-docker buildx build \
-    --platform linux/arm64 \
-    --build-arg BASE_IMAGE=nvidia/cuda:12.4.1-devel-ubuntu22.04 \ 
-    -t yourdockerprofile/yourrepo:yourtag \
-    -f buildx.Dockerfile \
-    --load .
-```
+## Docker & Docker Compose
+The Naptha Node providers Dockerfiles and a `docker-compose.yml` file that faciliate getting the node 
+up-and-running as quickly and easily as possible. The node depends on a number of services, and this moduler approach 
+will allow you to run a single command (`docker compose up`) to get everything up and running, or to 
+only start the services that you need, for example if you have to use external rabbitmq/postgres/surrealdb services.

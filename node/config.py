@@ -57,7 +57,7 @@ IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 LOCAL_HUB=False
 LOCAL_HUB_URL="ws://surrealdb:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
-HUB_DB_PORT=3001
+HUB_DB_PORT=8000 # port of the db as it will be accessible from other services. In docker, 8000. out of docker, 3001
 HUB_NS="naptha"
 HUB_DB="naptha"
 

@@ -32,10 +32,11 @@ services:
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # init SQL script to create databases etc.
     environment:
       POSTGRES_USER: postgres
+      PGUSER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready", "-d", "postgres" ]
+      test: pg_isready -d postgres
       interval: 10s
       timeout: 5s
       retries: 5
@@ -69,6 +70,12 @@ services:
       - node_private_network
     volumes:
       - surreal_data:/surreal_data
+    restart: unless-stopped
+    healthcheck:
+      test: surreal isready --conn http://localhost:8000
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports:
       - '3001:8000'
 
