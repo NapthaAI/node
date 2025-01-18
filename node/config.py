@@ -21,8 +21,8 @@ PROVIDER_TYPES=["models", "storage", "modules"]
 # Servers
 HTTP_PORT=7001
 NUM_SERVERS=1
-SERVER_TYPE="ws" # grpc or ws
-NODE_IP="localhost"
+SERVER_TYPE="http" # grpc or ws
+NODE_IP="pro-model-sturgeon.ngrok-free.app"
 NODE_PORT=7002
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"

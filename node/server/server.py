@@ -35,12 +35,14 @@ class NodeServer:
     async def register_node(self):
         """Register the node with the hub - only HTTP server does this"""
         if self.server_type == "http":
+            logger.info('Attempting to register node for HTTP server')
             try:
                 async with self.hub as hub:
                     success, user, user_id = await hub.signin(
                         os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                     )
                     if not success:
+                        logger.error('Failed to sign in to hub.')
                         raise Exception("Failed to sign in to hub")
                     
                     # First try to delete any existing node registration
@@ -231,7 +233,7 @@ async def run_server(server_type: str, port: int):
 
         # Register node (only for HTTP server)
         await node_server.register_node()
-        
+
         # Start server
         await node_server.start_server()
         
