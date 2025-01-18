@@ -42,8 +42,8 @@ services:
       retries: 5
     networks:
       - node_private_network
-    # ports:
-      #- '5433:5432' # exposed for testing, but should not be for production
+    ports:
+      - '5433:5432' # exposed for testing, but should not be for production
 
   celery-worker:
     container_name: celery
@@ -52,11 +52,14 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    env_file:
+      - ./.env
     environment:
       RMQ_USER: ${RABBITMQ_USER:?error}
       RMQ_PASSWORD: ${RABBITMQ_PASSWORD?:error}
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY?:error}
+      LOCAL_DB_HOST: pgvector
     networks:
       - node_private_network
 
