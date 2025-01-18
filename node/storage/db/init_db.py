@@ -22,9 +22,6 @@ def init_db():
     # Create the SQLAlchemy engine
     engine = create_engine(LOCAL_DB_URL)
 
-    # create all tables based on the models
-    #Base.metadata.create_all(engine)
-
     # Create an Alembic configuration object
     alembic_cfg = Config(alembic_ini_path)
     
@@ -47,6 +44,10 @@ def init_db():
         command.revision(alembic_cfg, autogenerate=True, message="Initial migration")
         # Apply the migration to the database
         command.upgrade(alembic_cfg, "head")
+
+    # create all tables based on the models
+    logging.info("Creating models if they don't already exist...")
+    Base.metadata.create_all(engine)
 
     print("Database initialization complete.")
 
