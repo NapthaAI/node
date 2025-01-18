@@ -44,7 +44,7 @@ from node.storage.hub.hub import Hub
 from node.user import check_user, register_user, get_user_public_key, verify_signature
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_memory, run_tool, run_environment, run_orchestrator, run_kb
+from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb, run_memory
 from node.client import Node as NodeClient
 from node.storage.server import router as storage_router
 
@@ -118,33 +118,6 @@ class HTTPServer:
             :return: Status
             """
             return await self.agent_check(agent_run)
-        
-        @router.post("/memory/create")
-        async def memory_create_endpoint(memory_input: MemoryDeployment) -> MemoryDeployment:
-            """
-            Create a memory module
-            :param memory_input: MemoryDeployment
-            :return: MemoryDeployment
-            """
-            return await self.memory_create(memory_input)
-
-        @router.post("/memory/run")
-        async def memory_run_endpoint(memory_run_input: MemoryRunInput) -> MemoryRun:
-            """
-            Run a memory module
-            :param memory_run_input: Memory run specifications
-            :return: Status
-            """
-            return await self.memory_run(memory_run_input)
-
-        @router.post("/memory/check")
-        async def memory_check_endpoint(memory_run: MemoryRun) -> MemoryRun:
-            """
-            Check a memory module
-            :param memory_run: MemoryRun details
-            :return: Status
-            """
-            return await self.memory_check(memory_run)
 
         @router.post("/tool/create")
         async def tool_create_endpoint(tool_input: ToolDeployment) -> ToolDeployment:
@@ -254,6 +227,33 @@ class HTTPServer:
             """
             return await self.kb_check(kb_run)
 
+        @router.post("/memory/create")
+        async def memory_create_endpoint(memory_input: MemoryDeployment) -> MemoryDeployment:
+            """
+            Create a memory module
+            :param memory_input: MemoryDeployment
+            :return: MemoryDeployment
+            """
+            return await self.memory_create(memory_input)
+
+        @router.post("/memory/run")
+        async def memory_run_endpoint(memory_run_input: MemoryRunInput) -> MemoryRun:
+            """
+            Run a memory module
+            :param memory_run_input: Memory run specifications
+            :return: Status
+            """
+            return await self.memory_run(memory_run_input)
+
+        @router.post("/memory/check")
+        async def memory_check_endpoint(memory_run: MemoryRun) -> MemoryRun:
+            """
+            Check a memory module
+            :param memory_run: MemoryRun details
+            :return: Status
+            """
+            return await self.memory_check(memory_run)
+
         # User endpoints
         @router.post("/user/check")
         async def user_check_endpoint(user_input: dict):
@@ -343,6 +343,10 @@ class HTTPServer:
             for deployment in module_run.kb_deployments:
                 if deployment.kb_node:
                     node_clients.append(NodeClient(deployment.kb_node))
+        elif hasattr(module_run, "memory_deployments"):
+            for deployment in module_run.memory_deployments:
+                if deployment.memory_node:
+                    node_clients.append(NodeClient(deployment.memory_node))
 
         for node_client in node_clients:
             async with node_client as node_client:
@@ -356,7 +360,7 @@ class HTTPServer:
                 consumer = await node_client.register_user(user_input=consumer)
                 logger.info(f"User registration complete on node: {node_client.node_schema}")
 
-    async def create_module(self, module_deployment: Union[AgentDeployment, MemoryDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, ToolDeployment]) -> Dict[str, Any]:
+    async def create_module(self, module_deployment: Union[AgentDeployment, MemoryDeployment, OrchestratorDeployment, EnvironmentDeployment, KBDeployment, MemoryDeployment, ToolDeployment]) -> Dict[str, Any]:
         """
         Unified method to create and install any type of module and its sub-modules
         """
@@ -378,10 +382,10 @@ class HTTPServer:
 
     async def run_module(
         self, 
-        module_run_input: Union[AgentRunInput, MemoryRunInput, OrchestratorRunInput, EnvironmentRunInput, KBDeployment, ToolRunInput]
+        module_run_input: Union[AgentRunInput, MemoryRunInput, OrchestratorRunInput, EnvironmentRunInput, ToolRunInput]
     ) -> Union[AgentRun, MemoryRun, OrchestratorRun, EnvironmentRun, ToolRun]:
         """
-        Generic method to run either an agent, memory, orchestrator, environment, tool or kb
+        Generic method to run either an agent, memory, orchestrator, environment, tool, kb, or memory
         :param run_input: Run specifications (AgentRunInput, MemoryRunInput, OrchestratorRunInput, EnvironmentRunInput, ToolRunInput or KBRunInput)
         :return: Status
         """
@@ -394,8 +398,6 @@ class HTTPServer:
             # Determine module type and configuration
             if isinstance(module_run_input, AgentRunInput):
                 create_func = lambda db: db.create_agent_run
-            elif isinstance(module_run_input, MemoryRunInput):
-                create_func = lambda db: db.create_memory_run
             elif isinstance(module_run_input, ToolRunInput):
                 create_func = lambda db: db.create_tool_run
             elif isinstance(module_run_input, OrchestratorRunInput):
@@ -404,6 +406,8 @@ class HTTPServer:
                 create_func = lambda db: db.create_environment_run
             elif isinstance(module_run_input, KBRunInput):
                 create_func = lambda db: db.create_kb_run
+            elif isinstance(module_run_input, MemoryRunInput):
+                create_func = lambda db: db.create_memory_run
             else:
                 raise HTTPException(status_code=400, detail="Invalid run input type")
                 
@@ -431,8 +435,6 @@ class HTTPServer:
             if module_run_input.deployment.module.execution_type == ModuleExecutionType.package:
                 if module_type == "agent":
                     _ = run_agent.delay(module_run_data)
-                elif module_type == "memory":
-                    _ = run_memory.delay(module_run_data)
                 elif module_type == "tool":
                     _ = run_tool.delay(module_run_data)
                 elif module_type == "orchestrator":
@@ -441,6 +443,8 @@ class HTTPServer:
                     _ = run_environment.delay(module_run_data)
                 elif module_type == "kb":
                     _ = run_kb.delay(module_run_data)
+                elif module_type == "memory":
+                    _ = run_memory.delay(module_run_data)                   
             elif module_run_input.deployment.module.execution_type == ModuleExecutionType.docker and module_type == "agent":
                 # validate docker params
                 try:
@@ -467,9 +471,6 @@ class HTTPServer:
 
     async def agent_create(self, agent_deployment: AgentDeployment) -> AgentDeployment:
         return await self.create_module(agent_deployment)
-    
-    async def memory_create(self, memory_deployment: MemoryDeployment) -> MemoryDeployment:
-        return await self.create_module(memory_deployment)
 
     async def tool_create(self, tool_deployment: ToolDeployment) -> ToolDeployment:
         return await self.create_module(tool_deployment)
@@ -483,11 +484,11 @@ class HTTPServer:
     async def kb_create(self, kb_deployment: KBDeployment) -> KBDeployment:
         return await self.create_module(kb_deployment)
 
+    async def memory_create(self, memory_deployment: MemoryDeployment) -> MemoryDeployment:
+        return await self.create_module(memory_deployment)
+
     async def agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:
         return await self.run_module(agent_run_input)
-    
-    async def memory_run(self, memory_run_input: MemoryRunInput) -> MemoryRun:
-        return await self.run_module(memory_run_input)
 
     async def tool_run(self, tool_run_input: ToolRunInput) -> ToolRun:
         return await self.run_module(tool_run_input)
@@ -500,7 +501,9 @@ class HTTPServer:
 
     async def kb_run(self, kb_run_input: KBRunInput) -> KBRun:
         return await self.run_module(kb_run_input)
-    
+
+    async def memory_run(self, memory_run_input: MemoryRunInput) -> MemoryRun:
+        return await self.run_module(memory_run_input)
 
     async def check_module(
         self, 
@@ -515,8 +518,6 @@ class HTTPServer:
             # Determine module type and configuration
             if isinstance(module_run, AgentRun):
                 list_func = lambda db: db.list_agent_runs(module_run.id)
-            elif isinstance(module_run, MemoryRun):
-                list_func = lambda db: db.list_memory_runs(module_run.id)
             elif isinstance(module_run, ToolRun):
                 list_func = lambda db: db.list_tool_runs(module_run.id)
             elif isinstance(module_run, OrchestratorRun):
@@ -525,6 +526,8 @@ class HTTPServer:
                 list_func = lambda db: db.list_environment_runs(module_run.id)
             elif isinstance(module_run, KBRun):
                 list_func = lambda db: db.list_kb_runs(module_run.id)
+            elif isinstance(module_run, MemoryRun):
+                list_func = lambda db: db.list_memory_runs(module_run.id)
             else:
                 raise HTTPException(status_code=400, detail="Invalid module run type")
 
@@ -580,9 +583,6 @@ class HTTPServer:
 
     async def agent_check(self, agent_run: AgentRun) -> AgentRun:
         return await self.check_module(agent_run)
-    
-    async def memory_check(self, memory_run: MemoryRun) -> MemoryRun:
-        return await self.check_module(memory_run)
 
     async def tool_check(self, tool_run: ToolRun) -> ToolRun:
         return await self.check_module(tool_run)
@@ -595,6 +595,9 @@ class HTTPServer:
 
     async def kb_check(self, kb_run: KBRun) -> KBRun:
         return await self.check_module(kb_run)
+
+    async def memory_check(self, memory_run: MemoryRun) -> MemoryRun:
+        return await self.check_module(memory_run)
 
     async def stop(self):
         """Handle graceful server shutdown"""

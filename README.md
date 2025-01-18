@@ -150,16 +150,21 @@ This is useful when you want to do a complete reset and restart of the node, esp
 
 ## To reset the databases
 
-If you are having issues related to the databases, you may want to reset them. Be warned, this will delete all data in the databases. For the hub DB, you can reset it by running:
+If you are having issues related to the databases on launch (e.g. from alembic with postgres), you may want to reset them. Be warned, this will delete all data in the databases. For the hub DB, you can reset it by running:
 
 ```
 make remove-hub
 ```
 
-For the local DB, you can reset it by running (this one should be run before running `bash stop_service.sh`):
+For the local DB, you can do a soft reset it by running (this one should be run before running `bash stop_service.sh`):
 
 ```
 make local-db-reset
+```
+If after the soft reset, you are still having issues related to the database on launch, you can run a hard reset using:
+
+```
+make local-db-hard-reset
 ```
 
 ## Docker & Docker Compose
@@ -167,3 +172,4 @@ The Naptha Node providers Dockerfiles and a `docker-compose.yml` file that facil
 up-and-running as quickly and easily as possible. The node depends on a number of services, and this moduler approach 
 will allow you to run a single command (`docker compose up`) to get everything up and running, or to 
 only start the services that you need, for example if you have to use external rabbitmq/postgres/surrealdb services.
+

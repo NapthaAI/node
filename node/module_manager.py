@@ -14,6 +14,7 @@ import time
 import traceback
 from pydantic import BaseModel
 from typing import Union, Dict
+import uuid
 import yaml
 from node.schemas import (
     AgentDeployment, 
@@ -25,6 +26,8 @@ from node.schemas import (
     DataGenerationConfig,
     KBRun,
     KBDeployment,
+    MemoryRun,
+    MemoryDeployment,
     ToolRun,
     ToolDeployment,
     Module,
@@ -345,30 +348,16 @@ def load_persona(persona_dir: str, persona_module: Module):
         logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
-async def load_data_generation_config(agent_run, data_generation_config_path):
-    run_config = agent_run.deployment.data_generation_config
-    if run_config is None:
-        run_config = DataGenerationConfig()
-
-    if isinstance(run_config, DataGenerationConfig):
-        run_config = run_config.model_dump()
-    
-    if os.path.exists(data_generation_config_path):    
-        with open(data_generation_config_path, "r") as file:
-            file_config = json.loads(file.read())
-            if file_config:
-                # Start with run config as base
-                config_dict = run_config.copy()
-                
-                # Fill in None values from file config
-                for key, run_value in run_config.items():
-                    if run_value is None and key in file_config:
-                        config_dict[key] = file_config[key]
-                        
-                return DataGenerationConfig(**config_dict)
-    
-    # If no file exists or file is empty, use run config
-    return agent_run.deployment.data_generation_config
+async def load_data_generation_config(deployment, default_deployment):
+    logger.info(f"Loading data generation config for {deployment.name}")
+    if not deployment.data_generation_config:
+        deployment.data_generation_config = DataGenerationConfig()
+    incoming_config = deployment.data_generation_config.model_dump()
+    merged_config = merge_config(incoming_config, default_deployment["data_generation_config"])
+    if "save_outputs_path" in merged_config:
+        merged_config["save_outputs_path"] = f"{BASE_OUTPUT_DIR}/{str(uuid.uuid4())}/{merged_config['save_outputs_path']}"
+    deployment.data_generation_config = merged_config
+    return deployment
 
 def merge_config(input_config, default_config):
     """
@@ -392,7 +381,7 @@ def merge_config(input_config, default_config):
         return result
     return input_config if input_config is not None else default_config
 
-async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, ToolRun]:
+async def load_and_validate_input_schema(module_run: Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun, ToolRun]) -> Union[AgentRun, OrchestratorRun, EnvironmentRun, KBRun, MemoryRun, ToolRun]:
     module_name = module_run.deployment.module['name']
 
     # Replace hyphens with underscores in module name
@@ -406,7 +395,7 @@ async def load_and_validate_input_schema(module_run: Union[AgentRun, Orchestrato
     
     return module_run
 
-def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment]):
+def load_and_validate_config_schema(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, MemoryDeployment]):
     if "config_schema" in deployment.config and deployment.config["config_schema"] is not None:
         config_schema = deployment.config["config_schema"]
         module_name = deployment.module["name"].replace("-", "_")
@@ -421,7 +410,7 @@ def load_llm_configs(llm_configs_path):
         llm_configs = json.loads(file.read())
     return [LLMConfig(**config) for config in llm_configs]
 
-async def load_module_metadata(module_type: str, deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment]):
+async def load_module_metadata(module_type: str, deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, MemoryDeployment, OrchestratorDeployment]):
     logger.info(f"Loading module metadata for deployment {deployment}")
     module_name = deployment.module["name"]
 
@@ -442,7 +431,7 @@ async def load_node_metadata(deployment):
     deployment.node = node_data
     logger.info(f"Node metadata loaded {deployment.node}")
 
-async def load_module_config_data(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment], default_deployment: Dict):
+async def load_module_config_data(deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, MemoryDeployment, OrchestratorDeployment], default_deployment: Dict):
     logger.info(f"Loading module config data for {deployment.module.name}")
     module_name = deployment.module.name
     module_type = deployment.module.id.split(":")[0]
@@ -518,6 +507,14 @@ async def load_subdeployments(deployment, main_deployment_default):
             kb_deployments.append(kb_deployment)
         deployment.kb_deployments = kb_deployments
     logger.info(f"Subdeployments loaded {deployment}")
+    if hasattr(deployment, "memory_deployments") and deployment.memory_deployments:
+        memory_deployments = []
+        for i, memory_deployment in enumerate(deployment.memory_deployments):
+            deployment_name = main_deployment_default["memory_deployments"][i]["name"]
+            memory_deployment = await setup_module_deployment("memory", module_path / "configs/memory_deployments.json", deployment_name, deployment.memory_deployments[i])
+            memory_deployments.append(memory_deployment)
+        deployment.memory_deployments = memory_deployments
+    logger.info(f"Subdeployments loaded {deployment}")
     return deployment
 
 async def setup_module_deployment(module_type: str, main_deployment_default_path: str, deployment_name: str, deployment: Union[AgentDeployment, ToolDeployment, EnvironmentDeployment, KBDeployment, OrchestratorDeployment]):
@@ -530,6 +527,7 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
         "tool": ToolDeployment,
         "environment": EnvironmentDeployment,
         "kb": KBDeployment,
+        "memory": MemoryDeployment,
         "orchestrator": OrchestratorDeployment
     }
 
@@ -555,6 +553,14 @@ async def setup_module_deployment(module_type: str, main_deployment_default_path
         # Install module from default deployment
         deployment.module = await load_module_metadata(module_type, deployment_map[module_type](**default_deployment))
         await install_module_with_lock(deployment.module)
+    
+    if 'data_generation_config' in deployment_map[module_type].__fields__:
+        if "data_generation_config" not in default_deployment:
+            default_deployment["data_generation_config"] = DataGenerationConfig().model_dump()
+        if "data_generation_config" in default_deployment and default_deployment["data_generation_config"] is None:
+            default_deployment["data_generation_config"] = DataGenerationConfig().model_dump()
+        if hasattr(deployment, "data_generation_config") or "data_generation_config" in default_deployment:
+            await load_data_generation_config(deployment, default_deployment)
 
     # Fill in metadata and config data
     await load_node_metadata(deployment)
