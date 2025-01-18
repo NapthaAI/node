@@ -41,6 +41,7 @@ class NodeServer:
                         os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
                     )
                     if not success:
+                        logger.error('Failed to sign in to hub.')
                         raise Exception("Failed to sign in to hub")
                     
                     # First try to delete any existing node registration
