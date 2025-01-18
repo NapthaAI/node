@@ -13,6 +13,11 @@ services:
       RABBITMQ_DEFAULT_VHOST: '/'
       RABBITMQ_MANAGEMENT_PASSWORD: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
     restart: unless-stopped
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - node_private_network
     ports:
@@ -29,6 +34,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
     restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready", "-d", "postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - node_private_network
     # ports:
@@ -37,9 +47,10 @@ services:
   celery-worker:
     container_name: celery
     build:
-      dockerfile: celery.Dockerfile
+      dockerfile: Dockerfile-celery
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       RMQ_USER: ${RABBITMQ_USER:?error}
       RMQ_PASSWORD: ${RABBITMQ_PASSWORD?:error}
@@ -68,7 +79,7 @@ services:
     # need to use the .env file UNLESS config.py is modified
     container_name: node-app
     build:
-      dockerfile: ./node.Dockerfile
+      dockerfile: Dockerfile-node
     env_file:
       - ./.env
     # NOTE for testing - this can override the default config.py in the container
@@ -78,10 +89,14 @@ services:
       - node_private_network
     # restart: unless-stopped
     depends_on:
-      - pgvector
-      - rabbitmq
-      - celery-worker
-      - surrealdb
+      pgvector:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+      surrealdb:
+        condition: service_started
     ports:
       - '7001:7001'
 
