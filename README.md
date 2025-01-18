@@ -214,3 +214,8 @@ docker buildx build \
     -f buildx.Dockerfile \
     --load .
 ```
+## Docker & Docker Compose
+The Naptha Node providers Dockerfiles and a `docker-compose.yml` file that faciliate getting the node 
+up-and-running as quickly and easily as possible. The node depends on a number of services, and this moduler approach 
+will allow you to run a single command (`docker compose up`) to get everything up and running, or to 
+only start the services that you need, for example if you have to use external rabbitmq/postgres/surrealdb services.
