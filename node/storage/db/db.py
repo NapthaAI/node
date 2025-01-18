@@ -45,7 +45,7 @@ class DatabasePool:
 
     def _initialize(self):
         self.engine = create_engine(
-            f"postgresql://{os.getenv('LOCAL_DB_USER')}:{os.getenv('LOCAL_DB_PASSWORD')}@localhost:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}",
+            f"postgresql://{os.getenv('LOCAL_DB_USER')}:{os.getenv('LOCAL_DB_PASSWORD')}@{os.getenv('LOCAL_DB_HOST')}:{LOCAL_DB_PORT}/{LOCAL_DB_NAME}",
             poolclass=QueuePool,
             pool_size=120,          # Base pool size
             max_overflow=240,      # More overflow for 120 workers
