@@ -28,7 +28,7 @@ ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
-LITELLM_URL="http://localhost:4000"
+LITELLM_URL="http://localhost:4000" # TODO change all this
 LLM_BACKEND="ollama"
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
 OLLAMA_MODELS="phi3:mini"
@@ -56,8 +56,6 @@ PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_SURREAL_PORT=3001
 HUB_DB_SURREAL_NS="naptha"
 HUB_DB_SURREAL_NAME="naptha"
-
-print('GOT NODE IP:', NODE_IP)
 
 def get_node_config():
     """Get the node configuration."""

@@ -1,3 +1,5 @@
+import logging
+
 from dotenv import load_dotenv
 import os
 from pathlib import Path
@@ -20,6 +22,9 @@ def init_db():
     # Create the SQLAlchemy engine
     engine = create_engine(LOCAL_DB_URL)
 
+    # create all tables based on the models
+    #Base.metadata.create_all(engine)
+
     # Create an Alembic configuration object
     alembic_cfg = Config(alembic_ini_path)
     
@@ -30,11 +35,18 @@ def init_db():
     if not os.path.exists(alembic_versions_path):
         os.makedirs(alembic_versions_path)
 
-    # Generate an initial migration
-    command.revision(alembic_cfg, autogenerate=True, message="Initial migration")
-
-    # Apply the migration to the database
-    command.upgrade(alembic_cfg, "head")
+    # try to run available migrations
+    logging.info('Running migrations...')
+    try:
+        command.upgrade(alembic_cfg, 'head')
+        logging.info("Existing migrations applied successfully")
+    except Exception as e:
+        logging.error(F"No existing migrations found or applied: {e}")
+        logging.info("Generating initial migration:")
+        # Generate an initial migration
+        command.revision(alembic_cfg, autogenerate=True, message="Initial migration")
+        # Apply the migration to the database
+        command.upgrade(alembic_cfg, "head")
 
     print("Database initialization complete.")
 

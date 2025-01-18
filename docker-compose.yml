@@ -63,9 +63,8 @@ services:
   surrealdb:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
-    user: root # stupid surreal configuration
-    #pull_policy: always
-    command: ['start', 'rocksdb:/surreal_data/hub.db']
+    user: root # surrealdb has to be run as root which is dumb
+    command: start rocksdb:/surreal_data/hub.db --user ${HUB_ROOT_USER?:error} --pass ${HUB_ROOT_PASS?:error}
     networks:
       - node_private_network
     volumes:
@@ -79,8 +78,6 @@ services:
     ports:
       - '3001:8000'
 
-  # TODO - litellm will be in vllm / ollama docker-compose files since it needs to know about those services.
-
   node-app:
     # can replace this with naptha image once it's published to hub, then we just
     # need to use the .env file UNLESS config.py is modified
@@ -89,9 +86,13 @@ services:
       dockerfile: Dockerfile-node
     env_file:
       - ./.env
+    environment:
+      LOCAL_DB_HOST: pgvector # name of the service
+      LOCAL_DB_PASSWORD: ${POSTGRES_PASSWORD:?error}
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
+      - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
     networks:
       - node_private_network
     # restart: unless-stopped
