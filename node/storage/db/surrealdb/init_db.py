@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from node.config import BASE_OUTPUT_DIR, DB_NS, DB_DB, SURREALDB_PORT
+from node.config import BASE_OUTPUT_DIR, HUB_NS, HUB_DB, HUB_DB_PORT, HUB_HOSTNAME
 from node.utils import create_output_dir
 import os
 import logging
@@ -15,13 +15,12 @@ local_db_file_path = f"{file_path}/db.db"
 surql_path = f"{file_path}/data_structures"
 root_dir = file_path.parent.parent
 
-logger.info(f"DB root pass: {os.getenv('DB_ROOT_PASS')}")
-logger.info(f"DB root user: {os.getenv('DB_ROOT_USER')}")
-
-
 def import_surql():
     """Import SURQL files to the database"""
     logger.info("Importing SURQL files")
+    logger.info(f"DB root pass: {os.getenv('HUB_ROOT_USER')}")
+    logger.info(f"DB root user: {os.getenv('HUB_ROOT_PASS')}")
+
     import_files = [
         f"{surql_path}/user.surql",
         f"{surql_path}/agent_run.surql",
@@ -30,11 +29,11 @@ def import_surql():
 
     for file in import_files:
         command = f"""surreal import \
-                      --conn http://localhost:{SURREALDB_PORT} \
-                      --user {os.getenv('DB_ROOT_USER')} \
-                      --pass {os.getenv('DB_ROOT_PASS')} \
-                      --ns {DB_NS} \
-                      --db {DB_DB} \
+                      --conn http://{HUB_HOSTNAME}:{HUB_DB_PORT} \
+                      --user {os.getenv('HUB_ROOT_USER')} \
+                      --pass {os.getenv('HUB_ROOT_PASS')} \
+                      --ns {HUB_NS} \
+                      --db {HUB_DB} \
                     {file}"""
 
         try:
@@ -59,12 +58,7 @@ def init_db():
     """Initialize the database"""
     logger.info("Initializing database")
 
-    # use file storage
-    command = f"""surreal start -A \
-                  --user {os.getenv('DB_ROOT_USER')} \
-                  --bind 0.0.0.0:{SURREALDB_PORT} \
-                  --pass {os.getenv('DB_ROOT_PASS')} \
-                  rocksdb://{local_db_file_path}"""
+    command = f""" surreal isready --conn http://{HUB_HOSTNAME}:{HUB_DB_PORT}"""
 
     try:
         # Start the command in a new process and detach it
