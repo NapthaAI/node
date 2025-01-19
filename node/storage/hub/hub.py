@@ -156,11 +156,16 @@ class Hub(AsyncMixin):
         return await self.surrealdb.update(node_id, node)
 
     async def list_nodes(self, node_ip=None) -> List:
+        logging.info('listing nodes...')
         if not node_ip:
+            logging.info('Node IP not specified, listing...')
             nodes = await self.surrealdb.query("SELECT * FROM node;")
+            logging.info(f'Got nodes: {nodes}')
             return nodes[0]['result']
         else:
+            logging.info('Getting node...')
             nodes = await self.surrealdb.query("SELECT * FROM node WHERE ip=$node_ip;", {"node_ip": node_ip})
+            logging.info(f'Got notes: {nodes}')
             node = nodes[0]['result'][0]
             server_ids = node['servers']
             servers = []

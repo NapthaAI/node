@@ -181,3 +181,6 @@ ops/systemd/*
 
 .idea/
 .idea/*
+
+node/ollama/*
+!node/ollama/init_ollama.py
