@@ -156,10 +156,14 @@ class HubDBSurreal(AsyncMixin):
         return await self.surrealdb.update(node_id, node)
 
     async def list_nodes(self, node_ip=None) -> List:
+        logging.info('listing nodes...')
         if not node_ip:
+            logging.info('Node IP not specified, listing...')
             nodes = await self.surrealdb.query("SELECT * FROM node;")
+            logging.info(f'Got nodes: {nodes}')
             return nodes[0]['result']
         else:
+            logging.info('Getting node...')
             nodes = await self.surrealdb.query("SELECT * FROM node WHERE ip=$node_ip;", {"node_ip": node_ip})
             if not nodes or not nodes[0].get("result"):
                 raise Exception(f"Node {node_ip} not found in hub. Please check if the node is registered.")

@@ -1,0 +1,44 @@
+include:
+  - docker-compose.yml
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: node-ollama
+    pull_policy: always
+    tty: true
+    restart: unless-stopped
+    healthcheck:
+      test: curl http://localhost:11434/
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    volumes:
+      - ./node/ollama:/root/.ollama
+    ports:
+      - '11434:11434' # TODO do not expose in production
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    command: --config config.yml
+    restart: unless-stopped
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
+      DATABASE_URL: postgresql://${LOCAL_DB_USER?:error}:${LOCAL_DB_PASSWORD:?error}@${LOCAL_DB_HOST:?error}:5432/${LOCAL_DB_NAME:?error}
+    ports:
+      - '4000:4000' # TODO do not expose in production

@@ -56,9 +56,9 @@ services:
       - ./.env
     environment:
       RMQ_USER: ${RABBITMQ_USER:?error}
-      RMQ_PASSWORD: ${RABBITMQ_PASSWORD?:error}
+      RMQ_PASSWORD: ${RABBITMQ_PASSWORD:?error}
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
-      OPENAI_API_KEY: ${OPENAI_API_KEY?:error}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
       LOCAL_DB_HOST: pgvector
     networks:
       - node_private_network
@@ -67,7 +67,7 @@ services:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
     user: root # surrealdb has to be run as root which is dumb
-    command: start rocksdb:/surreal_data/hub.db --user ${HUB_ROOT_USER?:error} --pass ${HUB_ROOT_PASS?:error}
+    command: start rocksdb:/surreal_data/hub.db --user ${HUB_ROOT_USER:?error} --pass ${HUB_ROOT_PASS:?error}
     networks:
       - node_private_network
     volumes:

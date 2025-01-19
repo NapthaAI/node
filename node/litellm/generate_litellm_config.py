@@ -29,6 +29,7 @@ def get_ollama_models() -> List[str]:
     """Get Ollama models from config."""
     if not OLLAMA_MODELS:
         return []
+     # NOTE requires that we
     return [model.strip() for model in OLLAMA_MODELS.split(',') if model.strip()]
 
 def generate_litellm_config() -> Dict:

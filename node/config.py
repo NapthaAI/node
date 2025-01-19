@@ -30,8 +30,10 @@ ROUTING_URL="ws://node.naptha.ai:8765"
 # LLMs Inference
 LITELLM_URL="http://localhost:4000" # TODO change all this
 LLM_BACKEND="ollama"
+
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
-OLLAMA_MODELS="phi3:mini"
+OLLAMA_MODELS="phi3:mini" # these will be pulled at startup
+
 # OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
 OPENAI_MODELS="gpt-4o-mini"
 MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
@@ -61,7 +63,7 @@ def get_node_config():
     """Get the node configuration."""
     from node.user import get_public_key
     public_key = get_public_key(os.getenv("PRIVATE_KEY"))
-    return NodeConfig(
+    node_config = NodeConfig(
         id=f"node:{public_key}",
         owner=os.getenv("HUB_USERNAME"),
         public_key=public_key,
@@ -83,3 +85,5 @@ def get_node_config():
         ram=psutil.virtual_memory().total,
         vram=VRAM,
     )
+    print("Created node config:", node_config)
+    return node_config
