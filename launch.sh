@@ -833,7 +833,7 @@ linux_start_servers() {
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
     # Get the config from the .env file
-    server_type=${SERVER_TYPE:-"ws"} # Default to ws if not set
+    server_type=${SERVER_TYPE_2:-"ws"} # Default to ws if not set
     num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
     start_port=${NODE_PORT:-7002} # Starting port for alternate servers
 
@@ -940,7 +940,7 @@ darwin_start_servers() {
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
     # Get the config from the .env file
-    server_type=${SERVER_TYPE:-"ws"} # Default to ws if not set
+    server_type=${SERVER_TYPE_2:-"ws"} # Default to ws if not set
     num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
     start_port=${NODE_PORT:-7002} # Starting port for alternate servers
 

@@ -58,7 +58,7 @@ class NodeServer:
                     if "http://" in ip_:    
                         ip_ = ip_.split("//")[1]
                     server_records.append({
-                        "server_type": 'http',
+                        "server_type": self.node_config.server_type_1,
                         "node_id": self.node_id,
                         "port": http_port
                     })
@@ -66,7 +66,7 @@ class NodeServer:
                     # Create other server records
                     for i in range(self.node_config.num_servers):
                         server_records.append({
-                            "server_type": self.node_config.server_type,
+                            "server_type": self.node_config.server_type_2,
                             "node_id": self.node_id,
                             "port": self.node_config.servers[i].port
                         })

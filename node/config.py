@@ -21,8 +21,9 @@ PROVIDER_TYPES=["models", "storage", "modules"]
 # Servers
 HTTP_PORT=7001
 NUM_SERVERS=1
-SERVER_TYPE="ws" # grpc or ws
-NODE_IP="localhost"
+SERVER_TYPE_1="https" # http or https
+SERVER_TYPE_2="ws" # grpc or ws
+NODE_IP="3b0b-100-26-170-209.ngrok-free.app"
 NODE_PORT=7002
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
@@ -65,11 +66,12 @@ def get_node_config():
         owner=os.getenv("HUB_USERNAME"),
         public_key=public_key,
         ip=NODE_IP,
-        server_type=SERVER_TYPE,
+        server_type_1=SERVER_TYPE_1,
+        server_type_2=SERVER_TYPE_2,
         http_port=HTTP_PORT,
         num_servers=NUM_SERVERS,
         provider_types=PROVIDER_TYPES,
-        servers=[NodeServer(server_type=SERVER_TYPE, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
+        servers=[NodeServer(server_type=SERVER_TYPE_2, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
         models=[MODELS],
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,
