@@ -21,9 +21,9 @@ PROVIDER_TYPES=["models", "storage", "modules"]
 # Servers
 HTTP_PORT=7001
 NUM_SERVERS=1
-SERVER_TYPE_1="https" # http or https
+SERVER_TYPE_1="http" # http or https
 SERVER_TYPE_2="ws" # grpc or ws
-NODE_IP="3b0b-100-26-170-209.ngrok-free.app"
+NODE_IP="localhost"
 NODE_PORT=7002
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
