@@ -275,16 +275,16 @@
       executable: /bin/bash
     register: env_file
 
-  - name: Get NODE_PORT from .env file
-    shell: echo $NODE_PORT
-    register: node_port
+  - name: Get NODE_COMMUNICATION_PORT from .env file
+    shell: echo $NODE_COMMUNICATION_PORT
+    register: node_communication_port
     when: env_file.stdout != ""
 
   - name: Check if port is in use
-    shell: lsof -i :{{ node_port.stdout }}
+    shell: lsof -i :{{ node_communication_port.stdout }}
     failed_when: true
     changed_when: false
-    when: node_port.stdout != ""
+    when: node_communication_port.stdout != ""
 
   - name: Configure Poetry to create a virtual environment in the project directory
     command: poetry config virtualenvs.in-project true

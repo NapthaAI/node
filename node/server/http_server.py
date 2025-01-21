@@ -76,7 +76,7 @@ class HTTPServer:
         
         @self.app.get("/health")
         async def health_check():
-            return {"status": "ok", "server_type": "http"}
+            return {"status": "ok", "communication_protocol": "http"}
         
         # Handle validation errors when request data doesn't match the expected Pydantic models
         # Logs the validation error details and request body, then returns a 422 response with the error info

@@ -57,10 +57,10 @@ def get_logger(name):
 
 
 def node_to_url(node_schema: NodeConfigInput):
-    if node_schema.server_type == 'grpc':
-        return f"{node_schema.ip}:{node_schema.port}"
+    if node_schema.user_communication_protocol == 'grpc':
+        return f"{node_schema.ip}:{node_schema.user_communication_port}"
     else:
-        return f"{node_schema.server_type}://{node_schema.ip}:{node_schema.http_port}"
+        return f"{node_schema.user_communication_protocol}://{node_schema.ip}:{node_schema.user_communication_port}"
 
 def get_external_ip():
     """Get the external IP address of the node. If the IP address is not found, raise an error."""

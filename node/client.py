@@ -30,7 +30,7 @@ class Node:
     def __init__(self, node_schema: NodeConfigInput):
         self.node_schema = node_schema
         self.node_url = node_to_url(node_schema)
-        self.server_type = node_schema.server_type
+        self.communication_protocol = node_schema.communication_protocol
         self.connections = {}
         self.access_token = None
 
@@ -97,7 +97,7 @@ class Node:
 
     async def check_health(self):
         # only works for http and ws
-        if self.server_type == "http" or self.server_type == "ws":
+        if self.communication_protocol == "http" or self.communication_protocol == "ws":
             try:
                 async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                     response = await client.get(f"{self.node_url}/health")
@@ -111,21 +111,21 @@ class Node:
 
     async def check_user(self, user_input):
         print("Checking user... ", user_input)
-        if self.server_type == "http":
+        if self.communication_protocol == "http":
             return await self.check_user_http(user_input)
-        elif self.server_type == "ws":
+        elif self.communication_protocol == "ws":
             return await self.check_user_ws(user_input)
-        elif self.server_type == "grpc":
+        elif self.communication_protocol == "grpc":
             return await self.check_user_grpc(user_input)
         else:
             raise ValueError("Invalid server type")
 
     async def register_user(self, user_input):
-        if self.server_type == "http":
+        if self.communication_protocol == "http":
             result = await self.register_user_http(user_input)
-        elif self.server_type == "ws":
+        elif self.communication_protocol == "ws":
             result = await self.register_user_ws(user_input)
-        elif self.server_type == "grpc":
+        elif self.communication_protocol == "grpc":
             result = await self.register_user_grpc(user_input)
         else:
             raise ValueError("Invalid server type")
@@ -136,11 +136,11 @@ class Node:
         return result
 
     async def run_agent(self, agent_run_input: AgentRunInput) -> AgentRun:
-        if self.server_type == "http":
+        if self.communication_protocol == "http":
             result = await self.run_agent_and_poll(agent_run_input)
-        elif self.server_type == "ws":
+        elif self.communication_protocol == "ws":
             result = await self.run_agent_ws(agent_run_input)
-        elif self.server_type == "grpc":
+        elif self.communication_protocol == "grpc":
             result = await self.run_agent_grpc(agent_run_input)
         else:
             raise ValueError("Invalid server type")
@@ -203,7 +203,7 @@ class Node:
 
     async def run_agent_and_poll(self, agent_run_input: AgentRunInput) -> AgentRun:
         assert (
-            self.server_type == "http"
+            self.communication_protocol == "http"
         ), "run_agent_and_poll should only be called for HTTP server type"
         agent_run = await self.run_agent_http(agent_run_input)
         print(f"Agent run started: {agent_run}")

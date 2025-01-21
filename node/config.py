@@ -19,12 +19,12 @@ DEV_MODE=True
 PROVIDER_TYPES=["models", "storage", "modules"]
 
 # Servers
-HTTP_PORT=7001
-NUM_SERVERS=1
-SERVER_TYPE_1="http" # http or https
-SERVER_TYPE_2="ws" # grpc or ws
+USER_COMMUNICATION_PORT=7001
+USER_COMMUNICATION_PROTOCOL="https" # http or https
+NUM_NODE_COMMUNICATION_SERVERS=1
+NODE_COMMUNICATION_PORT=7002
+NODE_COMMUNICATION_PROTOCOL="ws" # grpc or ws
 NODE_IP="localhost"
-NODE_PORT=7002
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
@@ -66,12 +66,12 @@ def get_node_config():
         owner=os.getenv("HUB_USERNAME"),
         public_key=public_key,
         ip=NODE_IP,
-        server_type_1=SERVER_TYPE_1,
-        server_type_2=SERVER_TYPE_2,
-        http_port=HTTP_PORT,
-        num_servers=NUM_SERVERS,
+        user_communication_protocol=USER_COMMUNICATION_PROTOCOL,
+        user_communication_port=USER_COMMUNICATION_PORT,
+        node_communication_protocol=NODE_COMMUNICATION_PROTOCOL,
+        num_node_communication_servers=NUM_NODE_COMMUNICATION_SERVERS,
         provider_types=PROVIDER_TYPES,
-        servers=[NodeServer(server_type=SERVER_TYPE_2, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
+        servers=[NodeServer(communication_protocol=NODE_COMMUNICATION_PROTOCOL, port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
         models=[MODELS],
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,

@@ -103,8 +103,8 @@ restart-servers:
 			launchctl load $$plist) & \
 		done; \
 	else \
-		SERVER_TYPE=$$(grep SERVER_TYPE .env | cut -d '=' -f2 | tr -d '"' | tr -d ' ') && \
-		for service in $$(systemctl list-units --plain --no-legend --type=service | grep "nodeapp_$$SERVER_TYPE" | grep "loaded" | awk '{print $$1}'); do \
+		NODE_COMMUNICATION_PROTOCOL=$$(grep NODE_COMMUNICATION_PROTOCOL .env | cut -d '=' -f2 | tr -d '"' | tr -d ' ') && \
+		for service in $$(systemctl list-units --plain --no-legend --type=service | grep "nodeapp_$$NODE_COMMUNICATION_PROTOCOL" | grep "loaded" | awk '{print $$1}'); do \
 			if systemctl is-active --quiet $$service; then \
 				(echo "Restarting $$service" && \
 				sudo systemctl restart $$service && \
