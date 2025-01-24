@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union, Any
 from pydantic import BaseModel, Field
-from node.storage.schemas import StorageType
+from node.storage.schemas import StorageType, StorageConfig
 
 class NodeServer(BaseModel):
     server_type: str
@@ -29,9 +29,6 @@ class NodeConfig(BaseModel):
     os: Optional[str] = Field(default=None)
     ram: Optional[int] = Field(default=None)
     vram: Optional[int] = Field(default=None)
-
-    class Config:
-        allow_mutation = True
 
 class NodeConfigInput(BaseModel):
     ip: str
@@ -100,33 +97,35 @@ class EnvironmentConfig(BaseModel):
     config_name: Optional[str] = None
     config_schema: Optional[str] = None
     environment_type: Optional[str] = None
+    storage_config: Optional[StorageConfig] = None
+
+    def model_dict(self):
+        if isinstance(self.storage_config, StorageConfig):
+            self.storage_config = self.storage_config.model_dict()
+        model_dict = self.dict()
+        model_dict['storage_config'] = self.storage_config
+        return model_dict
 
 class KBConfig(BaseModel):
     config_name: Optional[str] = None
-    storage_type: StorageType
-    path: str
-    schema: Dict[str, Any]
-    options: Optional[Dict[str, Any]] = None
+    storage_config: Optional[StorageConfig] = None
 
     def model_dict(self):
-        if isinstance(self.storage_type, StorageType):
-            self.storage_type = self.storage_type.value
+        if isinstance(self.storage_config, StorageConfig):
+            self.storage_config = self.storage_config.model_dict()
         model_dict = self.dict()
-        model_dict['storage_type'] = self.storage_type
+        model_dict['storage_config'] = self.storage_config
         return model_dict
 
 class MemoryConfig(BaseModel):
     config_name: Optional[str] = None
-    storage_type: StorageType
-    path: str
-    schema: Dict[str, Any]
-    options: Optional[Dict[str, Any]] = None
+    storage_config: Optional[StorageConfig] = None
 
     def model_dict(self):
-        if isinstance(self.storage_type, StorageType):
-            self.storage_type = self.storage_type.value
+        if isinstance(self.storage_config, StorageConfig):
+            self.storage_config = self.storage_config.model_dict()
         model_dict = self.dict()
-        model_dict['storage_type'] = self.storage_type
+        model_dict['storage_config'] = self.storage_config
         return model_dict
 
 class DataGenerationConfig(BaseModel):
@@ -200,20 +199,6 @@ class DockerParams(BaseModel):
     docker_output_dir: Optional[str] = None
     save_location: str = "node"
 
-    class Config:
-        allow_mutation = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-
-    def model_dict(self):
-        model_dict = self.dict()
-        for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-        return model_dict
-
-
 class AgentRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -231,12 +216,6 @@ class AgentRun(BaseModel):
     input_schema_ipfs_hash: Optional[str] = None
     signature: str
 
-    class Config:
-        allow_mutation = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-
     def model_dict(self):
         model_dict = self.dict()
         if isinstance(self.deployment.config, BaseModel):
@@ -246,9 +225,7 @@ class AgentRun(BaseModel):
             inputs = self.inputs.model_dump()
             model_dict['inputs'] = inputs
         for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-            elif isinstance(value, ModuleExecutionType):
+            if isinstance(value, ModuleExecutionType):
                 model_dict[key] = value.value
         for i, orchestrator_run in enumerate(model_dict['orchestrator_runs']):
             for key, value in orchestrator_run.items():
