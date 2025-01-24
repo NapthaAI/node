@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Union, Any
 from pydantic import BaseModel, Field
-from node.storage.schemas import StorageType
+from node.storage.schemas import StorageType, StorageConfig
 
 class NodeServer(BaseModel):
     server_type: str
@@ -100,33 +100,35 @@ class EnvironmentConfig(BaseModel):
     config_name: Optional[str] = None
     config_schema: Optional[str] = None
     environment_type: Optional[str] = None
+    storage_config: Optional[StorageConfig] = None
+
+    def model_dict(self):
+        if isinstance(self.storage_config, StorageConfig):
+            self.storage_config = self.storage_config.model_dict()
+        model_dict = self.dict()
+        model_dict['storage_config'] = self.storage_config
+        return model_dict
 
 class KBConfig(BaseModel):
     config_name: Optional[str] = None
-    storage_type: StorageType
-    path: str
-    schema: Dict[str, Any]
-    options: Optional[Dict[str, Any]] = None
+    storage_config: Optional[StorageConfig] = None
 
     def model_dict(self):
-        if isinstance(self.storage_type, StorageType):
-            self.storage_type = self.storage_type.value
+        if isinstance(self.storage_config, StorageConfig):
+            self.storage_config = self.storage_config.model_dict()
         model_dict = self.dict()
-        model_dict['storage_type'] = self.storage_type
+        model_dict['storage_config'] = self.storage_config
         return model_dict
 
 class MemoryConfig(BaseModel):
     config_name: Optional[str] = None
-    storage_type: StorageType
-    path: str
-    schema: Dict[str, Any]
-    options: Optional[Dict[str, Any]] = None
+    storage_config: Optional[StorageConfig] = None
 
     def model_dict(self):
-        if isinstance(self.storage_type, StorageType):
-            self.storage_type = self.storage_type.value
+        if isinstance(self.storage_config, StorageConfig):
+            self.storage_config = self.storage_config.model_dict()
         model_dict = self.dict()
-        model_dict['storage_type'] = self.storage_type
+        model_dict['storage_config'] = self.storage_config
         return model_dict
 
 class DataGenerationConfig(BaseModel):
