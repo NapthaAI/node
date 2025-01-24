@@ -191,129 +191,55 @@ class Hub(AsyncMixin):
     async def delete_server(self, server_id: str) -> bool:
         return await self.surrealdb.delete(server_id)
 
+    async def list_modules(self, module_type: str, module_name: str = None) -> List:
+        """
+        List modules from the database.
+        
+        Args:
+            module_type: Type of module (agent, tool, orchestrator, environment, kb, memory, persona)
+            module_name: Optional name to filter by
+        """
+        try:
+            if ':' in str(module_name):
+                module_name = module_name.split(':')[1]
+
+            if not module_name:
+                result = await self.surrealdb.query(f"SELECT * FROM {module_type};")
+                if not result or not result[0].get("result"):
+                    return []
+                return [Module(**item) for item in result[0]["result"]]
+            else:
+                result = await self.surrealdb.query(
+                    f"SELECT * FROM {module_type} WHERE name = $module_name LIMIT 1;",
+                    {"module_name": module_name}
+                )
+                if not result or not result[0].get("result") or not result[0]["result"]:
+                    return None
+                return Module(**result[0]["result"][0])
+        except Exception as e:
+            logger.error(f"Error querying {module_type} from database: {e}")
+            raise e
+        
     async def list_agents(self, agent_name=None) -> List:
-        try:
-            if not agent_name:
-                result = await self.surrealdb.query("SELECT * FROM agent;")
-                if not result or not result[0].get("result"):
-                    return []
-                return [Module(**agent) for agent in result[0]["result"]]
-            else:
-                if ':' in agent_name:
-                    agent_name = agent_name.split(':')[1]
-                result = await self.surrealdb.query(
-                    "SELECT * FROM agent WHERE name = $agent_name;",
-                    {"agent_name": agent_name}
-                )
-                if not result or not result[0].get("result") or not result[0]["result"]:
-                    return None
-                return Module(**result[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying agents from database: {e}")
-            raise e
-
+        return await self.list_modules("agent", agent_name)
+    
     async def list_tools(self, tool_name=None) -> List:
-        try:
-            if not tool_name:
-                result = await self.surrealdb.query("SELECT * FROM tool;")
-                if not result or not result[0].get("result"):
-                    return []
-                return [Module(**tool) for tool in result[0]["result"]]
-            else:
-                if ':' in tool_name:
-                    tool_name = tool_name.split(':')[1]
-                result = await self.surrealdb.query(
-                    "SELECT * FROM tool WHERE name = $tool_name;",
-                    {"tool_name": tool_name}
-                )
-                if not result or not result[0].get("result") or not result[0]["result"]:
-                    return None
-                return Module(**result[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying tools from database: {e}")
-            raise e
-
+        return await self.list_modules("tool", tool_name)
+    
     async def list_orchestrators(self, orchestrator_name=None) -> List:
-        try:
-            if not orchestrator_name:
-                orchestrators = await self.surrealdb.query("SELECT * FROM orchestrator;")
-                return [Module(**orchestrator) for orchestrator in orchestrators[0]["result"]]
-            else:
-                if ':' in orchestrator_name:
-                    orchestrator_name = orchestrator_name.split(':')[1]
-                orchestrator = await self.surrealdb.query(
-                    "SELECT * FROM orchestrator WHERE name=$orchestrator_name;", 
-                    {"orchestrator_name": orchestrator_name}
-                )
-                return Module(**orchestrator[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying orchestrators from database: {e}")
-            raise e
-
+        return await self.list_modules("orchestrator", orchestrator_name)
+    
     async def list_environments(self, environment_name=None) -> List:
-        try:
-            if not environment_name:
-                environments = await self.surrealdb.query("SELECT * FROM environment;")
-                return [Module(**environment) for environment in environments[0]["result"]]
-            else:
-                if ':' in environment_name:
-                    environment_name = environment_name.split(':')[1]
-                environment = await self.surrealdb.query("SELECT * FROM environment WHERE name=$environment_name;", {"environment_name": environment_name})
-                return Module(**environment[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying environments from database: {e}")
-            raise e
-
+        return await self.list_modules("environment", environment_name)
+    
     async def list_personas(self, persona_name=None) -> List:
-        try:
-            if not persona_name:
-                result = await self.surrealdb.query("SELECT * FROM persona;")
-                if not result or not result[0].get("result"):
-                    return []
-                return [Module(**persona) for persona in result[0]["result"]]
-            else:
-                if ':' in persona_name:
-                    persona_name = persona_name.split(':')[1]
-                result = await self.surrealdb.query(
-                    "SELECT * FROM persona WHERE name = $persona_name;",
-                    {"persona_name": persona_name}
-                )
-                if not result or not result[0].get("result") or not result[0]["result"]:
-                    return None
-                return Module(**result[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying personas from database: {e}")
-            raise e
+        return await self.list_modules("persona", persona_name)
 
     async def list_knowledge_bases(self, knowledge_base_name=None) -> List:
-        try:
-            if not knowledge_base_name:
-                knowledge_bases = await self.surrealdb.query("SELECT * FROM kb;")
-                return [Module(**knowledge_base) for knowledge_base in knowledge_bases[0]["result"]]
-            else:
-                if ':' in knowledge_base_name:
-                    knowledge_base_name = knowledge_base_name.split(':')[1]
-                knowledge_base = await self.surrealdb.query("SELECT * FROM kb WHERE name=$knowledge_base_name;", {"knowledge_base_name": knowledge_base_name})
-                logger.info(f"Knowledge base: {knowledge_base}")
-                return Module(**knowledge_base[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying knowledge bases from database: {e}")
-            raise e
-
+        return await self.list_modules("kb", knowledge_base_name)
+    
     async def list_memory_modules(self, memory_module_name=None) -> List:
-        try:
-            if not memory_module_name:
-                memory_modules = await self.surrealdb.query("SELECT * FROM memory;")
-                return [Module(**memory_module) for memory_module in memory_modules[0]["result"]]
-            else:
-                if ':' in memory_module_name:
-                    memory_module_name = memory_module_name.split(':')[1]
-                memory_module = await self.surrealdb.query("SELECT * FROM memory WHERE name=$memory_module_name;", {"memory_module_name": memory_module_name})
-                logger.info(f"Memory module: {memory_module}")
-                return Module(**memory_module[0]["result"][0])
-        except Exception as e:
-            logger.error(f"Error querying memory modules from database: {e}")
-            raise e
+        return await self.list_modules("memory", memory_module_name)
 
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
