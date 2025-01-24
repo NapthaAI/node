@@ -30,9 +30,6 @@ class NodeConfig(BaseModel):
     ram: Optional[int] = Field(default=None)
     vram: Optional[int] = Field(default=None)
 
-    class Config:
-        allow_mutation = True
-
 class NodeConfigInput(BaseModel):
     ip: str
     http_port: Optional[int] = None
@@ -202,20 +199,6 @@ class DockerParams(BaseModel):
     docker_output_dir: Optional[str] = None
     save_location: str = "node"
 
-    class Config:
-        allow_mutation = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-
-    def model_dict(self):
-        model_dict = self.dict()
-        for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-        return model_dict
-
-
 class AgentRun(BaseModel):
     consumer_id: str
     inputs: Optional[Union[Dict, BaseModel, DockerParams]] = None
@@ -233,12 +216,6 @@ class AgentRun(BaseModel):
     input_schema_ipfs_hash: Optional[str] = None
     signature: str
 
-    class Config:
-        allow_mutation = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
-
     def model_dict(self):
         model_dict = self.dict()
         if isinstance(self.deployment.config, BaseModel):
@@ -248,9 +225,7 @@ class AgentRun(BaseModel):
             inputs = self.inputs.model_dump()
             model_dict['inputs'] = inputs
         for key, value in model_dict.items():
-            if isinstance(value, datetime):
-                model_dict[key] = value.isoformat()
-            elif isinstance(value, ModuleExecutionType):
+            if isinstance(value, ModuleExecutionType):
                 model_dict[key] = value.value
         for i, orchestrator_run in enumerate(model_dict['orchestrator_runs']):
             for key, value in orchestrator_run.items():
