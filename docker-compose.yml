@@ -18,8 +18,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - node_private_network
     ports:
       - '5672:5672' # exposed for testing, but should not be in production.
       # - '15672:15672' # this is the management port, e.g. if you want rabbitmq:4-management
@@ -31,8 +29,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # init SQL script to create databases etc.
     environment:
-      POSTGRES_USER: postgres
-      PGUSER: postgres
+      POSTGRES_USER: ${LOCAL_DB_USER?:error}
+      PGUSER: ${LOCAL_DB_USER?:error}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
     restart: unless-stopped
     healthcheck:
@@ -40,8 +38,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - node_private_network
     ports:
       - '5433:5432' # exposed for testing, but should not be for production
 
@@ -60,16 +56,12 @@ services:
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
       LOCAL_DB_HOST: pgvector
-    networks:
-      - node_private_network
 
   surrealdb:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
     user: root # surrealdb has to be run as root which is dumb
     command: start rocksdb:/surreal_data/hub.db --user ${HUB_ROOT_USER:?error} --pass ${HUB_ROOT_PASS:?error}
-    networks:
-      - node_private_network
     volumes:
       - surreal_data:/surreal_data
     restart: unless-stopped
@@ -96,8 +88,6 @@ services:
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
-    networks:
-      - node_private_network
     # restart: unless-stopped
     depends_on:
       pgvector:
@@ -110,9 +100,6 @@ services:
         condition: service_started
     ports:
       - '7001:7001'
-
-networks:
-  node_private_network:
 
 volumes:
   rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs

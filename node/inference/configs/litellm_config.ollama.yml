@@ -1,0 +1,9 @@
+model_list:
+
+  # vllm-0-hermes
+  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
+    litellm_params:
+      model: ollama_chat/hermes3:8b
+      api_base: http://ollama:11434
+      api_key: none
+
