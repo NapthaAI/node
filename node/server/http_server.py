@@ -47,11 +47,15 @@ from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb, run_memory
 from node.client import Node as NodeClient
 from node.storage.server import router as storage_router
+import os
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
 LITELLM_HTTP_TIMEOUT = 60*5
+LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY")
+if not LITELLM_MASTER_KEY:
+    raise Exception("Missing LITELLM_MASTER_KEY for authentication")
 
 class TransientDatabaseError(Exception):
     pass
@@ -296,7 +300,10 @@ class HTTPServer:
                 async with httpx.AsyncClient(timeout=LITELLM_HTTP_TIMEOUT) as client:
                     response = await client.post(
                         f"{LITELLM_URL}/chat/completions",
-                        json=request.model_dump(exclude_none=True)
+                        json=request.model_dump(exclude_none=True),
+                        headers={
+                            "Authorization": f"Bearer {LITELLM_MASTER_KEY}"
+                        }
                     )
                     logger.info(f"LiteLLM response: {response.json()}")
                     return response.json()
@@ -624,7 +631,7 @@ class HTTPServer:
             limit_concurrency=200,
             backlog=4096,
             reload=False,  # Important: set to False for proper shutdown
-            timeout_graceful_shutdown=30  # Add explicit graceful shutdown timeout
+            timeout_graceful_shutdown=30,  # Add explicit graceful shutdown timeout
         )
         self.server = uvicorn.Server(config)
         self._started = True
