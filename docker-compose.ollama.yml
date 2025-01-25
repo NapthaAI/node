@@ -1,0 +1,36 @@
+include:
+  - docker-compose.yml
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: node-ollama
+    entrypoint: /bin/bash -c "(/bin/ollama serve &); sleep 5 && /bin/ollama run hermes3:8b"
+    tty: true
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    volumes:
+      - ./node/ollama/models:/root/.ollama
+    ports:
+      - '11435:11434' # TODO do not expose in production
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    command: --config /app/config.yaml
+    restart: unless-stopped
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
+      DATABASE_URL: postgresql://${LOCAL_DB_USER?:error}:${LOCAL_DB_PASSWORD:?error}@pgvector:5432/${LOCAL_DB_NAME:?error}
+    volumes:
+      - ./node/inference/configs/litellm_config.ollama.yml:/app/config.yaml
+    ports:
+      - '4000:4000' # TODO do not expose in production
+
+networks:
+  default:
+    name: node-network
