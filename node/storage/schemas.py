@@ -80,3 +80,9 @@ class IPFSOptions(BaseModel):
         default=False, 
         description="Resolve IPNS name to IPFS hash"
     )
+
+class StorageConfig(BaseModel):
+    storage_type: StorageType
+    path: str
+    storage_schema: Dict[str, Any]
+    options: Dict[str, Any] = Field(default_factory=dict)

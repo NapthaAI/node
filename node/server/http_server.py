@@ -126,7 +126,7 @@ class HTTPServer:
             :param tool_input: ToolDeployment 
             :return: ToolDeployment
             """
-            return await self.create_module(tool_input)
+            return await self.tool_create(tool_input)
 
         @router.post("/tool/run")
         async def tool_run_endpoint(tool_run_input: ToolRunInput) -> ToolRun:
@@ -470,21 +470,27 @@ class HTTPServer:
             )
 
     async def agent_create(self, agent_deployment: AgentDeployment) -> AgentDeployment:
+        agent_deployment.module['module_type'] = "agent"
         return await self.create_module(agent_deployment)
 
     async def tool_create(self, tool_deployment: ToolDeployment) -> ToolDeployment:
+        tool_deployment.module['module_type'] = "tool"
         return await self.create_module(tool_deployment)
 
     async def orchestrator_create(self, orchestrator_deployment: OrchestratorDeployment) -> OrchestratorDeployment:
+        orchestrator_deployment.module['module_type'] = "orchestrator"
         return await self.create_module(orchestrator_deployment)
     
     async def environment_create(self, environment_deployment: EnvironmentDeployment) -> EnvironmentDeployment:
+        environment_deployment.module['module_type'] = "environment"
         return await self.create_module(environment_deployment)
 
     async def kb_create(self, kb_deployment: KBDeployment) -> KBDeployment:
+        kb_deployment.module['module_type'] = "kb"
         return await self.create_module(kb_deployment)
 
     async def memory_create(self, memory_deployment: MemoryDeployment) -> MemoryDeployment:
+        memory_deployment.module['module_type'] = "memory"
         return await self.create_module(memory_deployment)
 
     async def agent_run(self, agent_run_input: AgentRunInput) -> AgentRun:

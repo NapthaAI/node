@@ -1,19 +1,23 @@
 import asyncio
+from contextlib import contextmanager
 import functools
 import inspect
+from importlib import util
 import json
 import logging
 import os
 import pytz
+from pathlib import Path
 import sys
+import subprocess
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from typing import Union
+import sys
 
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
-from node.module_manager import install_module_with_lock, load_module
+from node.module_manager import install_module_with_lock, load_and_validate_input_schema
 from node.schemas import AgentRun, MemoryRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
 from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upload_to_ipfs
@@ -171,6 +175,93 @@ async def maybe_async_call(func, *args, **kwargs):
             None, functools.partial(func, *args, **kwargs)
         )
 
+class ModuleLoader:
+    def __init__(self, module_name: str, venv_path: str, module_dir: Path):
+        self.module_name = module_name
+        self.venv_path = venv_path
+        self.module_dir = module_dir
+        self.original_sys_path = None
+        self.original_cwd = None
+
+    @contextmanager
+    def package_context(self):
+        """Temporarily modify sys.path and working directory for package imports"""
+        try:
+            self.original_sys_path = sys.path.copy()
+            self.original_cwd = os.getcwd()
+            
+            # Change working directory to module directory
+            os.chdir(str(self.module_dir))
+            
+            # Add both site-packages and module root directory to path
+            venv_site_packages = os.path.join(
+                self.venv_path, 
+                'lib', 
+                f'python{sys.version_info.major}.{sys.version_info.minor}',
+                'site-packages'
+            )
+            
+            # Ensure module directory is first in path
+            if str(self.module_dir) in sys.path:
+                sys.path.remove(str(self.module_dir))
+            if str(venv_site_packages) in sys.path:
+                sys.path.remove(str(venv_site_packages))
+                
+            sys.path.insert(0, str(self.module_dir))
+            sys.path.insert(1, str(venv_site_packages))
+            
+            logger.info(f"Modified sys.path: {sys.path[:2]}")
+            logger.info(f"Current working directory: {os.getcwd()}")
+            
+            yield
+            
+        finally:
+            if self.original_sys_path:
+                sys.path = self.original_sys_path
+            if self.original_cwd:
+                os.chdir(self.original_cwd)
+
+    async def load_and_run(self, module_path: Path, entrypoint: str, module_run):
+        with self.package_context():
+            try:
+                # Remove any existing module references
+                for key in list(sys.modules.keys()):
+                    if key.startswith(self.module_name):
+                        del sys.modules[key]
+
+                # Import the run module directly first
+                spec = util.spec_from_file_location(
+                    f"{self.module_name}.run", 
+                    str(module_path)
+                )
+                if not spec or not spec.loader:
+                    raise ImportError(f"Could not load module spec from {module_path}")
+                
+                module = util.module_from_spec(spec)
+                sys.modules[f"{self.module_name}.run"] = module
+                spec.loader.exec_module(module)
+
+                # Get and execute the entrypoint function
+                run_func = getattr(module, entrypoint)
+                
+                # Convert module_run to dict if it's a pydantic model
+                if hasattr(module_run, 'model_dump'):
+                    module_run_dict = module_run.model_dump()
+                else:
+                    module_run_dict = module_run
+                
+                if inspect.iscoroutinefunction(run_func):
+                    result = await run_func(module_run=module_run_dict)
+                else:
+                    result = await maybe_async_call(run_func, module_run=module_run_dict)
+                
+                return result
+
+            except Exception as e:
+                logger.error(f"Module import paths: {sys.path[:2]}")
+                logger.error(f"Current working directory: {os.getcwd()}")
+                logger.error(f"Module directory contents: {list(Path(os.getcwd()).glob('*'))}")
+                raise RuntimeError(f"Module execution failed: {str(e)}") from e
 
 class ModuleRunEngine:
     def __init__(self, module_run: Union[AgentRun, MemoryRun, ToolRun, EnvironmentRun, KBRun]):
@@ -203,7 +294,7 @@ class ModuleRunEngine:
             )
 
         # Load the module
-        self.module_func, self.module_run = await load_module(self.module_run)
+        self.module_run = await load_and_validate_input_schema(self.module_run)
 
     async def start_run(self):
         """Executes the module run"""
@@ -211,33 +302,47 @@ class ModuleRunEngine:
         self.module_run.status = "running"
         await update_db_with_status_sync(module_run=self.module_run)
 
-        logger.info(f"{self.module_type.title()} deployment: {self.deployment}")
-
         try:
-            kwargs = {"module_run": self.module_run.model_dict()}
-            response = await maybe_async_call(self.module_func, **kwargs)
+            # Setup paths
+            modules_source_dir = Path(MODULES_SOURCE_DIR) / self.module_name
+            module_dir = modules_source_dir  
+            venv_dir = module_dir / ".venv"
+            module_path = module_dir / self.module_name / "run.py"
+            
+            # Log package structure
+            logger.info(f"Checking module structure...")
+            logger.info(f"__init__.py exists: {(module_dir / self.module_name / '__init__.py').exists()}")
+            logger.info(f"schemas.py exists: {(module_dir / self.module_name / 'schemas.py').exists()}")
+            logger.info(f"Module directory contents: {list((module_dir / self.module_name).glob('*'))}")
+
+            # Get entrypoint name
+            entrypoint = self.module['module_entrypoint'].split('.')[0] if 'module_entrypoint' in self.module else 'run'
+            
+            # Initialize loader with module directory
+            loader = ModuleLoader(self.module_name, str(venv_dir), module_dir)
+            
+            # Run module
+            response = await loader.load_and_run(
+                module_path=module_path,
+                entrypoint=entrypoint,
+                module_run=self.module_run
+            )
+            
+            # Handle response
+            if isinstance(response, str):
+                self.module_run.results = [response]
+            else:
+                self.module_run.results = [json.dumps(response)]
+                
+            if self.module_type == "agent":
+                await self.handle_output(self.module_run, response)
+                
+            self.module_run.status = "completed"
+
         except Exception as e:
             logger.error(f"Error running {self.module_type}: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
-
-        logger.info(f"{self.module_type.title()} run response: {response}")
-
-        if isinstance(response, (dict, list, tuple)):
-            response = json.dumps(response)
-        elif isinstance(response, BaseModel):
-            response = response.model_dump_json()
-
-        if not isinstance(response, str):
-            raise ValueError(f"{self.module_type.title()} response is not a string: {response}. Current response type: {type(response)}")
-
-        self.module_run.results = [response]
-        
-        # Handle output for agent runs
-        if self.module_type == "agent":
-            await self.handle_output(self.module_run, response)
-            
-        self.module_run.status = "completed"
 
     async def handle_output(self, module_run, results):
         """Handles the output of the module run (only for agent and tool runs)"""
