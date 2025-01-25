@@ -1,10 +1,11 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from dotenv import load_dotenv
 import fcntl
 import shutil
 from git import Repo
 from git.exc import GitCommandError, InvalidGitRepositoryError
 import importlib
+import io
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from pathlib import Path
 import subprocess
 import time
 import traceback
+from pip._internal.cli.main import main as pip_main
 from pydantic import BaseModel
 import sys
 from typing import Union, Dict
@@ -33,8 +35,7 @@ from node.schemas import (
     ToolDeployment,
     Module,
     OrchestratorDeployment,
-    OrchestratorRun,
-    AgentConfig
+    OrchestratorRun
 )
 from node.worker.utils import download_from_ipfs, unzip_file
 from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
@@ -347,7 +348,6 @@ def run_poetry_command(command, module_name=None):
 
 def install_module(module_name: str, module_version: str, module_source_url: str):
     logger.info(f"Installing/updating module {module_name} version {module_version}")
-    
     modules_source_dir = Path(MODULES_SOURCE_DIR) / module_name
     logger.info(f"Module path exists: {modules_source_dir.exists()}")
 
@@ -357,22 +357,20 @@ def install_module(module_name: str, module_version: str, module_source_url: str
         else:
             install_module_from_git(module_name, module_version, module_source_url)
 
-        # Create virtualenv directly
+        # Create venv
         venv_dir = modules_source_dir / ".venv"
-        subprocess.run(
-            [sys.executable, "-m", "venv", str(venv_dir)],
-            check=True
-        )
+        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
 
-        # Get pip path in new venv
         pip_path = venv_dir / "bin" / "pip"
-        
-        # Install dependencies from pyproject.toml using pip
-        subprocess.run(
-            [str(pip_path), "install", "-e", str(modules_source_dir)],
-            check=True,
-            capture_output=True
-        )
+        install_cmd = [str(pip_path), "install", "-e", str(modules_source_dir)]
+
+        # Capture stdout/stderr
+        proc = subprocess.run(install_cmd, capture_output=True, text=True)
+        logger.info(f"Pip install stdout: {proc.stdout}")
+        logger.info(f"Pip install stderr: {proc.stderr}")
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Pip install failed: {proc.stderr}")
 
         if not verify_module_installation(module_name):
             raise RuntimeError(f"Module {module_name} failed verification after installation")
@@ -383,6 +381,7 @@ def install_module(module_name: str, module_version: str, module_source_url: str
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
+
 
 def load_persona(persona_dir: str, persona_module: Module):
     """Load persona from a JSON or YAML file in a git repository."""
