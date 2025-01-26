@@ -109,6 +109,26 @@ linux_install_ollama() {
         sudo curl -fsSL https://ollama.com/install.sh | sh
     }
 
+    create_ollama_service() {
+        # Create systemd service file
+        cat > /tmp/ollama.service << EOF
+[Unit]
+Description=Ollama Service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+        sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+    }
+
     restart_ollama_linux() {
         sudo systemctl daemon-reload
         sudo systemctl enable ollama
@@ -148,10 +168,12 @@ linux_install_ollama() {
     # Case 3: Latest version already installed
     else
         echo "Latest version of Ollama (${current_version}) is already installed" | log_with_service_name "Ollama" $RED
-        sudo cp ./ops/systemd/ollama.service /etc/systemd/system/
     fi
 
+    # Create and install systemd service file
+    create_ollama_service
     restart_ollama_linux
+
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
     IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
