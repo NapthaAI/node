@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import jwt
 import logging
 from node.utils import AsyncMixin
-from node.config import HUB_DB, HUB_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
+from node.config import HUB_DB_SURREAL_NAME, HUB_DB_SURREAL_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import Module, NodeConfig, NodeServer
 import os
 from surrealdb import Surreal
@@ -19,8 +19,8 @@ class Hub(AsyncMixin):
             self.hub_url = LOCAL_HUB_URL
         else:
             self.hub_url = PUBLIC_HUB_URL
-        self.ns = HUB_NS
-        self.db = HUB_DB
+        self.ns = HUB_DB_SURREAL_NS
+        self.db = HUB_DB_SURREAL_NAME
 
         self.surrealdb = Surreal(self.hub_url)
         self.is_authenticated = False

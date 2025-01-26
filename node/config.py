@@ -37,8 +37,8 @@ OPENAI_MODELS="gpt-4o-mini"
 MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
-LOCAL_DB_PORT=3002
-LOCAL_DB_NAME="naptha"
+LOCAL_DB_POSTGRES_PORT=3002
+LOCAL_DB_POSTGRES_NAME="naptha"
 
 # Storage
 file_path = Path(__file__).resolve()
@@ -51,9 +51,9 @@ IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 LOCAL_HUB=False
 LOCAL_HUB_URL="ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
-HUB_DB_PORT=3001
-HUB_NS="naptha"
-HUB_DB="naptha"
+HUB_DB_SURREAL_PORT=3001
+HUB_DB_SURREAL_NS="naptha"
+HUB_DB_SURREAL_NAME="naptha"
 
 def get_node_config():
     """Get the node configuration."""

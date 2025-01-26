@@ -7,7 +7,7 @@ import time
 import logging
 import getpass
 
-from node.config import get_node_config, HUB_DB_PORT, HUB_NS, HUB_DB
+from node.config import get_node_config, HUB_DB_SURREAL_PORT, HUB_DB_SURREAL_NS, HUB_DB_SURREAL_NAME
 from node.storage.hub.hub import Hub
 from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger
@@ -41,11 +41,11 @@ def import_surql():
 
     for file in import_files:
         command = f"""surreal import \
-                      --conn http://localhost:{HUB_DB_PORT} \
-                      --user {os.getenv('HUB_ROOT_USER')} \
-                      --pass {os.getenv('HUB_ROOT_PASS')} \
-                      --ns {HUB_NS} \
-                      --db {HUB_DB} \
+                      --conn http://localhost:{HUB_DB_SURREAL_PORT} \
+                      --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
+                      --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
+                      --ns {HUB_DB_SURREAL_NS} \
+                      --db {HUB_DB_SURREAL_NAME} \
                     {file}"""
 
         try:
@@ -72,9 +72,9 @@ async def init_hub():
 
     # use file storage
     command = f"""surreal start -A \
-                  --user {os.getenv('HUB_ROOT_USER')} \
-                  --bind 0.0.0.0:{HUB_DB_PORT} \
-                  --pass {os.getenv('HUB_ROOT_PASS')} \
+                  --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
+                  --bind 0.0.0.0:{HUB_DB_SURREAL_PORT} \
+                  --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
                   rocksdb://./node/storage/hub/hub.db"""
 
     try:
