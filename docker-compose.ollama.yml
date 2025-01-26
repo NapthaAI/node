@@ -25,9 +25,9 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
-      DATABASE_URL: postgresql://${LOCAL_DB_USER?:error}:${LOCAL_DB_PASSWORD:?error}@pgvector:5432/${LOCAL_DB_NAME:?error}
+      DATABASE_URL: postgresql://${LOCAL_DB_USER?:error}:${LOCAL_DB_PASSWORD:?error}@pgvector:5432/litellm
     volumes:
-      - ./node/inference/configs/litellm_config.ollama.yml:/app/config.yaml
+      - ./litellm_config.ollama.yml:/app/config.yaml
     ports:
       - '4000:4000' # TODO do not expose in production
 
