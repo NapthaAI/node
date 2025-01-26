@@ -7,7 +7,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from node.storage.db.models import Base
-from node.config import LOCAL_DB_POSTGRES_NAME, LOCAL_DB_POSTGRES_PORT
+from node.config import LOCAL_DB_POSTGRES_NAME, LOCAL_DB_POSTGRES_PORT, LOCAL_DB_POSTGRES_HOST
 
 load_dotenv()
 
@@ -16,7 +16,7 @@ alembic_ini_path = file_path / "alembic.ini"
 alembic_folder_path = file_path / "alembic"
 alembic_versions_path = alembic_folder_path / "versions"
 
-LOCAL_DB_URL = f"postgresql://{os.getenv('LOCAL_DB_POSTGRES_USERNAME')}:{os.getenv('LOCAL_DB_POSTGRES_PASSWORD')}@localhost:{LOCAL_DB_POSTGRES_PORT}/{LOCAL_DB_POSTGRES_NAME}"
+LOCAL_DB_URL = f"postgresql://{os.getenv('LOCAL_DB_POSTGRES_USERNAME')}:{os.getenv('LOCAL_DB_POSTGRES_PASSWORD')}@{LOCAL_DB_POSTGRES_HOST}:{LOCAL_DB_POSTGRES_PORT}/{LOCAL_DB_POSTGRES_NAME}"
 
 def init_db():
     # Create the SQLAlchemy engine
