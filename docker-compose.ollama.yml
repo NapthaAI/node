@@ -17,6 +17,7 @@ services:
 
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
     command: --config /app/config.yaml
     restart: unless-stopped
     depends_on:

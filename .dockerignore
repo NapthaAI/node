@@ -9,3 +9,4 @@ venv/
 .venv
 .git
 .idea
+node/ollama/*
