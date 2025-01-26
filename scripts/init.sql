@@ -1,0 +1,2 @@
+CREATE DATABASE naptha;
+CREATE DATABASE litellm;
