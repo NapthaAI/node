@@ -126,7 +126,7 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-        sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+    sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
     }
 
     restart_ollama_linux() {
