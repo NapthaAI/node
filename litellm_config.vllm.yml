@@ -6,6 +6,36 @@ model_list:
       model: openai/NousResearch/Hermes-3-Llama-3.1-8B
       api_base: http://vllm-0/v1
       api_key: none
+  # vllm-1-hermes
+  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
+    litellm_params:
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B
+      api_base: http://vllm-0/v1
+      api_key: none
+  # vllm-2-hermes
+  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
+    litellm_params:
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B
+      api_base: http://vllm-0/v1
+      api_key: none
+  # vllm-3-hermes
+  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
+    litellm_params:
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B
+      api_base: http://vllm-0/v1
+      api_key: none
+  # vllm-4-hermes
+  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
+    litellm_params:
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B
+      api_base: http://vllm-0/v1
+      api_key: none
+  # vllm-5-hermes
+  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
+    litellm_params:
+      model: openai/NousResearch/Hermes-3-Llama-3.1-8B
+      api_base: http://vllm-0/v1
+      api_key: none
 
 general_settings:
   master_key: 'sk-blacklight-key'
