@@ -1,6 +1,6 @@
 import logging
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
-from node.storage.db.db import DB
+from node.storage.db.db import LocalDBPostgres
 from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ async def register_user(user_input: Dict) -> Tuple[bool, Dict]:
         "public_key": user_input["public_key"],
         "id": "user:" + user_input["public_key"],
     }
-    async with DB() as db:
+    async with LocalDBPostgres() as db:
         user = await db.create_user(input_)
 
     if user:
@@ -25,7 +25,7 @@ async def register_user(user_input: Dict) -> Tuple[bool, Dict]:
 
 async def check_user(user_input: Dict) -> Tuple[bool, Dict]:
     logger.info("Checking user.")
-    async with DB() as db:
+    async with LocalDBPostgres() as db:
         user = await db.get_user(user_input=user_input)
 
     if user:
@@ -41,7 +41,7 @@ async def check_user(user_input: Dict) -> Tuple[bool, Dict]:
         return False, user_data
     
 async def get_user_public_key(user_id: str) -> str | None:
-    async with DB() as db:
+    async with LocalDBPostgres() as db:
         public_key = await db.get_public_key_by_id(user_id)
 
     if public_key:

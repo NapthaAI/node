@@ -1,7 +1,5 @@
-import os
 import asyncio
 import grpc
-import json
 import signal
 import logging
 import traceback
@@ -12,7 +10,7 @@ from google.protobuf.json_format import MessageToDict
 from grpc import ServicerContext
 from typing import Dict, Any, Union
 from google.protobuf import struct_pb2
-from node.storage.db.db import DB
+from node.storage.db.db import LocalDBPostgres
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import (
@@ -172,7 +170,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                 deployment = await self.create_module(run_input.deployment)
                 run_input.deployment = deployment
 
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 module_run = await config["db_create"](db, run_input)
                 module_run_data = module_run.model_dump()
 
@@ -210,7 +208,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
                 )
                 await asyncio.sleep(5)
 
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 updated_run = await config["db_list"](db, module_run_data['id'])
                 if isinstance(updated_run, list):
                     updated_run = updated_run[0]
@@ -333,7 +331,7 @@ class GrpcServerServicer(grpc_server_pb2_grpc.GrpcServerServicer):
             if module_type not in module_db_functions:
                 raise ValueError(f"Invalid module type: {module_type}")
 
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 module_run = await module_db_functions[module_type](db)
                 if isinstance(module_run, list):
                     module_run = module_run[0]

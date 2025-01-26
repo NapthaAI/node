@@ -89,7 +89,7 @@ class DatabasePool:
         if hasattr(self, 'engine'):
             self.engine.dispose()
 
-class DB:
+class LocalDBPostgres:
     def __init__(self):
         self.is_authenticated = False
         self.pool = DatabasePool()

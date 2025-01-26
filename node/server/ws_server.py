@@ -19,7 +19,7 @@ from node.schemas import (
     KBRunInput, KBDeployment, 
     ModuleExecutionType,
 )
-from node.storage.db.db import DB
+from node.storage.db.db import LocalDBPostgres
 from node.config import MODULES_SOURCE_DIR
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
@@ -326,7 +326,7 @@ class WebSocketServer:
                 deployment = await self.create_module(run_input.deployment)
                 run_input.deployment = deployment
 
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 module_run = await config["db_create"](db, run_input)
                 if not module_run:
                     raise ValueError(f"Failed to create {module_type} run")
@@ -350,7 +350,7 @@ class WebSocketServer:
                 await asyncio.sleep(1)
 
             # Retrieve the updated run from the database
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 updated_run = await config["db_list"](db, module_run_data['id'])
                 if isinstance(updated_run, list):
                     updated_run = updated_run[0]

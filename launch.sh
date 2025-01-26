@@ -651,7 +651,7 @@ start_hub_surrealdb() {
             exit 1
         fi
     else
-        echo "Not running Hub DB locally..." | log_with_service_name "HubDB" $RED
+        echo "Not running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDB" $RED
     fi
 
     poetry run python "$PWD/node/storage/hub/init_hub.py" --user 2>&1
@@ -666,7 +666,7 @@ start_hub_surrealdb() {
 start_local_surrealdb() {
     PWD=$(pwd)
 
-    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    echo "Running Local DB..." | log_with_service_name "LocalDBPostgres" $RED
     
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
@@ -675,15 +675,15 @@ start_local_surrealdb() {
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 
     # Check if Local DB is running
     if curl -s http://localhost:$SURREALDB_PORT/health > /dev/null; then
-        echo "Local DB is running successfully." | log_with_service_name "LocalDB" $RED
+        echo "Local DB is running successfully." | log_with_service_name "LocalDBPostgres" $RED
     else
-        echo "Local DB failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        echo "Local DB failed to start. Please check the logs." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 }
@@ -1358,25 +1358,25 @@ linux_start_local_db() {
     POSTGRES_BIN_PATH="/usr/lib/postgresql/16/bin"
     PSQL_BIN="$POSTGRES_BIN_PATH/psql"
 
-    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    echo "Running Local DB..." | log_with_service_name "LocalDBPostgres" $RED
     
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
 
-    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $RED
+    echo "Running init_db.py script..." | log_with_service_name "LocalDBPostgres" $RED
     poetry run python "$INIT_PYTHON_PATH" 2>&1
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 
-    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDB" $RED
+    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDBPostgres" $RED
     if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" >/dev/null 2>&1; then
-        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDB" $RED
+        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDBPostgres" $RED
     else
-        echo "Local DB (PostgreSQL) failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        echo "Local DB (PostgreSQL) failed to start. Please check the logs." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 }
@@ -1497,25 +1497,25 @@ EOF
 darwin_start_local_db() {
     PWD=$(pwd)
 
-    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    echo "Running Local DB..." | log_with_service_name "LocalDBPostgres" $RED
     
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
 
-    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $RED
+    echo "Running init_db.py script..." | log_with_service_name "LocalDBPostgres" $RED
     poetry run python "$INIT_PYTHON_PATH" 2>&1
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 
-    echo "Checking if PostgreSQL 16 is running..." | log_with_service_name "LocalDB" $RED
+    echo "Checking if PostgreSQL 16 is running..." | log_with_service_name "LocalDBPostgres" $RED
     if psql -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
-        echo "Local DB (PostgreSQL 16) is running successfully." | log_with_service_name "LocalDB" $RED
+        echo "Local DB (PostgreSQL 16) is running successfully." | log_with_service_name "LocalDBPostgres" $RED
     else
-        echo "Local DB (PostgreSQL 16) failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        echo "Local DB (PostgreSQL 16) failed to start. Please check the logs." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 }
