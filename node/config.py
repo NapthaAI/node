@@ -49,6 +49,7 @@ IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
 LOCAL_HUB=False
+REGISTER_NODE_WITH_HUB=False # set to true if you want your node to be available as a provider
 LOCAL_HUB_URL="ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_SURREAL_PORT=3001

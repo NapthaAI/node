@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 import traceback
 
-from node.config import get_node_config
+from node.config import get_node_config, REGISTER_NODE_WITH_HUB
 from node.storage.hub.hub import HubDBSurreal
 from node.server.http_server import HTTPServer
 from node.server.ws_server import WebSocketServer
@@ -226,11 +226,11 @@ async def run_server(server_type: str, port: int):
                 lambda s=sig: signal_handler(s)
             )
 
-        if "node.naptha.ai" in node_server.hub.hub_url and node_server.node_config.ip == "localhost":
-            raise Exception("Cannot register node on public hub with NODE_IP localhost. Please change NODE_IP in config.py to your public IP address or domain name.")
-
-        # Register node (only for HTTP server)
-        await node_server.register_node()
+        if REGISTER_NODE_WITH_HUB:
+            if node_server.node_config.ip == "localhost":
+                raise Exception("Cannot register node on hub with NODE_IP localhost. Either change REGISTER_NODE_WITH_HUB to False, or set NODE_IP to your public IP address or domain name in config.py.")
+            # Register node (only for HTTP server)
+            await node_server.register_node()
         
         # Start server
         await node_server.start_server()
