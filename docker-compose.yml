@@ -31,7 +31,7 @@ services:
     environment:
       POSTGRES_USER: ${LOCAL_DB_POSTGRES_USERNAME?:error}
       PGUSER: ${LOCAL_DB_POSTGRES_USERNAME?:error}
-      LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
+      POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
     restart: unless-stopped
     healthcheck:
       test: pg_isready -d postgres
