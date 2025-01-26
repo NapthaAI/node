@@ -15,12 +15,11 @@ GPU=False # set to true if gpu is available (Only for running node with IN_DOCKE
 NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
-DEV_MODE=True
 PROVIDER_TYPES=["models", "storage", "modules"]
 
 # Servers
 USER_COMMUNICATION_PORT=7001
-USER_COMMUNICATION_PROTOCOL="https" # http or https
+USER_COMMUNICATION_PROTOCOL="http" # http or https
 NUM_NODE_COMMUNICATION_SERVERS=1
 NODE_COMMUNICATION_PORT=7002
 NODE_COMMUNICATION_PROTOCOL="ws" # grpc or ws
@@ -76,7 +75,7 @@ def get_node_config():
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,
         routing_url=ROUTING_URL,
-        ports=[NODE_PORT+i for i in range(NUM_SERVERS)],
+        ports=[NODE_COMMUNICATION_PORT+i for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
         num_gpus=NUM_GPUS,
         arch=platform.machine(),
         os=platform.system(),
