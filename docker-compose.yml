@@ -8,10 +8,10 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?error}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
+      RABBITMQ_DEFAULT_USER: ${RMQ_USER:?error}
+      RABBITMQ_DEFAULT_PASS: ${RMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
       RABBITMQ_DEFAULT_VHOST: '/'
-      RABBITMQ_MANAGEMENT_PASSWORD: ${RABBITMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
+      RABBITMQ_MANAGEMENT_PASSWORD: ${RMQ_PASSWORD:?error} # loaded from .env file, MUST be present else error
     restart: unless-stopped
     healthcheck:
       test: rabbitmq-diagnostics check_port_connectivity
@@ -51,8 +51,8 @@ services:
     env_file:
       - ./.env
     environment:
-      RMQ_USER: ${RABBITMQ_USER:?error}
-      RMQ_PASSWORD: ${RABBITMQ_PASSWORD:?error}
+      RMQ_USER: ${RMQ_USER:?error}
+      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
       LOCAL_DB_HOST: pgvector
@@ -100,6 +100,7 @@ services:
         condition: service_started
     ports:
       - '7001:7001'
+      - '7002:7002'
 
 volumes:
   rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs
