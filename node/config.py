@@ -73,6 +73,7 @@ def get_node_config():
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,
         routing_url=ROUTING_URL,
+        ports=[NODE_PORT+i for i in range(NUM_SERVERS)],
         num_gpus=NUM_GPUS,
         arch=platform.machine(),
         os=platform.system(),
