@@ -7,7 +7,7 @@ from typing import Optional
 import traceback
 
 from node.config import get_node_config
-from node.storage.hub.hub import Hub
+from node.storage.hub.hub import HubDBSurreal
 from node.server.http_server import HTTPServer
 from node.server.ws_server import WebSocketServer
 from node.server.grpc_server import GrpcServer
@@ -29,7 +29,7 @@ class NodeServer:
         self.server: Optional[HTTPServer | WebSocketServer | GrpcServer] = None
         self.server_type = server_type
         self.port = port
-        self.hub = Hub()
+        self.hub = HubDBSurreal()
         self.shutdown_event = asyncio.Event()
 
     async def register_node(self):
@@ -140,7 +140,7 @@ class NodeServer:
                 node_id = self.node_config["id"]
                 logger.info(f"Attempting to unregister node: {node_id}")
 
-                async with Hub() as hub:
+                async with HubDBSurreal() as hub:
                     try:
                         # Add timeout to signin
                         success, user, user_id = await asyncio.wait_for(
@@ -162,7 +162,7 @@ class NodeServer:
                             logger.error(f"Failed to unregister node: {node_id}")
                             raise Exception("Failed to unregister node")
                     except asyncio.TimeoutError:
-                        logger.error("Hub operation timed out")
+                        logger.error("HubDBSurreal operation timed out")
                         raise
             except Exception as e:
                 logger.error(f"Error during node unregistration: {e}")

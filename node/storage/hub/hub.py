@@ -13,7 +13,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class Hub(AsyncMixin):
+class HubDBSurreal(AsyncMixin):
     def __init__(self, *args, **kwargs):
         if LOCAL_HUB:
             self.hub_url = LOCAL_HUB_URL
@@ -296,7 +296,7 @@ async def list_modules(module_type: str, module_name: str) -> List:
     if not module_name:
         raise ValueError("Module name cannot be empty")
 
-    async with Hub() as hub:
+    async with HubDBSurreal() as hub:
         try:
             _, _, _ = await hub.signin(hub_username, hub_password)
         except Exception as auth_error:
@@ -317,7 +317,7 @@ async def list_nodes(node_ip: str) -> List:
     hub_username = os.getenv("HUB_USERNAME")
     hub_password = os.getenv("HUB_PASSWORD")
 
-    async with Hub() as hub:
+    async with HubDBSurreal() as hub:
         try:
             _, _, _ = await hub.signin(hub_username, hub_password)
         except Exception as auth_error:

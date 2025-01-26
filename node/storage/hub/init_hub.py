@@ -8,7 +8,7 @@ import logging
 import getpass
 
 from node.config import get_node_config, HUB_DB_SURREAL_PORT, HUB_DB_SURREAL_NS, HUB_DB_SURREAL_NAME
-from node.storage.hub.hub import Hub
+from node.storage.hub.hub import HubDBSurreal
 from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger
 
@@ -100,7 +100,7 @@ async def init_hub():
 
 async def register_node():
     node_config = get_node_config()
-    async with Hub() as hub:
+    async with HubDBSurreal() as hub:
         success, user, user_id = await hub.signin(
             os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
         )
@@ -108,7 +108,7 @@ async def register_node():
 
 
 async def user_setup_flow():
-    async with Hub() as hub:
+    async with HubDBSurreal() as hub:
         username, password = os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
         username_exists, password_exists = len(username) > 1, len(password) > 1
         public_key = get_public_key(os.getenv("PRIVATE_KEY"))
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Initialize Hub or run user setup flow"
+        description="Initialize Hub DB (SurrealDB) or run user setup flow"
     )
     parser.add_argument("--user", action="store_true", help="Run user setup flow")
     args = parser.parse_args()
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     if args.user:
 
         async def run_user_setup():
-            async with Hub() as hub:
+            async with HubDBSurreal() as hub:
                 await user_setup_flow()
 
         asyncio.run(run_user_setup())

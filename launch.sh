@@ -630,7 +630,7 @@ start_hub_surrealdb() {
     PWD=$(pwd)
     echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
     if [ "$LOCAL_HUB" == "True" ]; then
-        echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
+        echo "Running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDBSurreal" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
         chmod +x "$INIT_PYTHON_PATH"
@@ -639,26 +639,26 @@ start_hub_surrealdb() {
         PYTHON_EXIT_STATUS=$?
 
         if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-            echo "Hub DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDB" $RED
+            echo "Hub DB (SurrealDB) initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
             exit 1
         fi
 
-        # Check if Hub DB is running
+        # Check if Hub DB (SurrealDB) is running
         if curl -s http://localhost:$HUB_DB_SURREAL_PORT/health > /dev/null; then
-            echo "Hub DB is running successfully." | log_with_service_name "HubDB" $RED
+            echo "Hub DB (SurrealDB) is running successfully." | log_with_service_name "HubDBSurreal" $RED
         else
-            echo "Hub DB failed to start. Please check the logs." | log_with_service_name "HubDB" $RED
+            echo "Hub DB failed to start. Please check the logs." | log_with_service_name "HubDBSurreal" $RED
             exit 1
         fi
     else
-        echo "Not running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDB" $RED
+        echo "Not running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDBSurreal" $RED
     fi
 
     poetry run python "$PWD/node/storage/hub/init_hub.py" --user 2>&1
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Hub DB sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDB" $RED
+        echo "Hub DB (SurrealDB) sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
         exit 1
     fi
 }

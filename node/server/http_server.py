@@ -40,7 +40,7 @@ from node.schemas import (
     ToolDeployment,
 )
 from node.storage.db.db import LocalDBPostgres
-from node.storage.hub.hub import Hub
+from node.storage.hub.hub import HubDBSurreal
 from node.user import check_user, register_user, get_user_public_key, verify_signature
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
@@ -276,7 +276,7 @@ class HTTPServer:
                 Gets server connection details from hub and returns appropriate Node object
             """
             try:
-                async with Hub() as hub:
+                async with HubDBSurreal() as hub:
                     logger.info(f"Getting server connection for {server_id}")
                     server = await hub.get_server(server_id=server_id)
                     logger.info(f"Server: {server}")
