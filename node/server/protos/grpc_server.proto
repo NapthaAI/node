@@ -30,15 +30,15 @@ message LLMConfig {
 }
 
 message NodeServer {
-    string server_type = 1;
+    string communication_protocol = 1;
     int32 port = 2;
     string node_id = 3;
 }
 
 message NodeConfigInput {
     string ip = 1;
-    optional int32 http_port = 2;
-    optional string server_type = 3;
+    optional int32 user_communication_port = 2;
+    optional string user_communication_protocol = 3;
 }
 
 message NodeConfig {
@@ -46,20 +46,21 @@ message NodeConfig {
     string owner = 2;
     string public_key = 3;
     string ip = 4;
-    string server_type = 5;
-    int32 http_port = 6;
-    int32 num_servers = 7;
-    repeated NodeServer servers = 8;
-    repeated string ollama_models = 9;
-    bool docker_jobs = 10;
-    repeated int32 ports = 11;
-    optional string routing_type = 12;
-    optional string routing_url = 13;
-    optional int32 num_gpus = 14;
-    optional string arch = 15;
-    optional string os = 16;
-    optional int64 ram = 17;
-    optional int64 vram = 18;
+    string user_communication_protocol = 5;
+    string node_communication_protocol = 6;
+    int32 user_communication_port = 7;
+    int32 num_node_communication_servers = 8;
+    repeated NodeServer servers = 9;
+    repeated string ollama_models = 10;
+    bool docker_jobs = 11;
+    repeated int32 ports = 12;
+    optional string routing_type = 13;
+    optional string routing_url = 14;
+    optional int32 num_gpus = 15;
+    optional string arch = 16;
+    optional string os = 17;
+    optional int64 ram = 18;
+    optional int64 vram = 19;
 }
 
 message Module {

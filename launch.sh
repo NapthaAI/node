@@ -833,13 +833,13 @@ linux_start_servers() {
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
     # Get the config from the .env file
-    server_type=${SERVER_TYPE:-"ws"} # Default to ws if not set
-    num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
-    start_port=${NODE_PORT:-7002} # Starting port for alternate servers
+    node_communication_protocol=${NODE_COMMUNICATION_PROTOCOL:-"ws"} # Default to ws if not set
+    num_node_communication_servers=${NUM_NODE_COMMUNICATION_SERVERS:-1} # Default to 1 if not set
+    start_port=${NODE_COMMUNICATION_PORT:-7002} # Starting port for alternate servers
 
-    echo "Server type: $server_type" | log_with_service_name "Server" $BLUE
-    echo "Number of additional servers: $num_servers" | log_with_service_name "Server" $BLUE
-    echo "Additional servers start from port: $start_port" | log_with_service_name "Server" $BLUE
+    echo "Node communication protocol: $node_communication_protocol" | log_with_service_name "Server" $BLUE
+    echo "Number of node communication servers: $num_node_communication_servers" | log_with_service_name "Server" $BLUE
+    echo "Node communication servers start from port: $start_port" | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -859,7 +859,7 @@ Description=Node HTTP Server
 After=network.target
 
 [Service]
-ExecStart=$PYTHON_APP_PATH run python server/server.py --server-type http --port 7001
+ExecStart=$PYTHON_APP_PATH run python server/server.py --communication-protocol http --port 7001
 WorkingDirectory=$WORKING_DIR
 EnvironmentFile=$ENVIRONMENT_FILE_PATH
 User=$USER_NAME
@@ -891,21 +891,21 @@ EOF
     ports="7001"
 
     # Create services for additional servers
-    for ((i=0; i<num_servers; i++)); do
+    for ((i=0; i<num_node_communication_servers; i++)); do
         current_port=$((start_port + i))
-        SERVICE_FILE="nodeapp_${server_type}_${current_port}.service"
+        SERVICE_FILE="nodeapp_${node_communication_protocol}_${current_port}.service"
         ports="${ports},${current_port}"
 
-        echo "Starting $server_type server on port $current_port..." | log_with_service_name "Server" $BLUE
+        echo "Starting $node_communication_protocol node communication server on port $current_port..." | log_with_service_name "Server" $BLUE
 
         # Create the systemd service file
         cat <<EOF > /tmp/$SERVICE_FILE
 [Unit]
-Description=Node $server_type Server on port $current_port
+Description=Node $node_communication_protocol Node Communication Server on port $current_port
 After=network.target nodeapp_http.service
 
 [Service]
-ExecStart=$PYTHON_APP_PATH run python server/server.py --server-type $server_type --port $current_port
+ExecStart=$PYTHON_APP_PATH run python server/server.py --communication-protocol $node_communication_protocol --port $current_port
 WorkingDirectory=$WORKING_DIR
 EnvironmentFile=$ENVIRONMENT_FILE_PATH
 User=$USER_NAME
@@ -923,16 +923,13 @@ EOF
         sudo mv /tmp/$SERVICE_FILE /etc/systemd/system/
         sudo systemctl daemon-reload
         if sudo systemctl enable $SERVICE_FILE && sudo systemctl start $SERVICE_FILE; then
-            echo "$server_type server service started successfully on port $current_port." | log_with_service_name "Server" $BLUE
+        echo "$node_communication_protocol server service started successfully on port $current_port." | log_with_service_name "Server" $BLUE
         else
-            echo "Failed to start $server_type server service on port $current_port." | log_with_service_name "Server" $RED
+            echo "Failed to start $node_communication_protocol server service on port $current_port." | log_with_service_name "Server" $RED
         fi
     done
 
-    # Update NODE_PORTS in .env file
-    sed -i '/^NODE_PORTS=/d' $ENVIRONMENT_FILE_PATH
-    echo "NODE_PORTS=$ports" >> $ENVIRONMENT_FILE_PATH
-    echo "Updated NODE_PORTS in .env: $ports" | log_with_service_name "Server" $BLUE
+    NODE_COMMUNICATION_PORTS=$ports
 }
 
 darwin_start_servers() {
@@ -940,13 +937,13 @@ darwin_start_servers() {
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
 
     # Get the config from the .env file
-    server_type=${SERVER_TYPE:-"ws"} # Default to ws if not set
-    num_servers=${NUM_SERVERS:-1} # Default to 1 if not set
-    start_port=${NODE_PORT:-7002} # Starting port for alternate servers
+    node_communication_protocol=${NODE_COMMUNICATION_PROTOCOL:-"ws"} # Default to ws if not set
+    num_node_communication_servers=${NUM_NODE_COMMUNICATION_SERVERS:-1} # Default to 1 if not set
+    start_port=${NODE_COMMUNICATION_PORT:-7002} # Starting port for alternate servers
 
-    echo "Server type: $server_type" | log_with_service_name "Server" $BLUE
-    echo "Number of additional servers: $num_servers" | log_with_service_name "Server" $BLUE
-    echo "Additional servers start from port: $start_port" | log_with_service_name "Server" $BLUE
+    echo "Node communication protocol: $node_communication_protocol" | log_with_service_name "Server" $BLUE
+    echo "Number of node communication servers: $num_node_communication_servers" | log_with_service_name "Server" $BLUE
+    echo "Node communication servers start from port: $start_port" | log_with_service_name "Server" $BLUE
 
     # Define paths
     USER_NAME=$(whoami)
@@ -976,7 +973,7 @@ darwin_start_servers() {
         <string>run</string>
         <string>python</string>
         <string>server/server.py</string>
-        <string>--server-type</string>
+        <string>--communication-protocol</string>
         <string>http</string>
         <string>--port</string>
         <string>7001</string>
@@ -1024,13 +1021,13 @@ EOF
     ports="7001"
 
     # Create plists for additional servers
-    for ((i=0; i<num_servers; i++)); do
+    for ((i=0; i<num_node_communication_servers; i++)); do
         current_port=$((start_port + i))
-        PLIST_FILE="com.example.nodeapp.${server_type}_${current_port}.plist"
+        PLIST_FILE="com.example.nodeapp.${node_communication_protocol}_${current_port}.plist"
         PLIST_PATH=~/Library/LaunchAgents/$PLIST_FILE
         ports="${ports},${current_port}"
 
-        echo "Starting $server_type server on port $current_port..." | log_with_service_name "Server" $BLUE
+        echo "Starting $node_communication_protocol server on port $current_port..." | log_with_service_name "Server" $BLUE
 
         cat <<EOF > ~/Library/LaunchAgents/$PLIST_FILE
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1038,15 +1035,15 @@ EOF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.example.nodeapp.${server_type}_${current_port}</string>
+    <string>com.example.nodeapp.${node_communication_protocol}_${current_port}</string>
     <key>ProgramArguments</key>
     <array>
         <string>$PYTHON_APP_PATH</string>
         <string>run</string>
         <string>python</string>
         <string>server/server.py</string>
-        <string>--server-type</string>
-        <string>$server_type</string>
+        <string>--communication-protocol</string>
+        <string>$node_communication_protocol</string>
         <string>--port</string>
         <string>$current_port</string>
     </array>
@@ -1064,35 +1061,32 @@ EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp_${server_type}_${current_port}.out</string>
+    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.out</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp_${server_type}_${current_port}.err</string>
+    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.err</string>
 </dict>
 </plist>
 EOF
 
         # Load with error checking
-        echo "Loading $server_type server service on port $current_port..." | log_with_service_name "Server" $BLUE
+        echo "Loading $node_communication_protocol server service on port $current_port..." | log_with_service_name "Server" $BLUE
         if ! launchctl load $PLIST_PATH; then
-            echo "Failed to load $server_type server service. Checking permissions..." | log_with_service_name "Server" $RED
+            echo "Failed to load $node_communication_protocol server service. Checking permissions..." | log_with_service_name "Server" $RED
             ls -l $PLIST_PATH
             exit 1
         fi
 
         # Verify service is running
         sleep 2
-        if launchctl list | grep -q "com.example.nodeapp.${server_type}_${current_port}"; then
-            echo "$server_type server service loaded successfully on port $current_port." | log_with_service_name "Server" $GREEN
+        if launchctl list | grep -q "com.example.nodeapp.${node_communication_protocol}_${current_port}"; then
+            echo "$node_communication_protocol server service loaded successfully on port $current_port." | log_with_service_name "Server" $GREEN
         else
-            echo "$server_type server service failed to load on port $current_port." | log_with_service_name "Server" $RED
+            echo "$node_communication_protocol server service failed to load on port $current_port." | log_with_service_name "Server" $RED
             exit 1
         fi
     done
 
-    # Update NODE_PORTS in .env file (using sed compatible with macOS)
-    sed -i '' '/^NODE_PORTS=/d' $ENVIRONMENT_FILE_PATH
-    echo "NODE_PORTS=$ports" >> $ENVIRONMENT_FILE_PATH
-    echo "Updated NODE_PORTS in .env: $ports" | log_with_service_name "Server" $BLUE
+    NODE_COMMUNICATION_PORTS=$ports
 }
 
 # Function to start the Celery worker
@@ -1729,12 +1723,12 @@ startup_summary() {
     fi
 
     # Check Secondary Servers (WS or gRPC)
-    for port in $(echo $NODE_PORTS | tr ',' ' '); do
+    for port in $(echo $NODE_COMMUNICATION_PORTS | tr ',' ' '); do
         if [ "$port" != "7001" ]; then  # Skip HTTP port
-            services+=("$(echo $SERVER_TYPE | tr '[:lower:]' '[:upper:]')_Server_${port}")
+            services+=("$(echo $NODE_COMMUNICATION_PROTOCOL | tr '[:lower:]' '[:upper:]')_Server_${port}")
             
             # Health check based on server type
-            if [ "${SERVER_TYPE}" = "ws" ]; then
+            if [ "${NODE_COMMUNICATION_PROTOCOL}" = "ws" ]; then
                 # WebSocket health check using /health endpoint
                 if curl -s http://localhost:$port/health > /dev/null; then
                     statuses+=("✅")

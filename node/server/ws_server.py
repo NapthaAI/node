@@ -111,7 +111,7 @@ class WebSocketServer:
         @self.app.get("/health")
         async def health_check():
             """Simple health check endpoint"""
-            return {"status": "ok", "server_type": "websocket"}
+            return {"status": "ok", "communication_protocol": "websocket"}
 
         self.app.add_api_websocket_route(
             "/ws/user/check/{client_id}", self.check_user_endpoint
