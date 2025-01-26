@@ -38,7 +38,7 @@ from node.schemas import (
     OrchestratorRun
 )
 from node.worker.utils import download_from_ipfs, unzip_file
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, get_node_config
 from node.storage.hub.hub import list_modules, list_nodes
 
 logger = logging.getLogger(__name__)
@@ -499,7 +499,10 @@ async def load_node_metadata(deployment):
     # Node metadata is always loaded from input parameters
     logger.info(f"Loading node metadata for {deployment.node.ip}")
     assert deployment.node is not None, "Node is not set"
-    node_data = await list_nodes(deployment.node.ip)
+    if deployment.node.ip == "localhost":
+        node_data = get_node_config()
+    else:
+        node_data = await list_nodes(deployment.node.ip)
     deployment.node = node_data
     logger.info(f"Node metadata loaded {deployment.node}")
 

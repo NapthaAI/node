@@ -28,12 +28,12 @@ if [ -f .env ]; then
     export $(cat .env | grep -v '^#' | xargs)
 else
     echo ".env file not found. Using default values."
-    NUM_SERVERS=1
+    NUM_NODE_COMMUNICATION_SERVERS=1
 fi
 
 load_config_constants
-server_type=${SERVER_TYPE:-"ws"}
-start_port=${NODE_PORT:-7002} 
+node_communication_protocol=${NODE_COMMUNICATION_PROTOCOL:-"ws"}
+start_port=${NODE_COMMUNICATION_PORT:-7002} 
 
 os=$(uname)
 if [ "$os" = "Darwin" ]; then
@@ -43,10 +43,10 @@ if [ "$os" = "Darwin" ]; then
     # Stop the services
     launchctl unload $LAUNCH_AGENTS_PATH/com.example.celeryworker.plist
     launchctl unload $LAUNCH_AGENTS_PATH/com.example.nodeapp.http.plist
-    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+    for i in $(seq 0 $((${NUM_NODE_COMMUNICATION_SERVERS:-1} - 1))); do
         current_port=$((start_port + i))
-        echo "Unloading com.example.nodeapp.${server_type}_${current_port}.plist"
-        launchctl unload $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
+        echo "Unloading com.example.nodeapp.${node_communication_protocol}_${current_port}.plist"
+        launchctl unload $LAUNCH_AGENTS_PATH/com.example.nodeapp.${node_communication_protocol}_${current_port}.plist
     done
     # Stop LiteLLM
     if launchctl list | grep -q "com.litellm.proxy"; then
@@ -60,9 +60,9 @@ if [ "$os" = "Darwin" ]; then
     # Remove the service files
     rm $LAUNCH_AGENTS_PATH/com.example.celeryworker.plist
     rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.http.plist
-    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+    for i in $(seq 0 $((${NUM_NODE_COMMUNICATION_SERVERS:-1} - 1))); do
         current_port=$((start_port + i))
-        rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.${server_type}_${current_port}.plist
+        rm $LAUNCH_AGENTS_PATH/com.example.nodeapp.${node_communication_protocol}_${current_port}.plist
     done
     rm $LAUNCH_AGENTS_PATH/com.litellm.proxy.plist
     rm $LAUNCH_AGENTS_PATH/com.example.ollama.plist
@@ -123,10 +123,10 @@ else
     stop_service celeryworker.service
     stop_service nodeapp_http.service
     
-    # Stop additional node servers
-    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+    # Stop additional node communication servers
+    for i in $(seq 0 $((${NUM_NODE_COMMUNICATION_SERVERS:-1} - 1))); do
         current_port=$((start_port + i))
-        stop_service "nodeapp_${server_type}_${current_port}.service"
+        stop_service "nodeapp_${node_communication_protocol}_${current_port}.service"
     done
     
     stop_service litellm.service
@@ -140,9 +140,9 @@ else
     echo "Disabling services..."
     sudo systemctl disable celeryworker.service
     sudo systemctl disable nodeapp_http.service
-    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+    for i in $(seq 0 $((${NUM_NODE_COMMUNICATION_SERVERS:-1} - 1))); do
         current_port=$((start_port + i))
-        sudo systemctl disable "nodeapp_${server_type}_${current_port}.service"
+        sudo systemctl disable "nodeapp_${node_communication_protocol}_${current_port}.service"
     done
     sudo systemctl disable litellm.service
     sudo systemctl disable ollama.service
@@ -152,9 +152,9 @@ else
     echo "Removing service files..."
     sudo rm -f /etc/systemd/system/celeryworker.service
     sudo rm -f /etc/systemd/system/nodeapp_http.service
-    for i in $(seq 0 $((${NUM_SERVERS:-1} - 1))); do
+    for i in $(seq 0 $((${NUM_NODE_COMMUNICATION_SERVERS:-1} - 1))); do
         current_port=$((start_port + i))
-        sudo rm -f "/etc/systemd/system/nodeapp_${server_type}_${current_port}.service"
+        sudo rm -f "/etc/systemd/system/nodeapp_${node_communication_protocol}_${current_port}.service"
     done
     sudo rm -f /etc/systemd/system/litellm.service
     sudo rm -f /etc/systemd/system/ollama.service

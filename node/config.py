@@ -15,15 +15,16 @@ GPU=False # set to true if gpu is available (Only for running node with IN_DOCKE
 NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
-DEV_MODE=True
 PROVIDER_TYPES=["models", "storage", "modules"]
 
 # Servers
-HTTP_PORT=7001
-NUM_SERVERS=1
-SERVER_TYPE="ws" # grpc or ws
-NODE_IP="pro-model-sturgeon.ngrok-free.app"
-NODE_PORT=7002
+
+USER_COMMUNICATION_PORT=7001
+USER_COMMUNICATION_PROTOCOL="http" # http or https
+NUM_NODE_COMMUNICATION_SERVERS=1
+NODE_COMMUNICATION_PORT=7002
+NODE_COMMUNICATION_PROTOCOL="ws" # grpc or ws
+NODE_IP="localhost"
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
@@ -39,8 +40,10 @@ OPENAI_MODELS="gpt-4o-mini"
 MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
-LOCAL_DB_PORT=5432
-LOCAL_DB_NAME="postgres"
+
+LOCAL_DB_POSTGRES_PORT=3002
+LOCAL_DB_POSTGRES_NAME="naptha"
+LOCAL_DB_POSTGRES_HOST="pgvector" # name of the service container
 
 # Storage
 file_path = Path(__file__).resolve()
@@ -51,12 +54,13 @@ IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
 LOCAL_HUB=False
+REGISTER_NODE_WITH_HUB=False # set to true if you want your node to be available as a provider
 LOCAL_HUB_URL="ws://surrealdb:8000/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
-HUB_HOSTNAME='surrealdb' # docker
-HUB_DB_PORT=8000
-HUB_NS="naptha"
-HUB_DB="naptha"
+HUB_DB_SURREAL_PORT=3001
+HUB_DB_SURREAL_NS="naptha"
+HUB_DB_SURREAL_NAME="naptha"
+
 
 def get_node_config():
     """Get the node configuration."""
@@ -67,15 +71,17 @@ def get_node_config():
         owner=os.getenv("HUB_USERNAME"),
         public_key=public_key,
         ip=NODE_IP,
-        server_type=SERVER_TYPE,
-        http_port=HTTP_PORT,
-        num_servers=NUM_SERVERS,
+        user_communication_protocol=USER_COMMUNICATION_PROTOCOL,
+        user_communication_port=USER_COMMUNICATION_PORT,
+        node_communication_protocol=NODE_COMMUNICATION_PROTOCOL,
+        num_node_communication_servers=NUM_NODE_COMMUNICATION_SERVERS,
         provider_types=PROVIDER_TYPES,
-        servers=[NodeServer(server_type=SERVER_TYPE, port=NODE_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_SERVERS)],
+        servers=[NodeServer(communication_protocol=NODE_COMMUNICATION_PROTOCOL, port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
         models=[MODELS],
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,
         routing_url=ROUTING_URL,
+        ports=[NODE_COMMUNICATION_PORT+i for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
         num_gpus=NUM_GPUS,
         arch=platform.machine(),
         os=platform.system(),

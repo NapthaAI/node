@@ -3,12 +3,12 @@ import os
 import platform
 import subprocess
 import sys
-from node.config import LOCAL_DB_NAME, LOCAL_DB_PORT
+from node.config import LOCAL_DB_POSTGRES_NAME, LOCAL_DB_POSTGRES_PORT
 
 load_dotenv()
 
-LOCAL_DB_USER = os.getenv("LOCAL_DB_USER")
-LOCAL_DB_PASSWORD = os.getenv("LOCAL_DB_PASSWORD")
+LOCAL_DB_POSTGRES_USERNAME = os.getenv("LOCAL_DB_POSTGRES_USERNAME")
+LOCAL_DB_POSTGRES_PASSWORD = os.getenv("LOCAL_DB_POSTGRES_PASSWORD")
 
 def reset_db():
     print("Starting database reset...")
@@ -18,23 +18,23 @@ def reset_db():
     if is_macos:
         commands = [
             "rm -rf node/storage/db/alembic/versions/*",
-            f"psql -p {LOCAL_DB_PORT} postgres -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{LOCAL_DB_NAME}' AND pid <> pg_backend_pid();\"",
-            f"dropdb -p {LOCAL_DB_PORT} --if-exists {LOCAL_DB_NAME}",
-            f"dropuser -p {LOCAL_DB_PORT} --if-exists {LOCAL_DB_USER}",
-            f"createuser -p {LOCAL_DB_PORT} {LOCAL_DB_USER}",
-            f"psql -p {LOCAL_DB_PORT} postgres -c \"ALTER USER {LOCAL_DB_USER} WITH PASSWORD '{LOCAL_DB_PASSWORD}';\"",
-            f"createdb -p {LOCAL_DB_PORT} --owner={LOCAL_DB_USER} {LOCAL_DB_NAME}",
-            f"psql -p {LOCAL_DB_PORT} postgres -c \"ALTER USER {LOCAL_DB_USER} CREATEDB;\""
+            f"psql -p {LOCAL_DB_POSTGRES_PORT} postgres -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{LOCAL_DB_POSTGRES_NAME}' AND pid <> pg_backend_pid();\"",
+            f"dropdb -p {LOCAL_DB_POSTGRES_PORT} --if-exists {LOCAL_DB_POSTGRES_NAME}",
+            f"dropuser -p {LOCAL_DB_POSTGRES_PORT} --if-exists {LOCAL_DB_POSTGRES_USERNAME}",
+            f"createuser -p {LOCAL_DB_POSTGRES_PORT} {LOCAL_DB_POSTGRES_USERNAME}",
+            f"psql -p {LOCAL_DB_POSTGRES_PORT} postgres -c \"ALTER USER {LOCAL_DB_POSTGRES_USERNAME} WITH PASSWORD '{LOCAL_DB_POSTGRES_PASSWORD}';\"",
+            f"createdb -p {LOCAL_DB_POSTGRES_PORT} --owner={LOCAL_DB_POSTGRES_USERNAME} {LOCAL_DB_POSTGRES_NAME}",
+            f"psql -p {LOCAL_DB_POSTGRES_PORT} postgres -c \"ALTER USER {LOCAL_DB_POSTGRES_USERNAME} CREATEDB;\""
         ]
     else:
         commands = [
             "rm -rf node/storage/db/alembic/versions/*",
-            f"sudo -u postgres psql -d template1 -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{LOCAL_DB_NAME}' AND pid <> pg_backend_pid();\"",
-            f"sudo -u postgres psql -d template1 -c \"DROP DATABASE IF EXISTS {LOCAL_DB_NAME};\"",
-            f"sudo -u postgres psql -d template1 -c \"DROP USER IF EXISTS {LOCAL_DB_USER};\"",
-            f"sudo -u postgres psql -d template1 -c \"CREATE USER {LOCAL_DB_USER} WITH PASSWORD '{LOCAL_DB_PASSWORD}';\"",
-            f"sudo -u postgres psql -d template1 -c \"CREATE DATABASE {LOCAL_DB_NAME} WITH OWNER {LOCAL_DB_USER};\"",
-            f"sudo -u postgres psql -d template1 -c \"ALTER USER {LOCAL_DB_USER} CREATEDB;\""
+            f"sudo -u postgres psql -d template1 -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{LOCAL_DB_POSTGRES_NAME}' AND pid <> pg_backend_pid();\"",
+            f"sudo -u postgres psql -d template1 -c \"DROP DATABASE IF EXISTS {LOCAL_DB_POSTGRES_NAME};\"",
+            f"sudo -u postgres psql -d template1 -c \"DROP USER IF EXISTS {LOCAL_DB_POSTGRES_USERNAME};\"",
+            f"sudo -u postgres psql -d template1 -c \"CREATE USER {LOCAL_DB_POSTGRES_USERNAME} WITH PASSWORD '{LOCAL_DB_POSTGRES_PASSWORD}';\"",
+            f"sudo -u postgres psql -d template1 -c \"CREATE DATABASE {LOCAL_DB_POSTGRES_NAME} WITH OWNER {LOCAL_DB_POSTGRES_USERNAME};\"",
+            f"sudo -u postgres psql -d template1 -c \"ALTER USER {LOCAL_DB_POSTGRES_USERNAME} CREATEDB;\""
         ]
 
     print("Executing database commands...")

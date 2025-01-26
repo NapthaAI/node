@@ -1,10 +1,10 @@
 import asyncio
 import logging
 import uuid
-from typing import Dict, Any, List
+from typing import List
 import numpy as np
 from datetime import datetime
-from node.storage.db.db import DB
+from node.storage.db.db import LocalDBPostgres
 from sqlalchemy import text
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ async def test_regular_table():
         "created_at": {"type": "timestamp", "default": "CURRENT_TIMESTAMP"}
     }
 
-    async with DB() as db:
+    async with LocalDBPostgres() as db:
         table_names = ["test_regular"]
         await clean_up_tables(db, table_names)
         try:
@@ -120,7 +120,7 @@ async def test_vector_table():
         "metadata": {"type": "jsonb"}
     }
 
-    async with DB() as db:
+    async with LocalDBPostgres() as db:
         try:
             # Clean up existing tables
             table_name = "test_vectors"

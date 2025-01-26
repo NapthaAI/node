@@ -6,9 +6,10 @@ DEFINE TABLE node SCHEMAFULL
 DEFINE FIELD owner ON TABLE node TYPE record<user>;
 DEFINE FIELD public_key ON TABLE node TYPE string;
 DEFINE FIELD ip ON TABLE node TYPE string;
-DEFINE FIELD server_type ON TABLE node TYPE string;
-DEFINE FIELD http_port ON TABLE node TYPE number;
-DEFINE FIELD num_servers ON TABLE node TYPE number;
+DEFINE FIELD user_communication_protocol ON TABLE node TYPE string;
+DEFINE FIELD user_communication_port ON TABLE node TYPE number;
+DEFINE FIELD node_communication_protocol ON TABLE node TYPE string;
+DEFINE FIELD num_node_communication_servers ON TABLE node TYPE number;
 DEFINE FIELD provider_types ON TABLE node TYPE array<string>;
 DEFINE FIELD servers ON TABLE node TYPE array<record<server>>;
 DEFINE FIELD models ON TABLE node FLEXIBLE TYPE array;
@@ -25,6 +26,6 @@ DEFINE TABLE server SCHEMAFULL
     PERMISSIONS 
         FOR create, select, update, delete WHERE true;
 
-DEFINE FIELD server_type ON TABLE server TYPE string;
+DEFINE FIELD communication_protocol ON TABLE server TYPE string;
 DEFINE FIELD port ON TABLE server TYPE number;
 DEFINE FIELD node_id ON TABLE server TYPE string;

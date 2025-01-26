@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Optional
 import traceback
 
-from node.config import get_node_config
-from node.storage.hub.hub import Hub
+from node.config import get_node_config, REGISTER_NODE_WITH_HUB
+from node.storage.hub.hub import HubDBSurreal
 from node.server.http_server import HTTPServer
 from node.server.ws_server import WebSocketServer
 from node.server.grpc_server import GrpcServer
@@ -21,21 +21,20 @@ PARENT_DIR = FILE_PATH.parent
 
 
 class NodeServer:
-    def __init__(self, server_type: str, port: int):
+    def __init__(self, communication_protocol: str, port: int):
         self.node_config = get_node_config()
         self.node_id = self.node_config.id.split(":")[1]
         # Store initial config values
         self.ip = self.node_config.ip
         self.server: Optional[HTTPServer | WebSocketServer | GrpcServer] = None
-        self.server_type = server_type
+        self.communication_protocol = communication_protocol
         self.port = port
-        self.hub = Hub()
+        self.hub = HubDBSurreal()
         self.shutdown_event = asyncio.Event()
 
     async def register_node(self):
         """Register the node with the hub - only HTTP server does this"""
-        if self.server_type == "http":
-            logger.info('Attempting to register node for HTTP server')
+        if self.communication_protocol == "http":
             try:
                 async with self.hub as hub:
                     success, user, user_id = await hub.signin(
@@ -56,19 +55,18 @@ class NodeServer:
                     # Create http server records first
                     server_records = []
                     ip_ = self.node_config.ip
-                    http_port = self.node_config.http_port
                     if "http://" in ip_:    
                         ip_ = ip_.split("//")[1]
                     server_records.append({
-                        "server_type": 'http',
+                        "communication_protocol": self.node_config.user_communication_protocol,
                         "node_id": self.node_id,
-                        "port": http_port
+                        "port": self.node_config.user_communication_port
                     })
 
                     # Create other server records
-                    for i in range(self.node_config.num_servers):
+                    for i in range(self.node_config.num_node_communication_servers):
                         server_records.append({
-                            "server_type": self.node_config.server_type,
+                            "communication_protocol": self.node_config.node_communication_protocol,
                             "node_id": self.node_id,
                             "port": self.node_config.servers[i].port
                         })
@@ -96,7 +94,7 @@ class NodeServer:
         else:
             ip = self.ip
 
-        if self.server_type == "http":
+        if self.communication_protocol == "http":
             logger.info(f"Starting HTTP server on port {self.port}...")
             self.server = HTTPServer(ip, self.port)
             # Store reference to NodeServer in app state
@@ -111,14 +109,14 @@ class NodeServer:
                 except Exception as e:
                     logger.error(f"Error during shutdown: {e}")
 
-        elif self.server_type == "ws":
+        elif self.communication_protocol == "ws":
             logger.info(f"Starting WebSocket server on port {self.port}...")
             self.server = WebSocketServer(
                 ip, 
                 self.port,
                 node_id=self.node_id
             )
-        elif self.server_type == "grpc":
+        elif self.communication_protocol == "grpc":
             logger.info(f"Starting gRPC server on port {self.port}...")
             self.server = GrpcServer(
                 ip,
@@ -126,13 +124,13 @@ class NodeServer:
                 node_id=self.node_id
             )
         else:
-            raise ValueError(f"Invalid server type: {self.server_type}")
+            raise ValueError(f"Invalid server type: {self.communication_protocol}")
 
         await self.server.launch_server()
 
     async def unregister_node(self):
         """Unregister the node from the hub - only HTTP server does this"""
-        if self.server_type == "http":
+        if self.communication_protocol == "http":
             try:
                 logger.info("Unregistering node from hub")
 
@@ -142,7 +140,7 @@ class NodeServer:
                 node_id = self.node_config["id"]
                 logger.info(f"Attempting to unregister node: {node_id}")
 
-                async with Hub() as hub:
+                async with HubDBSurreal() as hub:
                     try:
                         # Add timeout to signin
                         success, user, user_id = await asyncio.wait_for(
@@ -164,7 +162,7 @@ class NodeServer:
                             logger.error(f"Failed to unregister node: {node_id}")
                             raise Exception("Failed to unregister node")
                     except asyncio.TimeoutError:
-                        logger.error("Hub operation timed out")
+                        logger.error("HubDBSurreal operation timed out")
                         raise
             except Exception as e:
                 logger.error(f"Error during node unregistration: {e}")
@@ -176,11 +174,11 @@ class NodeServer:
         if sig:
             logger.info(f'Received exit signal {sig.name}...')
         
-        logger.info(f"Initiating graceful shutdown for {self.server_type} server on port {self.port}...")
+        logger.info(f"Initiating graceful shutdown for {self.communication_protocol} server on port {self.port}...")
         self.shutdown_event.set()
         
         try:
-            if self.server_type == "http":
+            if self.communication_protocol == "http":
                 logger.info("HTTP server shutting down, attempting to unregister node...")
                 # Add timeout to unregister operation
                 try:
@@ -203,17 +201,17 @@ class NodeServer:
                     logger.error(f"Error stopping HTTP server: {e}")
             
         except Exception as e:
-            logger.error(f"Error during {self.server_type} server shutdown: {e}")
+            logger.error(f"Error during {self.communication_protocol} server shutdown: {e}")
         finally:
             # Give time for cleanup operations to complete
             logger.info("Cleanup delay before exit...")
             await asyncio.sleep(1)
-            logger.info(f"Forcing exit of {self.server_type} server...")
+            logger.info(f"Forcing exit of {self.communication_protocol} server...")
             os._exit(0)
 
-async def run_server(server_type: str, port: int):
+async def run_server(communication_protocol: str, port: int):
     """Main function to run a single server"""
-    node_server = NodeServer(server_type, port)
+    node_server = NodeServer(communication_protocol, port)
     
     def signal_handler(sig):
         """Handle shutdown signals"""
@@ -228,12 +226,11 @@ async def run_server(server_type: str, port: int):
                 lambda s=sig: signal_handler(s)
             )
 
-        if "node.naptha.ai" in node_server.hub.hub_url and node_server.node_config.ip == "localhost":
-            raise Exception("Cannot register node on public hub with NODE_IP localhost. Please change NODE_IP in config.py to your public IP address or domain name.")
-
-        # Register node (only for HTTP server)
-        await node_server.register_node()
-
+        if REGISTER_NODE_WITH_HUB:
+            if node_server.node_config.ip == "localhost":
+                raise Exception("Cannot register node on hub with NODE_IP localhost. Either change REGISTER_NODE_WITH_HUB to False, or set NODE_IP to your public IP address or domain name in config.py.")
+            # Register node (only for HTTP server)
+            await node_server.register_node()
         # Start server
         await node_server.start_server()
         
@@ -254,7 +251,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run node server")
     parser.add_argument(
-        "--server-type",
+        "--communication-protocol",
         type=str,
         choices=["http", "ws", "grpc"],
         required=True,
@@ -270,6 +267,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     asyncio.run(run_server(
-        server_type=args.server_type,
+        communication_protocol=args.communication_protocol,
         port=args.port
     ))

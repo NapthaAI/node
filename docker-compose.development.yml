@@ -31,7 +31,7 @@ services:
     environment:
       POSTGRES_USER: ${LOCAL_DB_USER?:error}
       PGUSER: ${LOCAL_DB_USER?:error}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
     restart: unless-stopped
     healthcheck:
       test: pg_isready -d postgres
@@ -97,7 +97,7 @@ services:
       - ./.env
     environment:
       LOCAL_DB_HOST: pgvector # name of the service
-      LOCAL_DB_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      LOCAL_DB_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
