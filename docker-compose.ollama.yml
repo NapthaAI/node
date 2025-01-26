@@ -25,7 +25,7 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
-      DATABASE_URL: postgresql://${LOCAL_DB_USER?:error}:${LOCAL_DB_PASSWORD:?error}@pgvector:5432/litellm
+      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
     volumes:
       - ./litellm_config.ollama.yml:/app/config.yaml
     ports:
