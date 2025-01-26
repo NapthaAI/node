@@ -29,7 +29,7 @@ ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
-LITELLM_URL="http://localhost:4000" # TODO change all this
+LITELLM_URL="http://litellm:4000" # TODO change all this
 LLM_BACKEND="ollama"
 
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
@@ -41,7 +41,7 @@ MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
 
-LOCAL_DB_POSTGRES_PORT=3002
+LOCAL_DB_POSTGRES_PORT=5432
 LOCAL_DB_POSTGRES_NAME="naptha"
 LOCAL_DB_POSTGRES_HOST="pgvector" # name of the service container
 
