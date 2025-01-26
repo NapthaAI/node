@@ -12,7 +12,7 @@ import logging
 from io import BytesIO
 from typing import Any, Dict, Union, BinaryIO, List
 
-from node.storage.db.db import DB
+from node.storage.db.db import LocalDBPostgres
 from node.storage.schemas import StorageLocation, StorageObject, StorageType, DatabaseReadOptions, IPFSOptions, StorageMetadata
 from node.storage.utils import zip_directory, get_api_url
 from node.config import IPFS_GATEWAY_URL
@@ -85,7 +85,7 @@ class DatabaseStorageProvider(StorageProvider):
 
     async def create(self, location: StorageLocation, request_data: Dict, db_options: Dict[str, Any] = None) -> StorageObject:
         table_name = location.path.split('/')[0]
-        async with DB() as db:
+        async with LocalDBPostgres() as db:
             if "schema" in request_data:  
                 logger.info(f"Creating table {table_name} with schema {request_data['schema']}")
                 return await db.create_dynamic_table(table_name, request_data["schema"])
@@ -97,7 +97,7 @@ class DatabaseStorageProvider(StorageProvider):
     async def read(self, location: StorageLocation, db_options: DatabaseReadOptions = None) -> StorageObject:
         table_name = location.path.split('/')[0]
         
-        async with DB() as db:
+        async with LocalDBPostgres() as db:
             try:
                 # Vector similarity search
                 if db_options.vector_col:
@@ -130,7 +130,7 @@ class DatabaseStorageProvider(StorageProvider):
     async def delete(self, location: StorageLocation, options: Dict[str, Any] = None) -> bool:
         table_name = location.path.split('/')[0]
 
-        async with DB() as db:
+        async with LocalDBPostgres() as db:
             if options and "condition" in options:  
                 logger.info(f"Deleting row(s) from table {table_name} with data {options['condition']}")
                 result = await db.delete_dynamic_row(table_name, options["condition"])
@@ -142,7 +142,7 @@ class DatabaseStorageProvider(StorageProvider):
  
     async def list(self, location: StorageLocation, options: DatabaseReadOptions = None) -> List[StorageObject]:
         table_name = location.path.split('/')[0]
-        async with DB() as db:
+        async with LocalDBPostgres() as db:
             result = await db.list_dynamic_rows(table_name, limit=options.limit, offset=options.offset)
             return StorageObject(location=location, data=result)
 
@@ -155,7 +155,7 @@ class DatabaseStorageProvider(StorageProvider):
         """Update rows in a database table"""
         table_name = location.path.split('/')[0]
         
-        async with DB() as db:
+        async with LocalDBPostgres() as db:
             try:
                 if not isinstance(data, Dict):
                     raise ValueError("Data must be a dictionary for database updates")

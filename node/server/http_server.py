@@ -39,8 +39,8 @@ from node.schemas import (
     ModuleExecutionType,
     ToolDeployment,
 )
-from node.storage.db.db import DB
-from node.storage.hub.hub import Hub
+from node.storage.db.db import LocalDBPostgres
+from node.storage.hub.hub import HubDBSurreal
 from node.user import check_user, register_user, get_user_public_key, verify_signature
 from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
@@ -276,7 +276,7 @@ class HTTPServer:
                 Gets server connection details from hub and returns appropriate Node object
             """
             try:
-                async with Hub() as hub:
+                async with HubDBSurreal() as hub:
                     logger.info(f"Getting server connection for {server_id}")
                     server = await hub.get_server(server_id=server_id)
                     logger.info(f"Server: {server}")
@@ -421,7 +421,7 @@ class HTTPServer:
                 raise HTTPException(status_code=401, detail="Unauthorized: Invalid signature")
 
             # Create module run record in DB
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 module_run = await create_func(db)(module_run_input)
                 if not module_run:
                     raise HTTPException(status_code=500, detail=f"Failed to create {module_type} run")
@@ -543,7 +543,7 @@ class HTTPServer:
             if module_run.id is None:
                 raise HTTPException(status_code=400, detail=f"{module_type.capitalize()} run ID is required")
 
-            async with DB() as db:
+            async with LocalDBPostgres() as db:
                 run_data = await list_func(db)
                 if isinstance(run_data, list):
                     run_data = run_data[0]

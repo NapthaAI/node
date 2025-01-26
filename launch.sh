@@ -630,7 +630,7 @@ start_hub_surrealdb() {
     PWD=$(pwd)
     echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
     if [ "$LOCAL_HUB" == "True" ]; then
-        echo "Running Hub DB locally..." | log_with_service_name "HubDB" $RED
+        echo "Running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDBSurreal" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
         chmod +x "$INIT_PYTHON_PATH"
@@ -639,26 +639,26 @@ start_hub_surrealdb() {
         PYTHON_EXIT_STATUS=$?
 
         if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-            echo "Hub DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDB" $RED
+            echo "Hub DB (SurrealDB) initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
             exit 1
         fi
 
-        # Check if Hub DB is running
-        if curl -s http://localhost:$HUB_DB_PORT/health > /dev/null; then
-            echo "Hub DB is running successfully." | log_with_service_name "HubDB" $RED
+        # Check if Hub DB (SurrealDB) is running
+        if curl -s http://localhost:$HUB_DB_SURREAL_PORT/health > /dev/null; then
+            echo "Hub DB (SurrealDB) is running successfully." | log_with_service_name "HubDBSurreal" $RED
         else
-            echo "Hub DB failed to start. Please check the logs." | log_with_service_name "HubDB" $RED
+            echo "Hub DB failed to start. Please check the logs." | log_with_service_name "HubDBSurreal" $RED
             exit 1
         fi
     else
-        echo "Not running Hub DB locally..." | log_with_service_name "HubDB" $RED
+        echo "Not running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDBSurreal" $RED
     fi
 
     poetry run python "$PWD/node/storage/hub/init_hub.py" --user 2>&1
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Hub DB sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDB" $RED
+        echo "Hub DB (SurrealDB) sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
         exit 1
     fi
 }
@@ -666,7 +666,7 @@ start_hub_surrealdb() {
 start_local_surrealdb() {
     PWD=$(pwd)
 
-    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    echo "Running Local DB..." | log_with_service_name "LocalDBPostgres" $RED
     
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
@@ -675,15 +675,15 @@ start_local_surrealdb() {
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 
     # Check if Local DB is running
     if curl -s http://localhost:$SURREALDB_PORT/health > /dev/null; then
-        echo "Local DB is running successfully." | log_with_service_name "LocalDB" $RED
+        echo "Local DB is running successfully." | log_with_service_name "LocalDBPostgres" $RED
     else
-        echo "Local DB failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        echo "Local DB failed to start. Please check the logs." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 }
@@ -1294,8 +1294,8 @@ linux_setup_local_db() {
     
     sudo cp $POSTGRESQL_CONF ${POSTGRESQL_CONF}.bak
     
-    echo "Setting port to $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $BLUE
-    sudo sed -i "s/^\s*#*\s*port\s*=.*/port = $LOCAL_DB_PORT/" $POSTGRESQL_CONF
+    echo "Setting port to $LOCAL_DB_POSTGRES_PORT" | log_with_service_name "PostgreSQL" $BLUE
+    sudo sed -i "s/^\s*#*\s*port\s*=.*/port = $LOCAL_DB_POSTGRES_PORT/" $POSTGRESQL_CONF
     
     echo "Setting listen_addresses to '*'" | log_with_service_name "PostgreSQL" $BLUE
     sudo sed -i "s/^\s*#*\s*listen_addresses\s*=.*/listen_addresses = '*'/" $POSTGRESQL_CONF
@@ -1307,48 +1307,48 @@ linux_setup_local_db() {
 
     sudo sed -i "s/^local\s\+all\s\+all\s\+\(peer\|ident\)/local   all             all                                     md5/" $PG_HBA_CONF
 
-    echo "PostgreSQL configured to listen on port $LOCAL_DB_PORT" | log_with_service_name "PostgreSQL" $BLUE
+    echo "PostgreSQL configured to listen on port $LOCAL_DB_POSTGRES_PORT" | log_with_service_name "PostgreSQL" $BLUE
 
     echo "Restarting PostgreSQL service..." | log_with_service_name "PostgreSQL" $BLUE
     sudo systemctl restart postgresql
     sleep 5
 
     echo "Verifying PostgreSQL is running..." | log_with_service_name "PostgreSQL" $BLUE
-    if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
-        echo "PostgreSQL service started successfully on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $BLUE
+    if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" >/dev/null 2>&1; then
+        echo "PostgreSQL service started successfully on port $LOCAL_DB_POSTGRES_PORT." | log_with_service_name "PostgreSQL" $BLUE
     else
-        echo "Failed to connect to PostgreSQL on port $LOCAL_DB_PORT." | log_with_service_name "PostgreSQL" $BLUE
+        echo "Failed to connect to PostgreSQL on port $LOCAL_DB_POSTGRES_PORT." | log_with_service_name "PostgreSQL" $BLUE
         exit 1
     fi
 
     echo "Creating database and user..." | log_with_service_name "PostgreSQL" $BLUE
     
     # Create user
-    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT <<EOF
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT <<EOF
     DO \$\$
     BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$LOCAL_DB_USER') THEN
-            CREATE USER $LOCAL_DB_USER WITH ENCRYPTED PASSWORD '$LOCAL_DB_PASSWORD';
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$LOCAL_DB_POSTGRES_USERNAME') THEN
+            CREATE USER $LOCAL_DB_POSTGRES_USERNAME WITH ENCRYPTED PASSWORD '$LOCAL_DB_POSTGRES_PASSWORD';
         END IF;
     END
     \$\$;
 EOF
 
     # Create database
-    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "CREATE DATABASE $LOCAL_DB_NAME WITH OWNER $LOCAL_DB_USER;"
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT -c "CREATE DATABASE $LOCAL_DB_POSTGRES_NAME WITH OWNER $LOCAL_DB_POSTGRES_USERNAME;"
 
     # Set permissions
-    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME <<EOF
-    GRANT ALL PRIVILEGES ON DATABASE $LOCAL_DB_NAME TO $LOCAL_DB_USER;
-    GRANT ALL ON SCHEMA public TO $LOCAL_DB_USER;
-    ALTER SCHEMA public OWNER TO $LOCAL_DB_USER;
-    GRANT ALL ON ALL TABLES IN SCHEMA public TO $LOCAL_DB_USER;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_USER;
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT -d $LOCAL_DB_POSTGRES_NAME <<EOF
+    GRANT ALL PRIVILEGES ON DATABASE $LOCAL_DB_POSTGRES_NAME TO $LOCAL_DB_POSTGRES_USERNAME;
+    GRANT ALL ON SCHEMA public TO $LOCAL_DB_POSTGRES_USERNAME;
+    ALTER SCHEMA public OWNER TO $LOCAL_DB_POSTGRES_USERNAME;
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO $LOCAL_DB_POSTGRES_USERNAME;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $LOCAL_DB_POSTGRES_USERNAME;
 EOF
 
     # Create pgvector extension
     echo "Creating pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
-    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -d $LOCAL_DB_NAME -c "CREATE EXTENSION IF NOT EXISTS vector;"
+    sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT -d $LOCAL_DB_POSTGRES_NAME -c "CREATE EXTENSION IF NOT EXISTS vector;"
     
     echo "Database and user setup completed successfully" | log_with_service_name "PostgreSQL" $BLUE
 }
@@ -1358,25 +1358,25 @@ linux_start_local_db() {
     POSTGRES_BIN_PATH="/usr/lib/postgresql/16/bin"
     PSQL_BIN="$POSTGRES_BIN_PATH/psql"
 
-    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    echo "Running Local DB..." | log_with_service_name "LocalDBPostgres" $RED
     
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
 
-    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $RED
+    echo "Running init_db.py script..." | log_with_service_name "LocalDBPostgres" $RED
     poetry run python "$INIT_PYTHON_PATH" 2>&1
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 
-    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDB" $RED
-    if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
-        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDB" $RED
+    echo "Checking if PostgreSQL is running..." | log_with_service_name "LocalDBPostgres" $RED
+    if sudo -u postgres $PSQL_BIN -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" >/dev/null 2>&1; then
+        echo "Local DB (PostgreSQL) is running successfully." | log_with_service_name "LocalDBPostgres" $RED
     else
-        echo "Local DB (PostgreSQL) failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        echo "Local DB (PostgreSQL) failed to start. Please check the logs." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 }
@@ -1417,7 +1417,7 @@ darwin_setup_local_db() {
     # Backup and update configuration
     if [ -f "$POSTGRESQL_CONF" ]; then
         cp "$POSTGRESQL_CONF" "${POSTGRESQL_CONF}.bak"
-        sed -i '' "s/^#port = .*/port = $LOCAL_DB_PORT/" "$POSTGRESQL_CONF"
+        sed -i '' "s/^#port = .*/port = $LOCAL_DB_POSTGRES_PORT/" "$POSTGRESQL_CONF"
         sed -i '' "s/^#listen_addresses = .*/listen_addresses = '*'/" "$POSTGRESQL_CONF"
         sed -i '' "s/^#max_connections = .*/max_connections = 2000/" "$POSTGRESQL_CONF"
     fi
@@ -1449,7 +1449,7 @@ darwin_setup_local_db() {
     max_attempts=10
     attempt=1
     while [ $attempt -le $max_attempts ]; do
-        if pg_isready -p "$LOCAL_DB_PORT"; then
+        if pg_isready -p "$LOCAL_DB_POSTGRES_PORT"; then
             echo "PostgreSQL is ready." | log_with_service_name "PostgreSQL" $BLUE
             break
         fi
@@ -1465,26 +1465,26 @@ darwin_setup_local_db() {
 
     # Create user and database
     echo "Creating database user and database..." | log_with_service_name "PostgreSQL" $BLUE
-    psql postgres -p "$LOCAL_DB_PORT" <<EOF
+    psql postgres -p "$LOCAL_DB_POSTGRES_PORT" <<EOF
     DO \$\$
     BEGIN
-        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$LOCAL_DB_USER') THEN
-            CREATE USER $LOCAL_DB_USER WITH PASSWORD '$LOCAL_DB_PASSWORD';
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$LOCAL_DB_POSTGRES_USERNAME') THEN
+            CREATE USER $LOCAL_DB_POSTGRES_USERNAME WITH PASSWORD '$LOCAL_DB_POSTGRES_PASSWORD';
         END IF;
     END \$\$;
-    CREATE DATABASE $LOCAL_DB_NAME WITH OWNER $LOCAL_DB_USER;
+    CREATE DATABASE $LOCAL_DB_POSTGRES_NAME WITH OWNER $LOCAL_DB_POSTGRES_USERNAME;
 EOF
 
     # Set permissions
-    psql -d "$LOCAL_DB_NAME" -p "$LOCAL_DB_PORT" <<EOF
-    GRANT ALL PRIVILEGES ON DATABASE $LOCAL_DB_NAME TO $LOCAL_DB_USER;
-    GRANT ALL ON SCHEMA public TO $LOCAL_DB_USER;
-    ALTER SCHEMA public OWNER TO $LOCAL_DB_USER;
+    psql -d "$LOCAL_DB_POSTGRES_NAME" -p "$LOCAL_DB_POSTGRES_PORT" <<EOF
+    GRANT ALL PRIVILEGES ON DATABASE $LOCAL_DB_POSTGRES_NAME TO $LOCAL_DB_POSTGRES_USERNAME;
+    GRANT ALL ON SCHEMA public TO $LOCAL_DB_POSTGRES_USERNAME;
+    ALTER SCHEMA public OWNER TO $LOCAL_DB_POSTGRES_USERNAME;
 EOF
 
     # Create pgvector extension
     echo "Creating pgvector extension..." | log_with_service_name "PostgreSQL" $BLUE
-    psql -d "$LOCAL_DB_NAME" -p "$LOCAL_DB_PORT" -c "CREATE EXTENSION IF NOT EXISTS vector;"
+    psql -d "$LOCAL_DB_POSTGRES_NAME" -p "$LOCAL_DB_POSTGRES_PORT" -c "CREATE EXTENSION IF NOT EXISTS vector;"
     
     if [ $? -eq 0 ]; then
         echo "PostgreSQL setup completed successfully." | log_with_service_name "PostgreSQL" $GREEN
@@ -1497,25 +1497,25 @@ EOF
 darwin_start_local_db() {
     PWD=$(pwd)
 
-    echo "Running Local DB..." | log_with_service_name "LocalDB" $RED
+    echo "Running Local DB..." | log_with_service_name "LocalDBPostgres" $RED
     
     INIT_PYTHON_PATH="$PWD/node/storage/db/init_db.py"
     chmod +x "$INIT_PYTHON_PATH"
 
-    echo "Running init_db.py script..." | log_with_service_name "LocalDB" $RED
+    echo "Running init_db.py script..." | log_with_service_name "LocalDBPostgres" $RED
     poetry run python "$INIT_PYTHON_PATH" 2>&1
     PYTHON_EXIT_STATUS=$?
 
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
-        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDB" $RED
+        echo "Local DB initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 
-    echo "Checking if PostgreSQL 16 is running..." | log_with_service_name "LocalDB" $RED
-    if psql -p $LOCAL_DB_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
-        echo "Local DB (PostgreSQL 16) is running successfully." | log_with_service_name "LocalDB" $RED
+    echo "Checking if PostgreSQL 16 is running..." | log_with_service_name "LocalDBPostgres" $RED
+    if psql -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
+        echo "Local DB (PostgreSQL 16) is running successfully." | log_with_service_name "LocalDBPostgres" $RED
     else
-        echo "Local DB (PostgreSQL 16) failed to start. Please check the logs." | log_with_service_name "LocalDB" $RED
+        echo "Local DB (PostgreSQL 16) failed to start. Please check the logs." | log_with_service_name "LocalDBPostgres" $RED
         exit 1
     fi
 }
@@ -1655,7 +1655,7 @@ startup_summary() {
     # Check PostgreSQL
     services+=("PostgreSQL")
     if [ "$os" = "Darwin" ]; then
-        if psql -p $LOCAL_DB_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
+        if psql -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" postgres >/dev/null 2>&1; then
             statuses+=("✅")
             logs+=("")
         else
@@ -1663,7 +1663,7 @@ startup_summary() {
             logs+=("$(tail -n 20 /opt/homebrew/var/log/postgresql@16.log)")
         fi
     else
-        if sudo -u postgres psql -p $LOCAL_DB_PORT -c "SELECT 1" >/dev/null 2>&1; then
+        if sudo -u postgres psql -p $LOCAL_DB_POSTGRES_PORT -c "SELECT 1" >/dev/null 2>&1; then
             statuses+=("✅")
             logs+=("")
         else
@@ -1675,7 +1675,7 @@ startup_summary() {
     # Check Local Hub if enabled
     if [ "$LOCAL_HUB" == "True" ]; then
         services+=("Hub_DB")
-        if curl -s http://localhost:$HUB_DB_PORT/health > /dev/null; then
+        if curl -s http://localhost:$HUB_DB_SURREAL_PORT/health > /dev/null; then
             statuses+=("✅")
             logs+=("")
         else
