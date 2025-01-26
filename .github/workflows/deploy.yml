@@ -1,0 +1,49 @@
+name: Deploy Application
+
+on:
+  push:
+    branches:
+      - feat/github-actions  # TODO: Change this to main once testing is done
+  pull_request:
+    types:
+      - closed
+    branches:
+      - feat/github-actions  # TODO: Change this to main once testing is done
+
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/daimon.pem
+          chmod 600 ~/.ssh/daimon.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/daimon.pem ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+            cd ${{ secrets.DEPLOY_PATH }}
+            git stash
+            git fetch origin feat/github-actions     # TODO: Change this to main once testing is done
+            git reset --hard origin/feat/github-actions  # TODO: Change this to main once testing is done
+            git stash pop || true
+            bash stop_service.sh
+            bash launch.sh
+            echo "Deployment completed at $(date)"
+          EOF
+
+      - name: Deployment Status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+          fi
