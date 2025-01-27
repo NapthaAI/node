@@ -19,6 +19,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     deploy:
       resources:
@@ -43,6 +46,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
@@ -69,7 +75,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
-      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
@@ -97,7 +105,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
-      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
@@ -111,22 +121,21 @@ services:
   vllm-4:
     image: vllm/vllm-openai:latest
     entrypoint: [
-      "vllm", "serve", "openbmb/MiniCPM3-4B",
-      "--enable-prefix-caching", "--enable-auto-tool-choice", "--enable-chunked-prefill",
-      "--tool-parser-plugin", "/usr/app/tool-parsers/minicpm3_tool_parser.py",
+      "vllm", "serve", "ibm-granite/granite-3.1-8b-instruct",
+      "--enable-auto-tool-choice", "--enable-chunked-prefill", "--enable-prefix-caching",
       "--gpu-memory-utilization", "0.98",
       "--max-model-len", "32768",
-      "--tool-call-parser", "minicpm",
-      "--chat-template", "/usr/app/chat-templates/minicpm3_4b.jinja",
-      "--trust-remote-code"
+      "--tool-call-parser", "granite",
     ]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
     volumes:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
-      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
@@ -134,14 +143,14 @@ services:
         reservations:
           devices:
             - driver: "nvidia"
-              capabilities: [ "gpu" ]
-              device_ids: [ "4" ]
+              capabilities: ["gpu"]
+              device_ids: ["4"]
+
   vllm-5:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "internlm/internlm2_5-7b-chat",
       "--enable-prefix-caching", "--enable-auto-tool-choice", "--enable-chunked-prefill",
-      "--tool-parser", "internlm",
       "--gpu-memory-utilization", "0.98",
       "--max-model-len", "65536",
       "--tool-call-parser", "internlm",
@@ -154,7 +163,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
-      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
@@ -181,7 +192,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
-      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
@@ -195,7 +208,7 @@ services:
   vllm-7:
     image: vllm/vllm-openai:latest
     entrypoint: [
-      "vllm", "serve", "jinaai/jina-embeddings-v2-base-en"
+      "vllm", "serve", "BAAI/bge-base-en-v1.5"
     ]
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
@@ -203,6 +216,9 @@ services:
       - type: bind
         source: ${HF_HOME:?error}
         target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
     deploy:
