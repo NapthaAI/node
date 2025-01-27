@@ -177,8 +177,8 @@ class NodeServer:
         self.shutdown_event.set()
         
         try:
-            if self.communication_protocol == "http":
-                logger.info("HTTP server shutting down, attempting to unregister node...")
+            if self.communication_protocol == "http" and REGISTER_NODE_WITH_HUB:
+                logger.info("HTTP server shutting down, will unregister node")
                 # Add timeout to unregister operation
                 try:
                     await asyncio.wait_for(self.unregister_node(), timeout=20.0)
@@ -187,6 +187,8 @@ class NodeServer:
                     logger.error("Node unregistration timed out")
                 except Exception as e:
                     logger.error(f"Failed to unregister node during shutdown: {e}")
+            else:
+                logger.info("HTTP server shutting down, node unregistration not required")
             
             # Handle server-specific shutdown
             if isinstance(self.server, HTTPServer):
@@ -225,7 +227,7 @@ async def run_server(communication_protocol: str, port: int):
                 lambda s=sig: signal_handler(s)
             )
 
-        if REGISTER_NODE_WITH_HUB:
+        if REGISTER_NODE_WITH_HUB and node_server.communication_protocol == "http":
             if node_server.node_config.ip == "localhost":
                 raise Exception("Cannot register node on hub with NODE_IP localhost. Either change REGISTER_NODE_WITH_HUB to False, or set NODE_IP to your public IP address or domain name in config.py.")
             # Register node (only for HTTP server)
