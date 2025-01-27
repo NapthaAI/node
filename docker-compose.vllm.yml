@@ -60,7 +60,7 @@ services:
       "--enable-prefix-caching", "--enable-chunked-prefill",
       "--gpu-memory-utilization", "0.98",
       "--max-model-len", "131072",
-      "--enable-auto-tool-choice", "--tool-call-parser", "llama3_json"
+      "--enable-auto-tool-choice", "--tool-call-parser", "llama3_json",
       "--chat-template", "/usr/app/chat-templates/llama_3_1.jinja"
     ]
     environment:
@@ -107,6 +107,112 @@ services:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
               device_ids: [ "3" ]
+
+  vllm-4:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "openbmb/MiniCPM3-4B",
+      "--enable-prefix-caching", "--enable-auto-tool-choice", "--enable-chunked-prefill",
+      "--tool-parser-plugin", "/usr/app/tool-parsers/minicpm3_tool_parser.py",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "32768",
+      "--tool-call-parser", "minicpm",
+      "--chat-template", "/usr/app/chat-templates/minicpm3_4b.jinja",
+      "--trust-remote-code"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "4" ]
+  vllm-5:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "internlm/internlm2_5-7b-chat",
+      "--enable-prefix-caching", "--enable-auto-tool-choice", "--enable-chunked-prefill",
+      "--tool-parser", "internlm",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "65536",
+      "--tool-call-parser", "internlm",
+      "--chat-template", "/usr/app/chat-templates/internlm.jinja",
+      "--trust-remote-code"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "5" ]
+
+  vllm-6:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "meetkai/functionary-small-v3.1",
+      "--enable-auto-tool-choice", "--enable-chunked-prefill", # no prefix caching bc sliding window
+      "--tool-parser-plugin", "/usr/app/tool-parsers/llama3_xml.py", # uses llama 3.1's XML-like format
+      "--tool-call-parser", "functionary_31",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "131072",
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - ./node/inference/configs:/usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "6" ]
+
+  vllm-7:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "jinaai/jina-embeddings-v2-base-en"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "7" ]
+
 
   # litellm
   litellm:
