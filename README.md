@@ -69,19 +69,6 @@ tail -n 100 -f /tmp/nodeapp_http.err
 
 You should see ```Uvicorn running on http://0.0.0.0:7001```. 
 
-## Launch with docker
-
-Copy the example env file and add a PRIVATE_KEY:
-
-```bash
-cp .env.example .env
-```
-
-Then run the node in docker:
-
-```bash
-bash launch_docker.sh
-```
 
 # Run AI agents on your node
 
@@ -167,12 +154,14 @@ If after the soft reset, you are still having issues related to the database on 
 make local-db-hard-reset
 ```
 
-## Docker & Docker Compose
-The Naptha Node providers Dockerfiles and a `docker-compose.yml` file that faciliate getting the node 
+# Running the node with Docker & Docker Compose
+The Naptha Node providers Dockerfiles and a `docker-compose.yml` file that facilitate getting the node 
 up-and-running as quickly and easily as possible. The node depends on a number of services, and this moduler approach 
 will allow you to run a single command (`docker compose up`) to get everything up and running, or to 
 only start the services that you need, for example if you have to use external rabbitmq/postgres/surrealdb services.
 
 Getting started:
-1. customize `node/config.py`
-2. configure your `.env` file based on 
+1. customize `node/config.py` as desired
+2. configure your `.env` file based on the provided `.env.example` file.
+    - note that the `RMQ_*` variables will be passed in to create the default RMQ user, and to authenticate with RMQ.
+    - the `HUB_DB_SURREAL_*` variables will be used for the local hub via surrealDB, if using the development compose file.
