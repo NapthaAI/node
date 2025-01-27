@@ -160,8 +160,116 @@ up-and-running as quickly and easily as possible. The node depends on a number o
 will allow you to run a single command (`docker compose up`) to get everything up and running, or to 
 only start the services that you need, for example if you have to use external rabbitmq/postgres/surrealdb services.
 
-Getting started:
-1. customize `node/config.py` as desired
-2. configure your `.env` file based on the provided `.env.example` file.
-    - note that the `RMQ_*` variables will be passed in to create the default RMQ user, and to authenticate with RMQ.
-    - the `HUB_DB_SURREAL_*` variables will be used for the local hub via surrealDB, if using the development compose file.
+## Configuring Your Environment
+
+### Customizing your `config.py` file
+
+
+
+### Customizing your `.env` file
+Start by copying the provided `.env` file:
+```shell
+cp .env.example .env
+```
+- note that the `RMQ_*` variables will be passed in to create the default RMQ user, and to authenticate with RMQ. `RMQ_HOST` 
+should be set to `rabbitmq` in this case, since that's the name of the rabbitmq service in the docker-compose files. The
+username and password can be whatever you want.
+- the `HUB_DB_SURREAL_*` variables will be used for the local hub via surrealDB, if using the development compose file.
+- the `LITELLM_*` variables are required for LiteLLM, which is the proxy used for 
+aggregating LLM APIs from e.v. vLLM, ollama, OpenAI, etc.
+You should pick secure values for these.
+- if you plan to use the default vLLM compose file, you need to make sure to set `HUGGINGFACE_TOKEN` to a hugging face acccess token
+that has access to Llama 3.1 8B. Similarly, if you plan to access other private/gated models (e.g. those by Meta and Mistral),
+make sure to set your hugging face access token in `.env`
+- if you plan to serve models with vLLM, make sure to set the `HF_HOME` environment variable to the path to your hugging face
+cache directory, so the models can be mounted as volumes rather than being re-downloaded every time a container is created. 
+This will mount your cache directory into vLLM containers, so that models are downloaded and cached on your disk and can be
+easily re-loaded and ure-used. The default hugging face cache directory is `/home/<your user>/.cache/huggingface`, unless you have 
+changed it. 
+
+
+## Running the Node
+
+### Production Mode (Without Inference)
+
+If you are running LiteLLM externally to the node, you can specify the `LITELLM_URL` value in `node/config.py`, and add `LITELLM_MASTER_KEY` 
+in your `.env` file so that your node is able to access your LiteLLM instance.
+Then, run:
+
+```shell 
+docker-compose -f docker-compose.yml up
+```
+
+to launch the node's applications and services.
+
+### Production Mode (With inference)
+If you are _not_ running LiteLLM already, you can select to either run a model with `ollama` (good for local development on CPU), 
+or with vLLM. In either case, you should set `LITELLM_URL` in `config.py` to `http://litellm:4000`, which is the 
+host and port of the LiteLLM container in the inference-enabled compose configurations.
+
+#### Ollama
+A default [LiteLLM configuration file](https://docs.litellm.ai/docs/proxy/configs) has been provided at `litellm_config.ollama.yml`, which matches  
+the ollama container's default model of `hermes3:8b` (served as `NousResearch/Hermes-3-Llama-3.1-8B`), but you can 
+change the served model if you would like:
+1. You can change the model(s) you want to run, by altering the entrypoint of the `ollama` service in `docker-compose.ollama.yml` to run 
+a model other than `hermes3:8b`, 
+2. Then, alter `litellm_config.ollama.yml` to reflect your selected model. The `model_name` in the LiteLLM configuration file should be the name to serve the model as, and the `model` should be `ollama_chat/<your model here>`, e.g. `ollama_chat/qwen2.5-coder`
+
+Using either the default ollama container config & LiteLLM model _or_ your altered one, run:
+
+```shell 
+docker compose -f docker-compose.ollama.yml up
+```
+to start ollama, LiteLLM, and the node and its services.
+_Please see the "Notes" section below for additional information about model serving & node usage 
+with ollama_
+
+#### vLLM
+The vllm docker-compose file runs several < 10B models and an embedding model with vLLM.
+(You can substitute TEI for vLLM for the embedding model, if you would like for broader model support).
+
+A default [LiteLLM configuration file](https://docs.litellm.ai/docs/proxy/configs) has been provided that matches the 
+served models in the vLLM docker compose file. 
+You can alter the served model(s) by altering the `docker-compose.vllm.yml` file and its corresponding `litellm_config.vllm.yaml` 
+LiteLLM configuration file. 
+
+Using either the default configuration or your altered one, run:
+```shell 
+docker compose -f docker-compose.vllm.yml up
+```
+to start the LiteLLM proxy, the vLLM instances, and the node and its services. 
+
+
+### Development Mode 
+The development docker-compose file `docker-compose.development.yml` file has several notable differences 
+from the production-ready docker compose files:
+1. the `node-app` and `celery` services have bind mounts configured to the location of the node's and worker's source code.
+Additionally, they have "watch mode" enabled when run with `docker compose -f docker-compose.development.yml watch` enabled. 
+Changes to the application's source code (on your filesystem!) will be mirrored in the container, and saving those changes 
+will cause the process in the container to be restarted and updated with the changes, allowing for rapid iteration
+    - changes to dependencies or environment variables (e.g. `.env`) still require rebuilding the container.
+2. There is an additional `surrealdb` service in the compose file if you wish to use the local hub by setting `LOCAL_HUB=True` in `config.py`
+3. containers for the node server, celery worker, and storage API are build from source instead of being pulled from a container repository.
+
+## Notes & "Gotchas"
+- the vLLM docker compose container is intended to run on an 8x A100 80GB node -- running it on a device with fewer GPUs
+or with less vRAM per GPU will require modifying the number of models that are running and/or model context length, etc.
+- The `rabbitmq` and `postgres` containers have persistent volumes that will survive the containers being
+shut down. Once the container has been started for the first time, the username and password values in the `.env` file 
+cannot be changed without authentication failing, unless you run `docker compose -f <compose file name> down --volumes` 
+to destroy the persistent volumes, and then rebuilding with `docker compose -f <compose file name> up`
+   - `scripts/init.sql` is run the first time that the postgres container is launched, but its' results and the persisted 
+postgres data are saved in postgres's named volume. If you want to re-run the script, you need to destroy the volume 
+once the container is stopped 
+- By default, ollama models will be downloaded to `node/ollama`, which is configured in the `.dockerignore` and mounted 
+as a bind volume in the ollama container. This directory is also in the `.gitignore` so that models are not tracked in version control.
+- Make sure to set the `HF_HOME` environment variable to the _path to your hugging face cache directory_ on your host;
+this will be mounted into vLLM containers (if you are using vLLM) so that models don't have to be re-downloaded each 
+time that the containers are restarted. If you're not sure what to set this to,  `/home/<your user>/.cache/huggingface` 
+is the default path on linux and MacOS systems.
+- The `HUGGINGFACE_TOKEN` can be set in the `.env` file and is passed into vLLM containers, so that (a) you can access 
+private models if you want, and (b) you can access models that require agreeing to a license such as Llama 3.x models. 
+The default vLLM compose file `docker-compose.vllm.yml` accesses llama 3.1, so make sure to request access to this model
+and add your token to `.env` if you want to use it, otherwise remove it. 
+- When using `docker compose -f <...> watch`, changes to python dependencies, binary dependencies, or environment variables 
+in `.env` will still require that the container be re-built. changes to `config.py` will be reflected automatically.
