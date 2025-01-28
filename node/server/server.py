@@ -227,10 +227,15 @@ async def run_server(communication_protocol: str, port: int):
             )
 
         if REGISTER_NODE_WITH_HUB:
+            logger.info(f"Registering node with hub")
             if node_server.node_config.ip == "localhost":
+                logger.error("Unable to register a localhost server with the hub")
                 raise Exception("Cannot register node on hub with NODE_IP localhost. Either change REGISTER_NODE_WITH_HUB to False, or set NODE_IP to your public IP address or domain name in config.py.")
             # Register node (only for HTTP server)
             await node_server.register_node()
+            logger.info(f"Node registered with hub")
+        else:
+            logger.info("Skipping registration of node with hub")
         # Start server
         await node_server.start_server()
         
