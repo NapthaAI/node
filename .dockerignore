@@ -10,3 +10,5 @@ venv/
 .git
 .idea
 node/ollama/*
+node/storage/fs
+node/storage/hub/modules

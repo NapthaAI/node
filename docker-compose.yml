@@ -50,28 +50,15 @@ services:
         condition: service_healthy
     env_file:
       - ./.env
+    volumes:
+      - ./node/storage/fs:/app/node/storage/fs
+      - ./node/storage/hub/modules:/app/node/storage/hub/modules
     environment:
       RMQ_USER: ${RMQ_USER:?error}
       RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
       LOCAL_DB_HOST: pgvector
-
-  surrealdb:
-    container_name: surrealdb
-    image: surrealdb/surrealdb:latest
-    user: root # surrealdb has to be run as root which is dumb
-    command: start rocksdb:/surreal_data/hub.db --user ${HUB_DB_SURREAL_ROOT_USER:?error} --pass ${HUB_DB_SURREAL_ROOT_PASS:?error}
-    volumes:
-      - surreal_data:/surreal_data
-    restart: unless-stopped
-    healthcheck:
-      test: surreal isready --conn http://localhost:8000
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    ports:
-      - '3001:8000'
 
   node-app:
     # can replace this with naptha image once it's published to hub, then we just
@@ -82,12 +69,14 @@ services:
     env_file:
       - ./.env
     environment:
-      LOCAL_DB_HOST: pgvector # name of the service
-      LOCAL_DB_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
+      LOCAL_DB_POSTGRES_HOST: pgvector # name of the service
+      LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
+      - ./node/storage/fs:/app/node/storage/fs
+      - ./node/storage/hub/modules:/app/node/storage/hub/modules
     # restart: unless-stopped
     depends_on:
       pgvector:
