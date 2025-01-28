@@ -199,13 +199,19 @@ Then, run:
 ```shell 
 docker-compose -f docker-compose.yml up
 ```
-
 to launch the node's applications and services.
+
+_Note that this will pull the Node container image from `napthaai/node:latest` on Docker hub, it will not build the image
+from source_. See the development workflows below to build the container from source.
+
 
 ### Production Mode (With inference)
 If you are _not_ running LiteLLM already, you can select to either run a model with `ollama` (good for local development on CPU), 
 or with vLLM. In either case, you should set `LITELLM_URL` in `config.py` to `http://litellm:4000`, which is the 
 host and port of the LiteLLM container in the inference-enabled compose configurations.
+
+_Note that this will pull the Node container image from `napthaai/node:latest` on Docker hub, it will not build the image
+from source_. See the development workflows below to build the container from source.
 
 #### Ollama
 A default [LiteLLM configuration file](https://docs.litellm.ai/docs/proxy/configs) has been provided at `litellm_config.ollama.yml`, which matches  
@@ -243,13 +249,13 @@ to start the LiteLLM proxy, the vLLM instances, and the node and its services.
 ### Development Mode 
 The development docker-compose file `docker-compose.development.yml` file has several notable differences 
 from the production-ready docker compose files:
-1. the `node-app` and `celery` services have bind mounts configured to the location of the node's and worker's source code.
-Additionally, they have "watch mode" enabled when run with `docker compose -f docker-compose.development.yml watch` enabled. 
+1. the `node-app` has bind mounts configured to the location of the node's and worker's source code.
+Additionally, it has "watch mode" enabled when run with `docker compose -f docker-compose.development.yml watch` enabled. 
 Changes to the application's source code (on your filesystem!) will be mirrored in the container, and saving those changes 
 will cause the process in the container to be restarted and updated with the changes, allowing for rapid iteration
     - changes to dependencies or environment variables (e.g. `.env`) still require rebuilding the container.
 2. There is an additional `surrealdb` service in the compose file if you wish to use the local hub by setting `LOCAL_HUB=True` in `config.py`
-3. containers for the node server, celery worker, and storage API are build from source instead of being pulled from a container repository.
+3. _The container for the node server and celery worker will be built from source, rather than being pulled from dockerhub_.
 
 ### Partial Compose configuration (for development)
 Running a configuration where some services (e.g. RMQ, postgres) are run in containers and other applications, e.g. the node
@@ -259,31 +265,31 @@ and worker is possible, though documentation and support is less robust. General
 Note that it is not necessary to add inference services (`ollama`, `vllm-*`) to this list since they are only accessed directly by `litellm`, 
 unless you are running the inference services _or_ liteLLM outside of docker compose
     ```shell
-    sudo echo "127.0.0.1 node-app celery-worker storage-api pgvector rabbitmq litellm" >> /etc/hosts
+    sudo echo "127.0.0.1 node-app pgvector rabbitmq litellm" >> /etc/hosts
     ```
 
     or, if you want to run vllm or ollama or litellm outside of docker compose, you need to run:
     ```shell 
-   sudo echo "127.0.0.1 node-app celery-worker storage-api pgvector rabbitmq litellm" >> /etc/hosts
+   sudo echo "127.0.0.1 node-app pgvector rabbitmq litellm" >> /etc/hosts
    sudo echo "127.0.0.1 ollama vllm-0 vllm-1 vllm-2 vllm-3 vllm-4 vllm-5 vllm-6 vllm-7" >> /etc/hosts
    ```
    to ensure that they are added to your hosts file as well.
 2. ensure that any services which you are _not_ running in docker are not listed as dependencies in other services via the `depends_on` key. 
 if a service you are running outside of docker _is_ listed as a dependency for another service, you must remove the service from the dependency list.
 3. Start the services you want in docker with docker, with compose:
-   For example, to run the node with ollama, and to serve everything except the node app itself and the celery worker in docker, 
+   For example, to run the node with ollama, and to serve everything except the node app + celery worker in docker, 
     you would run this:
    ```shell 
    docker compose -f docker-compose.ollama.yml up rabbitmq pgvector ollama litellm  
    ```
-   and then you would start the node app and celery worker separate. 
+   and then you would start the node app and celery worker separately. 
 
-    Alternatively for example, to run the node plus vLLM for inference, with everything except the celery worker in docker, 
+    Alternatively for example, to run the node plus vLLM for inference, with everything except the node app + celery worker in docker, 
    you would run:
    ```shell 
-   docker compose -f docker-compose.vllm.yml up rabbitmq pgvector node-app litellm vllm-0 vllm-1 vllm-2 vllm-3 vllm-4 vllm-5 vllm-6 vllm-7
+   docker compose -f docker-compose.vllm.yml up rabbitmq pgvector litellm vllm-0 vllm-1 vllm-2 vllm-3 vllm-4 vllm-5 vllm-6 vllm-7
    ```
-   and then you would start the celery worker independently.
+   and then you would start the app + celery worker independently.
 
 ## Docker Notes & "Gotchas"
 - the vLLM docker compose container is intended to run on an 8x A100 80GB node -- running it on a device with fewer GPUs
