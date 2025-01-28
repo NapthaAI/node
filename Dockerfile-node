@@ -35,6 +35,6 @@ CMD set -x && \
     poetry run python -m node.storage.hub.init_hub 2>&1 && \
     poetry run python -m node.storage.hub.init_hub --user 2>&1 && \
     ((poetry run celery -A node.worker.main:app worker --loglevel=info | tee /dev/stdout) & ) && \
-    ((poetry run python -m node.server.server --communication-protocol http --port 7001 | tee /dev/stdout) &) && \
+    ((poetry run python -m node.server.server --communication-protocol http --port 7001) &) && \
     poetry run python -m node.server.server --communication-protocol ws --port 7002
 
