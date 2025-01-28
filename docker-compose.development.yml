@@ -64,6 +64,9 @@ services:
           path: poetry.lock
         - action: rebuild
           path: .env
+    volumes:
+      - ./node/storage/fs:/app/node/storage/fs
+      - ./node/storage/hub/modules:/app/node/storage/hub/modules
     environment:
       RMQ_USER: ${RMQ_USER:?error}
       RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
@@ -79,11 +82,6 @@ services:
     volumes:
       - surreal_data:/surreal_data
     restart: unless-stopped
-    healthcheck:
-      test: surreal isready --conn http://localhost:8000
-      interval: 10s
-      timeout: 5s
-      retries: 5
     ports:
       - '3001:8000'
 
@@ -96,12 +94,14 @@ services:
     env_file:
       - ./.env
     environment:
-      LOCAL_DB_HOST: pgvector # name of the service
-      LOCAL_DB_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      LOCAL_DB_POSTGRES_HOST: pgvector # name of the service
+      LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
+      - ./node/storage/fs:/app/node/storage/fs
+      - ./node/storage/hub/modules:/app/node/storage/hub/modules
     develop:
       watch:
         - action: sync+restart
@@ -152,7 +152,7 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
-      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_PASSWORD:?error}@pgvector:5432/litellm
+      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
     volumes:
       - ./litellm_config.ollama.yml:/app/config.yaml
     ports:

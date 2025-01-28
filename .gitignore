@@ -184,3 +184,5 @@ ops/systemd/*
 
 node/ollama/*
 !node/ollama/init_ollama.py
+node/storage/fs
+node/storage/hub/modules
