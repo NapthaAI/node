@@ -41,25 +41,6 @@ services:
     ports:
       - '5433:5432' # exposed for testing, but should not be for production
 
-  celery-worker:
-    container_name: celery
-    build:
-      dockerfile: Dockerfile-celery
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    env_file:
-      - ./.env
-    volumes:
-      - ./node/storage/fs:/app/node/storage/fs
-      - ./node/storage/hub/modules:/app/node/storage/hub/modules
-    environment:
-      RMQ_USER: ${RMQ_USER:?error}
-      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
-      RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
-      LOCAL_DB_HOST: pgvector
-
   node-app:
     # can replace this with naptha image once it's published to hub, then we just
     # need to use the .env file UNLESS config.py is modified
@@ -71,6 +52,10 @@ services:
     environment:
       LOCAL_DB_POSTGRES_HOST: pgvector # name of the service
       LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
+      RMQ_USER: ${RMQ_USER:?error}
+      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
+      RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
@@ -83,10 +68,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      celery-worker:
-        condition: service_started
-      surrealdb:
-        condition: service_started
+
     ports:
       - '7001:7001'
       - '7002:7002'
@@ -94,4 +76,3 @@ services:
 volumes:
   rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs
   postgres_data:
-  surreal_data:

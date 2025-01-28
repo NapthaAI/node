@@ -41,39 +41,6 @@ services:
     ports:
       - '5433:5432' # exposed for testing, but should not be for production
 
-  celery-worker:
-    container_name: celery
-    build:
-      dockerfile: Dockerfile-celery
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    env_file:
-      - ./.env
-    develop:
-      watch:
-        - action: sync+restart
-          path: ./node
-          target: /app/node
-          ignore:
-            - ./node/ollama
-            - ./node/storage/db/alembic
-        - action: rebuild
-          path: pyproject.toml
-        - action: rebuild
-          path: poetry.lock
-        - action: rebuild
-          path: .env
-    volumes:
-      - ./node/storage/fs:/app/node/storage/fs
-      - ./node/storage/hub/modules:/app/node/storage/hub/modules
-    environment:
-      RMQ_USER: ${RMQ_USER:?error}
-      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
-      RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
-      LOCAL_DB_HOST: pgvector
-
   surrealdb:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
@@ -90,18 +57,28 @@ services:
     # need to use the .env file UNLESS config.py is modified
     container_name: node-app
     build:
-      dockerfile: Dockerfile-node
+      dockerfile: Dockerfile-node-dev
     env_file:
       - ./.env
     environment:
       LOCAL_DB_POSTGRES_HOST: pgvector # name of the service
       LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
+      RMQ_USER: ${RMQ_USER:?error}
+      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
+      RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
       - ./node/storage/fs:/app/node/storage/fs
       - ./node/storage/hub/modules:/app/node/storage/hub/modules
+    # restart: unless-stopped
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     develop:
       watch:
         - action: sync+restart
@@ -116,18 +93,10 @@ services:
           path: poetry.lock
         - action: rebuild
           path: .env
-    # restart: unless-stopped
-    depends_on:
-      pgvector:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      celery-worker:
-        condition: service_started
-      surrealdb:
-        condition: service_started
     ports:
       - '7001:7001'
+      - '7002:7002'
+
 
   ollama:
     image: ollama/ollama:latest

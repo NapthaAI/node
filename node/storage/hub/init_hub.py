@@ -7,7 +7,7 @@ import time
 import logging
 import getpass
 
-from node.config import get_node_config, HUB_DB_SURREAL_PORT, HUB_DB_SURREAL_NS, HUB_DB_SURREAL_NAME
+from node.config import get_node_config, HUB_DB_SURREAL_PORT, HUB_DB_SURREAL_NS, HUB_DB_SURREAL_NAME, LOCAL_HUB
 from node.storage.hub.hub import HubDBSurreal
 from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger
@@ -41,7 +41,7 @@ def import_surql():
 
     for file in import_files:
         command = f"""surreal import \
-                      --conn http://localhost:{HUB_DB_SURREAL_PORT} \
+                      --conn http://surrealdb:8000 \
                       --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
                       --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
                       --ns {HUB_DB_SURREAL_NS} \
