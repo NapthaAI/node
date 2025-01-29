@@ -113,7 +113,7 @@ CREATE agent:wikipedia_agent SET name="wikipedia_agent", description="An agent f
 CREATE agent:generate_image_agent SET name="generate_image_agent", description="An agent for generating images", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image_agent", module_type="agent", execution_type="package", module_version="v0.4", module_entrypoint="run.py";
 
 -- TOOLS
-CREATE tool:generate_image_tool SET name="generate_image_tool", description="A simple tool for generating an image from text with Stable Diffusion", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image_tool", module_type="tool", execution_type="package", module_version="v0.13", module_entrypoint="run.py";
+CREATE tool:generate_image_tool SET name="generate_image_tool", description="A simple tool for generating an image from text with Stable Diffusion", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image_tool", module_type="tool", execution_type="package", module_version="v0.14", module_entrypoint="run.py";
 CREATE tool:image_to_image SET name="image_to_image", description="A simple tool for generating an image from another image with Stable Diffusion", parameters="{prompt: str}", author=user:naptha, module_url="https://github.com/NapthaAI/image2image", module_type="tool", execution_type="package", module_version="v0.9", module_entrypoint="run.py";
 
 -- ORCHESTRATORS
