@@ -45,7 +45,7 @@ services:
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
       DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
     volumes:
-      - ./litellm_config.vllm.yml:/app/config.yaml # this should be the litellm config file
+      - ./litellm_config.single_gpu.yml:/app/config.yaml # this should be the litellm config file
     ports:
       - '4000:4000'
 
