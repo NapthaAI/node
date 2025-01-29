@@ -45,7 +45,7 @@ services:
     container_name: surrealdb
     image: surrealdb/surrealdb:latest
     user: root # surrealdb has to be run as root which is dumb
-    command: start rocksdb:/surreal_data/hub.db --user ${HUB_DB_SURREAL_ROOT_USER:?error} --pass ${HUB_DB_SURREAL_ROOT_PASS:?error}
+    command: start -A rocksdb:/surreal_data/hub.db --user ${HUB_DB_SURREAL_ROOT_USER:?error} --pass ${HUB_DB_SURREAL_ROOT_PASS:?error}
     volumes:
       - surreal_data:/surreal_data
     restart: unless-stopped
@@ -122,6 +122,7 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
       DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
     volumes:
       - ./litellm_config.ollama.yml:/app/config.yaml
     ports:
