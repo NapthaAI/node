@@ -205,22 +205,23 @@ services:
               capabilities: [ "gpu" ]
               device_ids: [ "6" ]
 
-  vllm-7:
-    image: vllm/vllm-openai:latest
-    entrypoint: [
-      "vllm", "serve", "BAAI/bge-base-en-v1.5"
-    ]
+
+  text-embeddings-inference:
+    image: ghcr.io/huggingface/text-embeddings-inference:latest
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+      - HF_API_TOKEN=${HUGGINGFACE_TOKEN}
+      - MODEL_ID=jinaai/jina-embeddings-v2-base-en
     volumes:
       - type: bind
         source: ${HF_HOME:?error}
-        target: /root/.cache/huggingface
+        target: /data
       - type: bind
         source: ./node/inference/configs
         target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
+    ports:
+      - '8080:80'
     deploy:
       resources:
         reservations:
