@@ -33,6 +33,7 @@ EXPOSE 7001 7002
 
 # run db migrations / config & server
 CMD (poetry run python -m node.storage.db.init_db | tee /dev/stdout) && \
+    (poetry run python -m node.storage.hub.init_hub | tee /dev/stdout) && \
     (poetry run python -m node.storage.hub.init_hub --user | tee /dev/stdout) && \
     ((poetry run celery -A node.worker.main:app worker --loglevel=info | tee /dev/stdout) & ) && \
     (poetry run python -m node.server.server --communication-protocol http --port 7001 | tee /dev/stdout) & \
