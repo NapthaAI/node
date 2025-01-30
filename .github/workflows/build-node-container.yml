@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - k-mistele/add-compose-configurations # for testing
     paths:
       - 'Dockerfile-node'
       - 'node/**'
