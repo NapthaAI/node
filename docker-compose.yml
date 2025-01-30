@@ -55,6 +55,7 @@ services:
       RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
       RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
+      LITELLM_URL: http://litellm:4000
     # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py

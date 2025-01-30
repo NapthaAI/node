@@ -4,6 +4,7 @@ import psutil
 from node.schemas import NodeConfig, NodeServer
 from pathlib import Path
 from dotenv import load_dotenv
+import os
 
 FILE_PATH = Path(__file__).resolve()
 NODE_PATH = FILE_PATH.parent
@@ -28,7 +29,7 @@ ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
-LITELLM_URL="http://litellm:4000" # TODO change all this
+LITELLM_URL=os.getenv("LITELLM_URL") or "http://localhost:4000"
 LLM_BACKEND="ollama"
 
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
@@ -39,8 +40,12 @@ OPENAI_MODELS="gpt-4o-mini"
 MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
-LOCAL_DB_POSTGRES_PORT=3002
+LOCAL_DB_POSTGRES_PORT=5432
 LOCAL_DB_POSTGRES_NAME="naptha"
+LOCAL_DB_POSTGRES_HOST=os.getenv("LOCAL_DB_POSTGRES_HOST") or "localhost" # name of the service container
+
+# RMQ
+RMQ_HOST = os.environ.get("RMQ_HOST") or 'localhost'
 
 # Storage
 file_path = Path(__file__).resolve()

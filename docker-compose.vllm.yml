@@ -244,6 +244,8 @@ services:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
       DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
+
     volumes:
       - ./node/litellm/litellm_config.vllm.yml:/app/config.yaml # this should be the litellm config file
     ports:
