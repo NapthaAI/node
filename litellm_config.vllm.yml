@@ -1,5 +1,8 @@
 model_list:
-
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
   # vllm-0 hermes
   - model_name: NousResearch/Hermes-3-Llama-3.1-8B
     litellm_params:
