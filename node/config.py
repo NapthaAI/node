@@ -23,7 +23,7 @@ USER_COMMUNICATION_PROTOCOL="http" # http or https
 NUM_NODE_COMMUNICATION_SERVERS=1
 NODE_COMMUNICATION_PORT=7002
 NODE_COMMUNICATION_PROTOCOL="ws" # grpc or ws
-NODE_IP="localhost"
+NODE_IP="pro-model-sturgeon.ngrok-free.app"
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 

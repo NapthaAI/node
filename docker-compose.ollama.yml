@@ -28,7 +28,7 @@ services:
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
       DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
     volumes:
-      - ./litellm_config.ollama.yml:/app/config.yaml
+      - ./node/litellm/litellm_config.ollama.yml:/app/config.yaml
     ports:
       - '4000:4000' # TODO do not expose in production
 
