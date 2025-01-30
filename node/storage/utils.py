@@ -37,3 +37,34 @@ def get_api_url():
     domain = IPFS_GATEWAY_URL.split("/")[2]
     port = IPFS_GATEWAY_URL.split("/")[4]
     return f"http://{domain}:{port}/api/v0"
+
+def to_multiaddr(address):
+    import re
+
+    # Check if it's already a multiaddr format
+    if address.startswith('/'):
+        return address
+    
+    # Remove http:// or https:// if present
+    if address.startswith('http://'):
+        address = address[7:]
+    elif address.startswith('https://'):
+        address = address[8:]
+    
+    # IP address pattern
+    ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    
+    # Split host and port
+    if ':' in address:
+        host, port = address.split(':')
+        # Check if host is IP address
+        if re.match(ip_pattern, host):
+            return f'/ip4/{host}/tcp/{port}'
+        else:
+            return f'/dns/{host}/tcp/{port}'
+    else:
+        # Check if address is IP address
+        if re.match(ip_pattern, address):
+            return f'/ip4/{address}'
+        else:
+            return f'/dns/{address}'

@@ -14,7 +14,7 @@ from typing import Any, Dict, Union, BinaryIO, List
 
 from node.storage.db.db import LocalDBPostgres
 from node.storage.schemas import StorageLocation, StorageObject, StorageType, DatabaseReadOptions, IPFSOptions, StorageMetadata
-from node.storage.utils import zip_directory, get_api_url
+from node.storage.utils import zip_directory, get_api_url, to_multiaddr
 from node.config import IPFS_GATEWAY_URL
 
 logger = logging.getLogger(__name__)
@@ -387,7 +387,7 @@ class IPFSStorageProvider(StorageProvider):
     """Implementation for IPFS storage with enhanced functionality"""
     
     def __init__(self):
-        self.gateway_url = IPFS_GATEWAY_URL
+        self.gateway_url = to_multiaddr(IPFS_GATEWAY_URL)
         if not self.gateway_url:
             raise ValueError("IPFS_GATEWAY_URL not found in environment")
         self.client = None
