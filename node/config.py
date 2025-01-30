@@ -1,16 +1,21 @@
 import os
+import logging
 import platform
 import psutil
 from node.schemas import NodeConfig, NodeServer
 from pathlib import Path
 from dotenv import load_dotenv
 
+
+logger = logging.getLogger(__name__)
+
 FILE_PATH = Path(__file__).resolve()
 NODE_PATH = FILE_PATH.parent
-load_dotenv()
+load_dotenv(f"{NODE_PATH}/.env")
 
 # Node
-IN_DOCKER=False
+LAUNCH_DOCKER = os.getenv('LAUNCH_DOCKER', 'false').lower() == 'true'
+logger.info(f"LAUNCH_DOCKER: {LAUNCH_DOCKER}")
 GPU=False # set to true if gpu is available (Only for running node with IN_DOCKER=true)
 NUM_GPUS=0
 VRAM=0
@@ -29,7 +34,7 @@ ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
-LITELLM_URL="http://litellm:4000" # TODO change all this
+LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
 LLM_BACKEND="ollama"
 
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
@@ -43,7 +48,7 @@ MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 LOCAL_DB_POSTGRES_PORT=5432
 LOCAL_DB_POSTGRES_NAME="naptha"
-LOCAL_DB_POSTGRES_HOST="pgvector" # name of the service container
+LOCAL_DB_POSTGRES_HOST = "pgvector" if LAUNCH_DOCKER else "localhost"
 
 # Storage
 file_path = Path(__file__).resolve()
@@ -53,9 +58,9 @@ MODULES_SOURCE_DIR=f"{repo_dir}/node/storage/hub/modules"
 IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
 
 # Hub
-LOCAL_HUB=False
+LOCAL_HUB=True
 REGISTER_NODE_WITH_HUB=False # set to true if you want your node to be available as a provider
-LOCAL_HUB_URL="ws://surrealdb:8000/rpc"
+LOCAL_HUB_URL="ws://surrealdb:8000/rpc" if LAUNCH_DOCKER else "ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_SURREAL_PORT=3001
 HUB_DB_SURREAL_NS="naptha"
