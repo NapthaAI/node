@@ -46,7 +46,7 @@ repo_dir = file_path.parent.parent
 BASE_OUTPUT_DIR=f"{repo_dir}/node/storage/fs"
 MODULES_SOURCE_DIR=f"{repo_dir}/node/storage/hub/modules"
 # IPFS_GATEWAY_URL="/dns/provider.akash.pro/tcp/31832/http"
-IPFS_GATEWAY_URL="http://ipfs.naptha.work:30506"
+IPFS_GATEWAY_URL="http://ipfs.naptha.work:30798"
 
 # Hub
 LOCAL_HUB=False
