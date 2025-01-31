@@ -651,7 +651,7 @@ install_python312() {
 start_hub_surrealdb() {
     PWD=$(pwd)
     echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
-    if [ "$LOCAL_HUB" == "True" ]; then
+    if [ "$LOCAL_HUB" == "true" ]; then
         echo "Running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDBSurreal" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
@@ -659,7 +659,6 @@ start_hub_surrealdb() {
 
         poetry run python "$INIT_PYTHON_PATH" 2>&1
         PYTHON_EXIT_STATUS=$?
-
         if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
             echo "Hub DB (SurrealDB) initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
             exit 1
@@ -678,7 +677,7 @@ start_hub_surrealdb() {
 
     poetry run python "$PWD/node/storage/hub/init_hub.py" --user 2>&1
     PYTHON_EXIT_STATUS=$?
-
+    echo "PYTHON_EXIT_STATUS: $PYTHON_EXIT_STATUS"
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
         echo "Hub DB (SurrealDB) sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
         exit 1
@@ -821,27 +820,60 @@ load_config_constants() {
 
     if [ -f "$CONFIG_FILE" ]; then
         echo "config.py file found." | log_with_service_name "Config" 
-        # Extract constants from config.py using Python
-        eval "$(python3 -c "
-import re
-import ast
+        
+        # Create a temporary Python script to load and execute config.py
+        cat > /tmp/load_config.py << EOF
+import os
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
 
-def parse_value(value):
-    try:
-        return ast.literal_eval(value)
-    except:
-        return value
+# Add the current directory to Python path
+sys.path.insert(0, '${CURRENT_DIR}')
 
-with open('$CONFIG_FILE', 'r') as f:
-    content = f.read()
-constants = re.findall(r'^([A-Z_]+)\s*=\s*(.+)$', content, re.MULTILINE)
-for name, value in constants:
-    parsed_value = parse_value(value.strip())
-    if isinstance(parsed_value, str):
-        print(f'{name}=\"{parsed_value}\"')
-    else:
-        print(f'{name}={parsed_value}')
-        ")"
+# Load .env file
+load_dotenv('${CURRENT_DIR}/.env')
+
+# Import the config module
+from node.config import *
+
+# Get all uppercase variables (constants)
+config_vars = {name: value for name, value in locals().items() 
+              if name.isupper() and not name.startswith('_')}
+
+# Print in a format that can be evaluated by bash
+for name, value in config_vars.items():
+    if isinstance(value, bool):
+        print(f'{name}={str(value).lower()}')
+    elif isinstance(value, (int, float)):
+        print(f'{name}={value}')
+    elif isinstance(value, str):
+        print(f'{name}="{value}"')
+    elif isinstance(value, list):
+        print(f'{name}="{",".join(str(x) for x in value)}"')
+EOF
+
+        echo "Executing config.py and loading variables..." | log_with_service_name "Config"
+        
+        # Execute the Python script and store output
+        output=$(poetry run python /tmp/load_config.py)
+        
+        # Evaluate the output
+        eval "$output"
+        
+        # Echo key variables
+        echo "Key configuration values:" | log_with_service_name "Config"
+        echo "LAUNCH_DOCKER: $LAUNCH_DOCKER" | log_with_service_name "Config"
+        echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
+        echo "LITELLM_URL: $LITELLM_URL" | log_with_service_name "Config"
+        echo "LOCAL_DB_POSTGRES_PORT: $LOCAL_DB_POSTGRES_PORT" | log_with_service_name "Config"
+        echo "LOCAL_DB_POSTGRES_HOST: $LOCAL_DB_POSTGRES_HOST" | log_with_service_name "Config"
+        echo "NODE_COMMUNICATION_PORT: $NODE_COMMUNICATION_PORT" | log_with_service_name "Config"
+        echo "NODE_COMMUNICATION_PROTOCOL: $NODE_COMMUNICATION_PROTOCOL" | log_with_service_name "Config"
+        echo "HUB_DB_SURREAL_PORT: $HUB_DB_SURREAL_PORT" | log_with_service_name "Config"
+        
+        rm /tmp/load_config.py
+        
     else
         echo "config.py file does not exist in $CURRENT_DIR/node/." | log_with_service_name "Config"
         exit 1
@@ -1689,7 +1721,7 @@ startup_summary() {
     fi
 
     # Check Local Hub if enabled
-    if [ "$LOCAL_HUB" == "True" ]; then
+    if [ "$LOCAL_HUB" == "true" ]; then
         services+=("Hub_DB")
         if curl -s http://localhost:$HUB_DB_SURREAL_PORT/health > /dev/null; then
             statuses+=("✅")
@@ -1879,16 +1911,16 @@ main() {
     if [ "$os" = "Darwin" ]; then
         print_logo
         install_python312
+        darwin_install_miniforge
+        darwin_clean_node
+        setup_poetry
         install_surrealdb
         check_and_copy_env
         load_env_file
         load_config_constants
         darwin_install_ollama
-        darwin_install_miniforge
         darwin_install_docker
-        darwin_clean_node
         darwin_start_rabbitmq
-        setup_poetry
         check_and_set_private_key
         check_and_set_stability_key
         start_hub_surrealdb
@@ -1901,16 +1933,16 @@ main() {
     else
         print_logo
         install_python312
+        linux_install_miniforge
+        linux_clean_node
+        setup_poetry
         install_surrealdb
         check_and_copy_env
         load_env_file
         load_config_constants
         linux_install_ollama
-        linux_install_miniforge
         linux_install_docker
-        linux_clean_node
         linux_start_rabbitmq
-        setup_poetry
         check_and_set_private_key
         check_and_set_stability_key
         start_hub_surrealdb
