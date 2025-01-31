@@ -61,14 +61,11 @@ services:
     env_file:
       - ./.env
     environment:
-      LOCAL_DB_POSTGRES_HOST: pgvector # name of the service
       LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
       RMQ_USER: ${RMQ_USER:?error}
       RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
-      RMQ_HOST: rabbitmq # name of the RMQ service; override for external config.
       OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
-      LITELLM_URL: http://litellm:4000
-    # NOTE for testing - this can override the default config.py in the container
+      LAUNCH_DOCKER: true    # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
