@@ -11,7 +11,7 @@ NODE_PATH = FILE_PATH.parent
 load_dotenv()
 
 # Node
-IN_DOCKER=False
+LAUNCH_DOCKER = os.getenv('LAUNCH_DOCKER', 'false').lower() == 'true'
 GPU=False # set to true if gpu is available (Only for running node with IN_DOCKER=true)
 NUM_GPUS=0
 VRAM=0
@@ -24,12 +24,12 @@ USER_COMMUNICATION_PROTOCOL="http" # http or https
 NUM_NODE_COMMUNICATION_SERVERS=1
 NODE_COMMUNICATION_PORT=7002
 NODE_COMMUNICATION_PROTOCOL="ws" # grpc or ws
-NODE_IP="pro-model-sturgeon.ngrok-free.app"
+NODE_IP="localhost"
 ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
-LITELLM_URL=os.getenv("LITELLM_URL") or "http://localhost:4000"
+LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
 LLM_BACKEND="ollama"
 
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
@@ -42,10 +42,10 @@ MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 # Local DB
 LOCAL_DB_POSTGRES_PORT=5432
 LOCAL_DB_POSTGRES_NAME="naptha"
-LOCAL_DB_POSTGRES_HOST=os.getenv("LOCAL_DB_POSTGRES_HOST") or "localhost" # name of the service container
+LOCAL_DB_POSTGRES_HOST = "pgvector" if LAUNCH_DOCKER else "localhost"
 
 # RMQ
-RMQ_HOST = os.environ.get("RMQ_HOST") or 'localhost'
+RMQ_HOST = "rabbitmq" if LAUNCH_DOCKER else "localhost"
 
 # Storage
 file_path = Path(__file__).resolve()
@@ -58,7 +58,7 @@ IPFS_GATEWAY_URL="http://ipfs.naptha.work:30798"
 # Hub
 LOCAL_HUB=False
 REGISTER_NODE_WITH_HUB=False # set to true if you want your node to be available as a provider
-LOCAL_HUB_URL="ws://localhost:3001/rpc"
+LOCAL_HUB_URL="ws://surrealdb:8000/rpc" if LAUNCH_DOCKER else "ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_SURREAL_PORT=3001
 HUB_DB_SURREAL_NS="naptha"
