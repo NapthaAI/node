@@ -284,6 +284,12 @@ def install_module_from_ipfs(module_name: str, module_version: str, module_sourc
         unzip_file(module_temp_zip_path, modules_source_dir)
         os.remove(module_temp_zip_path)
 
+        # remove the .venv directory
+        venv_dir = modules_source_dir / ".venv"
+        if venv_dir.exists():
+            shutil.rmtree(venv_dir)
+            logger.info(f"Removed existing venv directory: {venv_dir}")
+
     except Exception as e:
         error_msg = f"Error installing {module_name}: {str(e)}"
         logger.error(error_msg)
