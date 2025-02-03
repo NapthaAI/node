@@ -33,7 +33,7 @@ LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000
 LLM_BACKEND="ollama"
 
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
-OLLAMA_MODELS="phi3:mini" # these will be pulled at startup
+OLLAMA_MODELS="hermes3" # these will be pulled at startup
 
 # OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
 OPENAI_MODELS="gpt-4o-mini"

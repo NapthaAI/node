@@ -3,7 +3,7 @@ model_list:
   litellm_params:
     model: openai/gpt-4o-mini
     api_key: os.environ/OPENAI_API_KEY
-- model_name: phi3:mini
+- model_name: hermes3
   litellm_params:
-    model: ollama/phi3:mini
+    model: ollama/hermes3
     api_base: http://localhost:11434

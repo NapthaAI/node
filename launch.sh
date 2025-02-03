@@ -174,6 +174,10 @@ EOF
     create_ollama_service
     restart_ollama_linux
 
+    pull_ollama_models
+}
+
+pull_ollama_models() {
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
     IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
@@ -243,6 +247,8 @@ darwin_install_ollama() {
         echo "Failed to start Ollama" | log_with_service_name "Ollama" $RED
         exit 1
     fi
+
+    pull_ollama_models
 
     echo "Ollama is now running" | log_with_service_name "Ollama" $RED
 }
