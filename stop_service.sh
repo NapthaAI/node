@@ -13,14 +13,6 @@ stop_surrealdb() {
     else
         echo "No SurrealDB process found running on port 3001"
     fi
-
-    surrealdb_db_pid=$(lsof -ti:3002)
-    if [ ! -z "$surrealdb_db_pid" ]; then
-        echo "Stopping SurrealDB on port 3002"
-        kill -9 $surrealdb_db_pid
-    else
-        echo "No SurrealDB process found running on port 3002"
-    fi
 }
 
 # Load the .env file
