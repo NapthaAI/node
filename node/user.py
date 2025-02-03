@@ -2,6 +2,7 @@ import logging
 from ecdsa import SigningKey, SECP256k1, VerifyingKey
 from node.storage.db.db import LocalDBPostgres
 from typing import Dict, Tuple
+from eth_hash.auto import keccak
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,6 @@ def get_public_key(private_key_hex):
     public_key = private_key.get_verifying_key()
     return public_key.to_string().hex()
 
-
 def generate_user():
     private_key = SigningKey.generate(curve=SECP256k1).to_string().hex()
     public_key = get_public_key(private_key)
@@ -72,3 +72,12 @@ def verify_signature(consumer_id, signature_hex, public_key_hex):
             return True
     except:
         return False
+    
+def generate_address(public_key: bytes) -> str:
+    if len(public_key) not in [64, 33]:
+        print(public_key)
+        raise ValueError("Public key must be either 33 or 64 bytes long.")
+        
+    hash = keccak(public_key)
+    address = hash[-20:]
+    return "0x" + address.hex()

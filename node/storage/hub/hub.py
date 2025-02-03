@@ -4,6 +4,7 @@ import logging
 from node.utils import AsyncMixin
 from node.config import HUB_DB_SURREAL_NAME, HUB_DB_SURREAL_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import Module, NodeConfig, NodeServer
+from node.user import generate_address
 import os
 from surrealdb import Surreal
 import traceback
@@ -64,6 +65,7 @@ class HubDBSurreal(AsyncMixin):
             self.user_id = self._decode_token(user)
             self.token = user
             self.is_authenticated = True
+            await self.check_and_update_address(self.user_id)
             return True, user, self.user_id
         except Exception as e:
             logger.error(f"Sign in failed: {e}")
@@ -82,12 +84,31 @@ class HubDBSurreal(AsyncMixin):
                 "username": username,
                 "password": password,
                 "public_key": public_key,
+                "address": generate_address(bytes.fromhex(public_key))
             }
         )
         if not user:
             return False, None, None
         self.user_id = self._decode_token(user)
         return True, user, self.user_id
+    
+    async def check_and_update_address(self, user_id: str) -> None:
+        user = await self.get_user(user_id)
+        
+        # Check if the address is empty or None
+        if not user.get("address"):
+            logger.info("User address not found")
+            logger.info("Updating address....")
+            
+            # Generate the address and update the record
+            user["address"] = generate_address(bytes.fromhex(user["public_key"]))
+            try:
+                await self.surrealdb.update(user.pop('id'), user)
+                logger.info("Address updated successfully")
+            except Exception as e:
+                logger.error(f"Failed to update address: {e}")
+        else:
+            logger.info("User address found, moving on.....")
 
     async def get_user(self, user_id: str) -> Optional[Dict]:
         return await self.surrealdb.select(user_id)
