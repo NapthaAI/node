@@ -1,13 +1,9 @@
 model_list:
-
-  # vllm-0-hermes
-  - model_name: NousResearch/Hermes-3-Llama-3.1-8B
-    litellm_params:
-      model: ollama_chat/hermes3:8b
-      api_base: http://ollama:11434
-      api_key: none
-
-  - model_name: gpt-4o-mini
-    litellm_params:
-      model: openai/gpt-4o-mini
-      api_key: os.environ/OPENAI_API_KEY
+- model_name: gpt-4o-mini
+  litellm_params:
+    model: openai/gpt-4o-mini
+    api_key: os.environ/OPENAI_API_KEY
+- model_name: hermes3
+  litellm_params:
+    model: ollama/hermes3
+    api_base: http://localhost:11434

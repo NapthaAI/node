@@ -1911,53 +1911,66 @@ print_logo(){
     echo -e "\n"
 }
 
-main() {
-    os="$(uname)"
-    # Main execution flow
-    if [ "$os" = "Darwin" ]; then
-        print_logo
-        install_python312
-        darwin_install_miniforge
-        darwin_clean_node
-        setup_poetry
-        install_surrealdb
-        check_and_copy_env
-        load_env_file
-        load_config_constants
-        darwin_install_ollama
-        darwin_install_docker
-        darwin_start_rabbitmq
-        check_and_set_private_key
-        check_and_set_stability_key
-        start_hub_surrealdb
-        darwin_setup_local_db
-        darwin_start_local_db
-        darwin_start_servers
-        darwin_start_celery_worker
-        darwin_start_litellm
-        startup_summary
+launch_docker() {
+    echo "Launching Docker..."
+    if [ "$LLM_BACKEND" = "ollama" ]; then
+        echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
+        poetry run python node/node/litellm/generate_litellm_config.py
+        docker compose -f docker-compose.development.yml up
     else
-        print_logo
-        install_python312
-        linux_install_miniforge
-        linux_clean_node
-        setup_poetry
-        install_surrealdb
-        check_and_copy_env
-        load_env_file
-        load_config_constants
-        linux_install_ollama
-        linux_install_docker
-        linux_start_rabbitmq
-        check_and_set_private_key
-        check_and_set_stability_key
-        start_hub_surrealdb
-        linux_setup_local_db
-        linux_start_local_db
-        linux_start_servers
-        linux_start_celery_worker
-        linux_start_litellm
-        startup_summary
+        docker compose -f docker-compose.vllm up
+    fi
+}
+
+main() {
+    print_logo
+    load_config_constants
+    os="$(uname)"
+    if [ "$LAUNCH_DOCKER" = "true" ]; then
+        launch_docker
+    else
+        # use systemd/launchd
+        if [ "$os" = "Darwin" ]; then
+            install_python312
+            darwin_install_miniforge
+            darwin_clean_node
+            setup_poetry
+            install_surrealdb
+            check_and_copy_env
+            load_env_file
+            darwin_install_ollama
+            darwin_install_docker
+            darwin_start_rabbitmq
+            check_and_set_private_key
+            check_and_set_stability_key
+            start_hub_surrealdb
+            darwin_setup_local_db
+            darwin_start_local_db
+            darwin_start_servers
+            darwin_start_celery_worker
+            darwin_start_litellm
+            startup_summary
+        else
+            install_python312
+            linux_install_miniforge
+            linux_clean_node
+            setup_poetry
+            install_surrealdb
+            check_and_copy_env
+            load_env_file
+            linux_install_ollama
+            linux_install_docker
+            linux_start_rabbitmq
+            check_and_set_private_key
+            check_and_set_stability_key
+            start_hub_surrealdb
+            linux_setup_local_db
+            linux_start_local_db
+            linux_start_servers
+            linux_start_celery_worker
+            linux_start_litellm
+            startup_summary
+        fi
     fi
 
     echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN

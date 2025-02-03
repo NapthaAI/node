@@ -12,7 +12,6 @@ load_dotenv()
 
 # Node
 LAUNCH_DOCKER = os.getenv('LAUNCH_DOCKER', 'false').lower() == 'true'
-GPU=False # set to true if gpu is available (Only for running node with IN_DOCKER=true)
 NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
@@ -29,14 +28,11 @@ ROUTING_TYPE="direct"
 ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
-LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
 LLM_BACKEND="ollama"
-
 VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
-OLLAMA_MODELS="hermes3" # these will be pulled at startup
-
-# OLLAMA_MODELS="phi3:mini,qwen2.5:1.5b"
+OLLAMA_MODELS="hermes3" # use string of models separated by commas
 OPENAI_MODELS="gpt-4o-mini"
+LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
 MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
 
 # Local DB
