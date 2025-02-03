@@ -89,6 +89,19 @@ class DatabasePool:
         if hasattr(self, 'engine'):
             self.engine.dispose()
 
+def clean_value_for_postgres(value):
+    """Clean a value to make it PostgreSQL compatible"""
+    if isinstance(value, str):
+        # Remove NULL bytes and other problematic control characters
+        return ''.join(char for char in value if ord(char) >= 32 or char in '\n\r\t')
+    elif isinstance(value, dict):
+        return {k: clean_value_for_postgres(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        if any(isinstance(x, (int, float)) for x in value):  # Likely a vector
+            return value
+        return [clean_value_for_postgres(x) for x in value]
+    return value
+
 class LocalDBPostgres:
     def __init__(self):
         self.is_authenticated = False
@@ -465,8 +478,11 @@ class LocalDBPostgres:
                 # Process all rows
                 processed_rows = []
                 for row_data in data_rows:
+                    # Clean the entire row data first
+                    cleaned_row_data = clean_value_for_postgres(row_data)
+                    
                     processed_data = {}
-                    for key, value in row_data.items():
+                    for key, value in cleaned_row_data.items():
                         if key in column_types:
                             data_type, udt_name = column_types[key]
                             
