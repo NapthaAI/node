@@ -73,7 +73,7 @@ def main():
     
     # Determine the output path - this should be in the litellm directory
     script_dir = Path(__file__).parent
-    output_path = script_dir / 'litellm_config.yaml'
+    output_path = script_dir / 'litellm_config.ollama.yml'
     
     # Write the configuration
     try:

@@ -1605,7 +1605,7 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR
 Environment=PATH=$VENV_PATH:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=$CURRENT_DIR/.env
-ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.yaml
+ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.ollama.yml
 Restart=always
 RestartSec=3
 
@@ -1662,7 +1662,7 @@ darwin_start_litellm() {
     <array>
         <string>$VENV_PATH/litellm</string>
         <string>--config</string>
-        <string>$PROJECT_DIR/litellm_config.yaml</string>
+        <string>$PROJECT_DIR/litellm_config.ollama.yml</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$PROJECT_DIR</string>
