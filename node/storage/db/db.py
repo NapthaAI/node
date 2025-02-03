@@ -11,7 +11,7 @@ from sqlalchemy.pool import QueuePool
 import threading
 from typing import Dict, List, Optional, Union, Any
 
-from node.config import LOCAL_DB_POSTGRES_NAME, LOCAL_DB_POSTGRES_PORT
+from node.config import LOCAL_DB_POSTGRES_NAME, LOCAL_DB_POSTGRES_PORT, LOCAL_DB_POSTGRES_HOST
 from node.storage.db.models import AgentRun, MemoryRun, OrchestratorRun, EnvironmentRun, User, KBRun, ToolRun
 from node.schemas import (
     AgentRun as AgentRunSchema,
@@ -45,7 +45,7 @@ class DatabasePool:
 
     def _initialize(self):
         self.engine = create_engine(
-            f"postgresql://{os.getenv('LOCAL_DB_POSTGRES_USERNAME')}:{os.getenv('LOCAL_DB_POSTGRES_PASSWORD')}@localhost:{LOCAL_DB_POSTGRES_PORT}/{LOCAL_DB_POSTGRES_NAME}",
+            f"postgresql://{os.getenv('LOCAL_DB_POSTGRES_USERNAME')}:{os.getenv('LOCAL_DB_POSTGRES_PASSWORD')}@{LOCAL_DB_POSTGRES_HOST}:{LOCAL_DB_POSTGRES_PORT}/{LOCAL_DB_POSTGRES_NAME}",
             poolclass=QueuePool,
             pool_size=120,          # Base pool size
             max_overflow=240,      # More overflow for 120 workers
