@@ -52,6 +52,7 @@ class LLMConfig(BaseModel):
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None
     api_base: Optional[str] = None
+    options: Optional[Dict] = None
 
 class ModuleType(str, Enum):
     agent = "agent"
@@ -110,6 +111,7 @@ class EnvironmentConfig(BaseModel):
 class KBConfig(BaseModel):
     config_name: Optional[str] = None
     storage_config: Optional[StorageConfig] = None
+    llm_config: Optional[LLMConfig] = None
 
     def model_dict(self):
         if isinstance(self.storage_config, StorageConfig):
