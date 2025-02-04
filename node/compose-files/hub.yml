@@ -1,0 +1,11 @@
+services:  
+  surrealdb:
+    container_name: surrealdb
+    image: surrealdb/surrealdb:latest
+    user: root # surrealdb has to be run as root which is dumb
+    command: start -A rocksdb:/surreal_data/hub.db --user ${HUB_DB_SURREAL_ROOT_USER:?error} --pass ${HUB_DB_SURREAL_ROOT_PASS:?error}
+    volumes:
+      - surreal_data:/surreal_data
+    restart: unless-stopped
+    ports:
+      - '3001:8000'

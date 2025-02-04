@@ -1,0 +1,28 @@
+services:
+  vllm-4:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "ibm-granite/granite-3.1-8b-instruct",
+      "--enable-auto-tool-choice", "--enable-chunked-prefill", "--enable-prefix-caching",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "32768",
+      "--tool-call-parser", "granite",
+    ]
+    environment:
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: ["gpu"]
+              device_ids: ["4"]

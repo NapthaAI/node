@@ -1,0 +1,24 @@
+services:
+  text-embeddings-inference:
+    image: ghcr.io/huggingface/text-embeddings-inference:latest
+    environment:
+      - HF_API_TOKEN=${HUGGINGFACE_TOKEN}
+      - MODEL_ID=jinaai/jina-embeddings-v2-base-en
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /data
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "7" ]
