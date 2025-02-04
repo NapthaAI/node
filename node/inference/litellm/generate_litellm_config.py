@@ -60,6 +60,11 @@ def generate_litellm_config() -> Dict:
                 'api_base': 'http://localhost:11434'
             }
         })
+
+    # add api key at the bottom of the config
+    config['general_settings'] = {
+        'master_key': os.getenv('LITELLM_MASTER_KEY')
+    }
     
     return config
 
