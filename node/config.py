@@ -3,7 +3,8 @@ from pathlib import Path
 import os
 
 # Node
-LAUNCH_DOCKER = os.getenv('LAUNCH_DOCKER', 'false').lower() == 'true'
+# True if you want to launch node in docker containers, False if you want to run in systemd services
+LAUNCH_DOCKER = False
 NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
