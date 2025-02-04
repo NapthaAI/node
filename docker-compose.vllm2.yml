@@ -24,8 +24,6 @@ services:
         source: ./node/inference/configs
         target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
-    ports:
-      - '8008:8000' # TODO TEMPORARY
     deploy:
       resources:
         reservations:
@@ -54,8 +52,6 @@ services:
         target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
-    ports:
-      - '8009:8000' # TODO temporary
     deploy:
       resources:
         reservations:
@@ -85,8 +81,6 @@ services:
         target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
-    ports:
-      - '8010:8000' # TODO temporary
     deploy:
       resources:
         reservations:
@@ -115,8 +109,6 @@ services:
         target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
-    ports:
-      - '8011:8000' # TODO temporary
     deploy:
       resources:
         reservations:
@@ -146,8 +138,6 @@ services:
         target: /usr/app # configs like chat templates, vllm configs, tool parsers
     ipc: host
     restart: unless-stopped
-    ports:
-      - '8012:8000' # TODO temporary
     deploy:
       resources:
         reservations:
