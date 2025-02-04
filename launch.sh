@@ -1579,7 +1579,7 @@ linux_start_litellm() {
     
     # Get absolute paths
     CURRENT_DIR=$(pwd)
-    PROJECT_DIR="$CURRENT_DIR/node/litellm"
+    PROJECT_DIR="$CURRENT_DIR/node/inference/litellm"
     VENV_PATH="$PROJECT_DIR/.venv/bin"
     
     # Install dependencies using poetry with --no-root flag
@@ -1636,7 +1636,7 @@ darwin_start_litellm() {
     
     # Get absolute paths
     CURRENT_DIR=$(pwd)
-    PROJECT_DIR="$CURRENT_DIR/node/litellm"
+    PROJECT_DIR="$CURRENT_DIR/node/inference/litellm"
     VENV_PATH="$PROJECT_DIR/.venv/bin"
     
     # Install dependencies using poetry with --no-root flag
@@ -1915,7 +1915,7 @@ launch_docker() {
     echo "Launching Docker..."
     if [ "$LLM_BACKEND" = "ollama" ]; then
         echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
-        poetry run python node/node/litellm/generate_litellm_config.py
+        poetry run python node/node/inference/litellm/generate_litellm_config.py
         docker compose -f docker-compose.development.yml up
     else
         docker compose -f docker-compose.vllm up
