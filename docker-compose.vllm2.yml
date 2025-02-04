@@ -176,7 +176,3 @@ services:
     ports:
       - '4000:4000'
 
-# TODO make this the shared config
-networks:
-  default:
-    name: node-network
