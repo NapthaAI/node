@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
+from dotenv import load_dotenv
 import os
-import yaml
 from pathlib import Path
-from typing import Dict, List, Optional
 import sys
-from node.config import OLLAMA_MODELS, OPENAI_MODELS
+from typing import Dict, List, Optional
+import yaml
+from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS
+
+load_dotenv()
 
 def validate_openai_key() -> Optional[str]:
     """Validate OpenAI API key from environment."""
@@ -32,6 +35,12 @@ def get_ollama_models() -> List[str]:
      # NOTE requires that we
     return [model.strip() for model in OLLAMA_MODELS.split(',') if model.strip()]
 
+def get_vllm_models() -> List[str]:
+    """Get VLLM models from config."""
+    if not VLLM_MODELS:
+        return []
+    return VLLM_MODELS
+
 def generate_litellm_config() -> Dict:
     """Generate LiteLLM configuration."""
     config = {
@@ -50,16 +59,28 @@ def generate_litellm_config() -> Dict:
                 }
             })
     
-    # Add Ollama models
-    ollama_models = get_ollama_models()
-    for model in ollama_models:
-        config['model_list'].append({
-            'model_name': model,
-            'litellm_params': {
-                'model': f'ollama/{model}',
-                'api_base': 'http://localhost:11434'
-            }
-        })
+    # Add models based on LLM_BACKEND
+    if LLM_BACKEND == "ollama":
+        ollama_models = get_ollama_models()
+        for model in ollama_models:
+            config['model_list'].append({
+                'model_name': model,
+                'litellm_params': {
+                    'model': f'ollama/{model}',
+                    'api_base': 'http://localhost:11434'
+                }
+            })
+    elif LLM_BACKEND == "vllm":
+        vllm_models = get_vllm_models()
+        for i, model in enumerate(vllm_models):
+            config['model_list'].append({
+                'model_name': model,
+                'litellm_params': {
+                    'model': f'openai/{model}',
+                    'api_base': f'http://vllm-{i}:8000/v1',
+                    'api_key': 'none'
+                }
+            })
 
     # add api key at the bottom of the config
     config['general_settings'] = {
@@ -78,7 +99,7 @@ def main():
     
     # Determine the output path - this should be in the litellm directory
     script_dir = Path(__file__).parent
-    output_path = script_dir / 'litellm_config.ollama.yml'
+    output_path = script_dir / 'litellm_config.yml'
     
     # Write the configuration
     try:
