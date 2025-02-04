@@ -145,7 +145,7 @@ services:
     ipc: host
     restart: unless-stopped
     ports:
-      - '8011:8000' # TODO temporary
+      - '8012:8000' # TODO temporary
     deploy:
       resources:
         reservations:
