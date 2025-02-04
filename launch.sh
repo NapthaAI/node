@@ -1909,13 +1909,33 @@ print_logo(){
 
 launch_docker() {
     echo "Launching Docker..."
+    COMPOSE_DIR="node/compose-files"
+    COMPOSE_FILES=""
+    echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
+    output=$(poetry run python node/inference/litellm/generate_litellm_config.py)
+    echo "$output" | log_with_service_name "LiteLLM" $BLUE
     if [ "$LLM_BACKEND" = "ollama" ]; then
-        echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
-        poetry run python node/node/inference/litellm/generate_litellm_config.py
-        docker compose -f docker-compose.development.yml up
+        COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
+    elif [ "$LLM_BACKEND" = "vllm" ]; then
+        for model in "${VLLM_MODELS[@]}"; do
+            COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model}.yml"
+        done
     else
-        docker compose -f docker-compose.vllm up
+        echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" $RED
+        exit 1
     fi
+
+    if [ "$LOCAL_HUB" = "true" ]; then
+        COMPOSE_FILES+=" -f ${COMPOSE_DIR}/hub.yml"
+    fi
+
+    echo "Using compose files:" | log_with_service_name "Docker" $BLUE
+    echo "- docker-compose.script.yml" | log_with_service_name "Docker" $BLUE
+    for file in $COMPOSE_FILES; do
+        echo "- $(basename $file)" | log_with_service_name "Docker" $BLUE
+    done
+
+    # docker compose docker-compose.script.yml $COMPOSE_FILES up
 }
 
 main() {
