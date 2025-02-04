@@ -183,5 +183,6 @@ ops/systemd/*
 .idea/*
 
 node/inference/ollama/*
+!node/inference/ollama/.gitkeep
 node/storage/fs
 node/storage/hub/modules
