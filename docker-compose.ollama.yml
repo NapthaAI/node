@@ -11,7 +11,7 @@ services:
     environment:
       OLLAMA_HOST: 0.0.0.0
     volumes:
-      - ./node/ollama/models:/root/.ollama
+      - ./node/inference/ollama/models:/root/.ollama
     ports:
       - '11435:11434' # TODO do not expose in production
 

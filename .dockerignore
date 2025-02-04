@@ -9,6 +9,6 @@ venv/
 .venv
 .git
 .idea
-node/ollama/*
+node/inference/ollama/*
 node/storage/fs
 node/storage/hub/modules
