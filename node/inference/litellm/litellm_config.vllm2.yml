@@ -1,0 +1,39 @@
+model_list:
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: katanemo/Arch-Function-7B
+    litellm_params:
+      model: openai/katanemo/Arch-Function-7B
+      api_base: http://vllm-8:8000/v1
+      api_key: none
+
+  - model_name: openbmb/MiniCPM-o-2_6
+    litellm_params:
+      model: openai/openbmb/MiniCPM-o-2_6
+      api_base: http://vllm-9:8000/v1
+      api_key: none
+
+  - model_name: deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+    litellm_params:
+      model: openai/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+      api_base: http://vllm-10:8000/v1
+      api_key: none
+
+  - model_name: Qwen/QwQ-32B-Preview
+    litellm_params:
+      model: openai/Qwen/QwQ-32B-Preview
+      api_base: http://vllm-11:8000/v1
+      api_key: none
+
+  - model_name: mistralai/Mistral-Small-24B-Instruct-2501
+    litellm_params:
+      model: openai/mistralai/Mistral-Small-24B-Instruct-2501
+      api_base: http://vllm-12:8000/v1
+      api_key: none
+
+
+general_settings:
+  master_key: 'sk-blacklight-key'
