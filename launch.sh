@@ -832,13 +832,9 @@ load_config_constants() {
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Add the current directory to Python path
 sys.path.insert(0, '${CURRENT_DIR}')
-
-# Load .env file
-load_dotenv('${CURRENT_DIR}/.env')
 
 # Import the config module
 from node.config import *
@@ -861,8 +857,8 @@ EOF
 
         echo "Executing config.py and loading variables..." | log_with_service_name "Config"
         
-        # Execute the Python script and store output
-        output=$(poetry run python /tmp/load_config.py)
+        # Execute the Python script and store output using system Python
+        output=$(env python3 /tmp/load_config.py)
         
         # Evaluate the output
         eval "$output"
