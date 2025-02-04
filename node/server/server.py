@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Optional
 import traceback
 
-from node.config import get_node_config, REGISTER_NODE_WITH_HUB
+from node.config import REGISTER_NODE_WITH_HUB
 from node.storage.hub.hub import HubDBSurreal
 from node.server.http_server import HTTPServer
 from node.server.ws_server import WebSocketServer
 from node.server.grpc_server import GrpcServer
-from node.utils import get_logger
+from node.utils import get_logger, get_node_config
 
 logger = get_logger(__name__)
 load_dotenv()

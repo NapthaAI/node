@@ -1,14 +1,6 @@
 import os
-import platform
-import psutil
-from node.schemas import NodeConfig, NodeServer
 from pathlib import Path
-from dotenv import load_dotenv
 import os
-
-FILE_PATH = Path(__file__).resolve()
-NODE_PATH = FILE_PATH.parent
-load_dotenv()
 
 # Node
 LAUNCH_DOCKER = os.getenv('LAUNCH_DOCKER', 'false').lower() == 'true'
@@ -59,32 +51,3 @@ PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
 HUB_DB_SURREAL_PORT=3001
 HUB_DB_SURREAL_NS="naptha"
 HUB_DB_SURREAL_NAME="naptha"
-
-def get_node_config():
-    """Get the node configuration."""
-    from node.user import get_public_key
-    public_key = get_public_key(os.getenv("PRIVATE_KEY"))
-    node_config = NodeConfig(
-        id=f"node:{public_key}",
-        owner=os.getenv("HUB_USERNAME"),
-        public_key=public_key,
-        ip=NODE_IP,
-        user_communication_protocol=USER_COMMUNICATION_PROTOCOL,
-        user_communication_port=USER_COMMUNICATION_PORT,
-        node_communication_protocol=NODE_COMMUNICATION_PROTOCOL,
-        num_node_communication_servers=NUM_NODE_COMMUNICATION_SERVERS,
-        provider_types=PROVIDER_TYPES,
-        servers=[NodeServer(communication_protocol=NODE_COMMUNICATION_PROTOCOL, port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
-        models=[MODELS],
-        docker_jobs=DOCKER_JOBS,
-        routing_type=ROUTING_TYPE,
-        routing_url=ROUTING_URL,
-        ports=[NODE_COMMUNICATION_PORT+i for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
-        num_gpus=NUM_GPUS,
-        arch=platform.machine(),
-        os=platform.system(),
-        ram=psutil.virtual_memory().total,
-        vram=VRAM,
-    )
-    print("Created node config:", node_config)
-    return node_config

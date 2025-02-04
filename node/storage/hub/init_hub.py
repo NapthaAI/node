@@ -8,14 +8,12 @@ import getpass
 
 from node.storage.hub.hub import HubDBSurreal
 from node.user import get_public_key
-from node.utils import add_credentials_to_env, get_logger
-from node.config import (
-    get_node_config, 
+from node.utils import add_credentials_to_env, get_logger, get_node_config
+from node.config import ( 
     HUB_DB_SURREAL_NS, 
     HUB_DB_SURREAL_NAME, 
     LOCAL_HUB, 
     LAUNCH_DOCKER, 
-    LOCAL_HUB_URL,
     HUB_DB_SURREAL_PORT,
 )
 

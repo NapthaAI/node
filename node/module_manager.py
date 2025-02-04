@@ -38,7 +38,8 @@ from node.schemas import (
     OrchestratorRun
 )
 from node.worker.utils import download_from_ipfs, unzip_file
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, get_node_config
+from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
+from node.utils import get_node_config
 from node.storage.hub.hub import list_modules, list_nodes
 
 logger = logging.getLogger(__name__)
