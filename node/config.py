@@ -1,6 +1,4 @@
-import os
 from pathlib import Path
-import os
 
 # Node
 # True if you want to launch node in docker containers, False if you want to run in systemd services
@@ -22,11 +20,11 @@ ROUTING_URL="ws://node.naptha.ai:8765"
 
 # LLMs Inference
 LLM_BACKEND="ollama"
-VLLM_MODEL="NousResearch/Hermes-3-Llama-3.1-8B"
+VLLM_MODELS="NousResearch/Hermes-3-Llama-3.1-8B"
 OLLAMA_MODELS="hermes3" # use string of models separated by commas
 OPENAI_MODELS="gpt-4o-mini"
 LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
-MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODEL
+MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODELS
 
 # Local DB
 LOCAL_DB_POSTGRES_PORT=5432
