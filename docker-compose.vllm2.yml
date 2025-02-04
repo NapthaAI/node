@@ -39,7 +39,6 @@ services:
       "--enable-prefix-caching", "--enable-chunked-prefill",
       "--gpu-memory-utilization", "0.98",
       "--max-model-len", "32768",
-      "--enable-auto-tool-choice", "--tool-call-parser", "hermes",
       "--trust-remote-code"
     ]
     environment:
@@ -62,6 +61,37 @@ services:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
               device_ids: [ "1" ]
+
+  vllm-10:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "DeepSeek-R1-Distill-Qwen-32B",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "131072",
+      "--trust-remote-code",
+      "--tensor-parallel-size", "2" # split across the 2 GPUs
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    ports:
+      - '8010:8000' # TODO temporary
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "2", "3" ]
 
 # TODO make this the shared config
 networks:
