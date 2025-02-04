@@ -3,12 +3,12 @@ name: Deploy Application
 on:
   push:
     branches:
-      - feat/github-actions  # TODO: Change this to main once testing is done
+      - main
   pull_request:
     types:
       - closed
     branches:
-      - feat/github-actions  # TODO: Change this to main once testing is done
+      - main
 
 jobs:
   deploy:
