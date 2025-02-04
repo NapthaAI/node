@@ -1048,9 +1048,9 @@ darwin_start_servers() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp_http.out</string>
+    <string>/tmp/nodeapp_http.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp_http.err</string>
+    <string>/tmp/nodeapp_http.log</string>
 </dict>
 </plist>
 EOF
@@ -1117,9 +1117,9 @@ EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.out</string>
+    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.err</string>
+    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.log</string>
 </dict>
 </plist>
 EOF
@@ -1218,7 +1218,7 @@ set -e
 
 # Log function
 log_error() {
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') ERROR: \$1" >> /tmp/celeryworker.err
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') ERROR: \$1" >> /tmp/celeryworker.log
 }
 
 # Check if virtual environment exists
@@ -1282,9 +1282,9 @@ EOF
         <false/>
     </dict>
     <key>StandardOutPath</key>
-    <string>/tmp/celeryworker.out</string>
+    <string>/tmp/celeryworker.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/celeryworker.err</string>
+    <string>/tmp/celeryworker.log</string>
 </dict>
 </plist>
 EOF
@@ -1674,7 +1674,7 @@ darwin_start_litellm() {
     <key>StandardOutPath</key>
     <string>/tmp/litellm.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/litellm.error.log</string>
+    <string>/tmp/litellm.log</string>
 </dict>
 </plist>
 EOF
