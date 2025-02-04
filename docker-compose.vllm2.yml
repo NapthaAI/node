@@ -1,0 +1,69 @@
+include:
+  - docker-compose.yml
+
+services:
+
+  # vllm service(s)
+  vllm-8:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "katanemo/Arch-Function-7B",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "131072",
+      "--enable-auto-tool-choice", "--tool-call-parser", "hermes"
+    ]
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGINGFACE_TOKEN:?error}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    ports:
+      - '8008:8000' # TODO TEMPORARY
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "0" ]
+
+  vllm-9:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "openbmb/MiniCPM-o-2_6",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "32768",
+      "--enable-auto-tool-choice", "--tool-call-parser", "hermes"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    ports:
+      - '8009:8000' # TODO temporary
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "1" ]
+
+# TODO make this the shared config
+networks:
+  default:
+    name: node-network
