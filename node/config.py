@@ -1,8 +1,9 @@
 from pathlib import Path
+import os
 
 # Node
 # True if you want to launch node in docker containers, False if you want to run in systemd services
-LAUNCH_DOCKER = False
+LAUNCH_DOCKER = (os.environ.get('LAUNCH_DOCKER', 'false') == 'true')
 NUM_GPUS=0
 VRAM=0
 DOCKER_JOBS=False
