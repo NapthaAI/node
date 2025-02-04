@@ -65,7 +65,6 @@ services:
       RMQ_USER: ${RMQ_USER:?error}
       RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
-      LAUNCH_DOCKER: true    # NOTE for testing - this can override the default config.py in the container
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
