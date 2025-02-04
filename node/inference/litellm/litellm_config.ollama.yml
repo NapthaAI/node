@@ -7,3 +7,5 @@ model_list:
   litellm_params:
     model: ollama/hermes3
     api_base: http://localhost:11434
+general_settings:
+  master_key: sk-blacklight-key
