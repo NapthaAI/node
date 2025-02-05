@@ -1,5 +1,5 @@
 services:
-  text-embeddings-inference:
+  jina-embeddings-v2-base-en:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     environment:
       - HF_API_TOKEN=${HUGGINGFACE_TOKEN:?error}
