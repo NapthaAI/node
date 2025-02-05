@@ -1,3 +1,4 @@
+# ollama.yml
 services:
   ollama:
     image: ollama/ollama:latest
@@ -10,4 +11,10 @@ services:
     volumes:
       - ./node/inference/ollama/models:/root/.ollama
     ports:
-      - '11435:11434' # TODO do not expose in production
+      - '11435:11434'
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true
