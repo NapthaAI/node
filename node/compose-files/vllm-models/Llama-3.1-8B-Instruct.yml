@@ -1,5 +1,5 @@
 services:
-  vllm-2:
+  Llama-3.1-8B-Instruct:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "meta-llama/Llama-3.1-8B-Instruct",

@@ -1,5 +1,5 @@
 services:
-  vllm-0:
+  Hermes-3-Llama-3.1-8B:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "NousResearch/Hermes-3-Llama-3.1-8B",

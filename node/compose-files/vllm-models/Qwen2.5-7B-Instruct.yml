@@ -1,5 +1,5 @@
 services:
-  vllm-1:
+  Qwen2.5-7B-Instruct:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "Qwen/Qwen2.5-7B-Instruct",

@@ -1,5 +1,5 @@
 services:
-  vllm-5:
+  internlm2_5-7b-chat:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "internlm/internlm2_5-7b-chat",

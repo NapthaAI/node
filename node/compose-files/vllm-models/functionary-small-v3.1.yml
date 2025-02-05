@@ -1,5 +1,5 @@
 services:
-  vllm-6:
+  functionary-small-v3.1:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "meetkai/functionary-small-v3.1",
