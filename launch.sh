@@ -1914,6 +1914,7 @@ launch_docker() {
     echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
     output=$(poetry run python node/inference/litellm/generate_litellm_config.py)
     echo "$output" | log_with_service_name "LiteLLM" $BLUE
+    
     if [ "$LLM_BACKEND" = "ollama" ]; then
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [ "$LLM_BACKEND" = "vllm" ]; then
@@ -1931,11 +1932,24 @@ launch_docker() {
 
     echo "Using compose files:" | log_with_service_name "Docker" $BLUE
     echo "- docker-compose.script.yml" | log_with_service_name "Docker" $BLUE
-    for file in $COMPOSE_FILES; do
-        echo "- $(basename $file)" | log_with_service_name "Docker" $BLUE
+    
+    # Fix: Process the compose files string properly for basename
+    for file in $(echo "$COMPOSE_FILES" | sed 's/-f //g'); do
+        echo "- $(basename "$file")" | log_with_service_name "Docker" $BLUE
     done
 
-    # docker compose docker-compose.script.yml $COMPOSE_FILES up
+    # save the compose files to a file
+    echo "COMPOSE_FILES=$COMPOSE_FILES"
+
+    # Uncomment and fix the docker compose command
+    echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up"
+    echo "Creating network if it doesn't exist..."
+    if ! docker network ls | grep -q naptha-network; then
+        docker network create naptha-network
+    fi
+    echo "Creating network... done"
+    echo "Starting services..."
+    docker compose -f docker-compose.script.yml $COMPOSE_FILES up
 }
 
 main() {
@@ -1943,6 +1957,7 @@ main() {
     load_config_constants
     os="$(uname)"
     if [ "$LAUNCH_DOCKER" = "true" ]; then
+        setup_poetry
         launch_docker
     else
         # use systemd/launchd
