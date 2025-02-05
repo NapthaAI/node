@@ -1,6 +1,6 @@
-
+# litellm.yml
 services:
-  litellm-ollama:
+  litellm:  # Changed from litellm-ollama to match container name
     image: ghcr.io/berriai/litellm:main-latest
     container_name: litellm
     command: --config /app/config.yaml
@@ -11,9 +11,15 @@ services:
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
-      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
+      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME:?error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     volumes:
       - ./node/inference/litellm/litellm_config.yml:/app/config.yaml
     ports:
-      - '4000:4000' # TODO do not expose in production
+      - '4000:4000'
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true
