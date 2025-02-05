@@ -197,7 +197,7 @@ def get_node_config():
         num_node_communication_servers=NUM_NODE_COMMUNICATION_SERVERS,
         provider_types=PROVIDER_TYPES,
         servers=[NodeServer(communication_protocol=NODE_COMMUNICATION_PROTOCOL, port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
-        models=[MODELS],
+        models=[MODELS] if isinstance(MODELS, str) else MODELS,
         docker_jobs=DOCKER_JOBS,
         routing_type=ROUTING_TYPE,
         routing_url=ROUTING_URL,
