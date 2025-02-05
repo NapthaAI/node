@@ -25,3 +25,9 @@ services:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
               device_ids: [ "0" ]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

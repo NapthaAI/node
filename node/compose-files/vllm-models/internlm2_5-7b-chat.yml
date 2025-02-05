@@ -11,7 +11,7 @@ services:
       "--trust-remote-code"
     ]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN:?error}
     volumes:
       - type: bind
         source: ${HF_HOME:?error}
@@ -28,3 +28,9 @@ services:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
               device_ids: [ "5" ]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

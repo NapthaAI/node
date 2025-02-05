@@ -2,7 +2,7 @@ services:
   text-embeddings-inference:
     image: ghcr.io/huggingface/text-embeddings-inference:latest
     environment:
-      - HF_API_TOKEN=${HUGGINGFACE_TOKEN}
+      - HF_API_TOKEN=${HUGGINGFACE_TOKEN:?error}
       - MODEL_ID=jinaai/jina-embeddings-v2-base-en
     volumes:
       - type: bind
@@ -22,3 +22,9 @@ services:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
               device_ids: [ "7" ]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true
