@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from typing import Dict, List, Optional
 import yaml
-from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER
+from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER, MODEL_SERVICE_MAP
 
 load_dotenv()
 
@@ -70,17 +70,32 @@ def generate_litellm_config() -> Dict:
                     'api_base': 'http://localhost:11434' if not LAUNCH_DOCKER else 'http://ollama:11434'
                 }
             })
+
     elif LLM_BACKEND == "vllm":
         vllm_models = get_vllm_models()
-        for i, model in enumerate(vllm_models):
-            config['model_list'].append({
-                'model_name': model,
-                'litellm_params': {
-                    'model': f'openai/{model}',
-                    'api_base': f'http://vllm-{i}:8000/v1',
-                    'api_key': 'none'
-                }
-            })
+        for model in vllm_models:
+            service_name = MODEL_SERVICE_MAP.get(model)
+            if service_name:
+                if "embeddings" not in service_name:
+                    config['model_list'].append({
+                        'model_name': model,
+                        'litellm_params': {
+                            'model': f'openai/{model}',
+                            'api_base': f'http://{service_name}:8000/v1',
+                            'api_key': 'none'
+                        }
+                    })
+                else:
+                    config['model_list'].append({
+                        'model_name': model,
+                        'litellm_params': {
+                            'model': f'openai/{model}',
+                            'api_base': f'http://{service_name}/v1',
+                            'api_key': 'none'
+                        }
+                    })
+            else:
+                print(f"Model {model} not found in MODEL_SERVICE_MAP")
 
     # add api key at the bottom of the config
     config['general_settings'] = {
