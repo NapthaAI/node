@@ -27,7 +27,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ ${GPU_ID_toolace_8b:?error} ]
+              device_ids: [ "${GPU_ID_toolace_8b:?error}" ]
     networks:
       - naptha-network
 

@@ -26,7 +26,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ ${GPU_ID_functionary_small_v3_1:?error} ]
+              device_ids: ["${GPU_ID_functionary_small_v3_1:?error}"]
     networks:
       - naptha-network
 

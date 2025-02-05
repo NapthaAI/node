@@ -21,7 +21,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ ${GPU_ID_jina_embeddings_v2_base_en:?error} ]
+              device_ids: [ "${GPU_ID_jina_embeddings_v2_base_en:?error}" ]
     networks:
       - naptha-network
 

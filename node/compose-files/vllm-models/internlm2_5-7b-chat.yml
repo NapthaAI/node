@@ -27,7 +27,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ ${GPU_ID_internlm2_5_7b_chat:?error} ]
+              device_ids: ["${GPU_ID_internlm2_5_7b_chat:?error}"]
     networks:
       - naptha-network
 
