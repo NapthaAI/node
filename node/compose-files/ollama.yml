@@ -11,7 +11,7 @@ services:
     volumes:
       - ./node/inference/ollama/models:/root/.ollama
     ports:
-      - '11435:11434'
+      - '11434:11434'
     networks:
       - naptha-network
 
