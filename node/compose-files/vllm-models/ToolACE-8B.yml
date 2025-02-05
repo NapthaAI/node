@@ -1,5 +1,5 @@
 services:
-  vllm-3:
+  ToolACE-8B:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "Team-ACE/ToolACE-8B",
@@ -27,7 +27,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ "3" ]
+              device_ids: [ ${GPU_ID_toolace_8b:?error} ]
     networks:
       - naptha-network
 

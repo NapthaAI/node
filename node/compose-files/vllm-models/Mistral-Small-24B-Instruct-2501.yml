@@ -26,7 +26,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ "6", "7" ]
+              device_ids: [ ${GPU_ID_mistral_small_24b_instruct_2501:?error} ]
 
 networks:
   naptha-network:

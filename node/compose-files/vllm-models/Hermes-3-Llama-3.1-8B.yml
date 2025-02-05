@@ -24,7 +24,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ "0" ]
+              device_ids: [ ${GPU_ID_hermes_3_llama_3_1_8b:?error} ]
     networks:
       - naptha-network
 

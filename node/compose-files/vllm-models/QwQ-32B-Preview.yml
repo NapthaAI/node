@@ -26,7 +26,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ "4", "5" ]
+              device_ids: [ ${GPU_ID_qwq_32b_preview:?error} ]
 
 networks:
   naptha-network:
