@@ -22,6 +22,16 @@ ROUTING_URL="wss://node.naptha.ai"
 # LLMs Inference: ollama or vllm
 LLM_BACKEND="ollama"
 OLLAMA_MODELS="hermes3:8b" # use string of models separated by commas
+MODEL_SERVICE_MAP = {
+    "NousResearch/Hermes-3-Llama-3.1-8B": "vllm-0",
+    "Qwen/Qwen2.5-7B-Instruct": "vllm-1",
+    "meta-llama/Llama-3.1-8B-Instruct": "vllm-2",
+    "Team-ACE/ToolACE-8B": "vllm-3",
+    "ibm-granite/granite-3.1-8b-instruct": "vllm-4",
+    "internlm/internlm2_5-7b-chat": "vllm-5",
+    "meetkai/functionary-small-v3.1": "vllm-6",
+    "jinaai/jina-embeddings-v2-base-en": "text-embeddings-inference"
+}
 VLLM_MODELS=[
     "NousResearch/Hermes-3-Llama-3.1-8B",
     # "Qwen/Qwen2.5-7B-Instruct",
