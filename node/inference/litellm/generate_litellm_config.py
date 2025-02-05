@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import sys
+import time
 from typing import Dict, List, Optional
 root_dir = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(root_dir))
@@ -103,7 +104,7 @@ def generate_litellm_config() -> Dict:
     elif LLM_BACKEND == "vllm":
         vllm_models = get_vllm_models()
         for model in vllm_models:
-            service_name = MODEL_SERVICE_MAP.get(model)
+            service_name = model.split("/")[-1]
             if service_name:
                 if "embeddings" not in service_name:
                     config['model_list'].append({
@@ -133,12 +134,48 @@ def generate_litellm_config() -> Dict:
     
     return config
 
+def get_gpu_var_name(model_name: str) -> str:
+    """Generate standardized GPU ID variable name from model name."""
+    # Get the part after the last slash
+    base_name = model_name.split('/')[-1]
+    # Convert to lowercase and replace special chars with underscores
+    normalized = base_name.lower().replace('-', '_').replace('.', '_')
+    return f"GPU_ID_{normalized}"
+
+def allocate_gpus(model_map, vllm_models):
+    """
+    Allocate GPUs based on model requirements.
+    Returns a space-separated string of GPU assignments for docker compose.
+    """
+    current_gpu = 0
+    gpu_assignments = []
+
+    for model in vllm_models:
+        if model not in model_map:
+            print(f"Warning: {model} not found in MODEL_SERVICE_MAP", file=sys.stderr)
+            continue
+
+        gpu_count = model_map[model]  # Now directly get the GPU count
+        gpu_var_name = get_gpu_var_name(model)
+        
+        # Check if we have enough GPUs
+        if current_gpu + gpu_count > 8:  # Assuming 8 GPUs
+            print(f"Error: Not enough GPUs for {model}", file=sys.stderr)
+            sys.exit(1)
+        
+        # Create GPU list for this model
+        gpu_list = ",".join(str(i) for i in range(current_gpu, current_gpu + gpu_count))
+        gpu_assignments.append(f"{gpu_var_name}={gpu_list}")
+        current_gpu += gpu_count
+
+    return " ".join(gpu_assignments)
+
 def main():
     # Generate config
     config = generate_litellm_config()
     
     if not config['model_list']:
-        print("Error: No models configured. Please check OPENAI_MODELS and OLLAMA_MODELS in your configuration.")
+        print("Error: No models configured. Please check OPENAI_MODELS and OLLAMA_MODELS in your configuration.", file=sys.stderr)
         sys.exit(1)
     
     # Determine the output path - this should be in the litellm directory
@@ -150,10 +187,15 @@ def main():
         yaml_content = dict_to_yaml(config)
         with open(output_path, 'w') as f:
             f.write(yaml_content)
-        print(f"Successfully generated LiteLLM config at {output_path}")
+        print(f"Successfully generated LiteLLM config at {output_path}", file=sys.stderr)
     except Exception as e:
-        print(f"Error writing config file: {e}")
+        print(f"Error writing config file: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Generate GPU assignments
+    if LLM_BACKEND == "vllm":
+        gpu_assignments = allocate_gpus(MODEL_SERVICE_MAP, VLLM_MODELS)
+        print(gpu_assignments)  # This will go to stdout
 
 if __name__ == "__main__":
     main()

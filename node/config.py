@@ -23,24 +23,34 @@ ROUTING_URL="wss://node.naptha.ai"
 LLM_BACKEND="ollama"
 OLLAMA_MODELS="hermes3:8b" # use string of models separated by commas
 MODEL_SERVICE_MAP = {
-    "NousResearch/Hermes-3-Llama-3.1-8B": "vllm-0",
-    "Qwen/Qwen2.5-7B-Instruct": "vllm-1",
-    "meta-llama/Llama-3.1-8B-Instruct": "vllm-2",
-    "Team-ACE/ToolACE-8B": "vllm-3",
-    "ibm-granite/granite-3.1-8b-instruct": "vllm-4",
-    "internlm/internlm2_5-7b-chat": "vllm-5",
-    "meetkai/functionary-small-v3.1": "vllm-6",
-    "jinaai/jina-embeddings-v2-base-en": "text-embeddings-inference"
+    "NousResearch/Hermes-3-Llama-3.1-8B": 1,
+    "Qwen/Qwen2.5-7B-Instruct": 1,
+    "meta-llama/Llama-3.1-8B-Instruct": 1,
+    "Team-ACE/ToolACE-8B": 1,
+    "ibm-granite/granite-3.1-8b-instruct": 1,
+    "internlm/internlm2_5-7b-chat": 1,
+    "meetkai/functionary-small-v3.1": 1,
+    "jinaai/jina-embeddings-v2-base-en": 1,
+    "katanemo/Arch-Function-7B": 1,
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": 2,
+    "openbmb/MiniCPM-o-2_6": 1,
+    "mistralai/Mistral-Small-24B-Instruct-2501": 2,
+    "Qwen/QwQ-32B-Preview": 2,
 }
 VLLM_MODELS=[
     "NousResearch/Hermes-3-Llama-3.1-8B",
-    # "Qwen/Qwen2.5-7B-Instruct",
-    # "meta-llama/Llama-3.1-8B-Instruct",
-    # "Team-ACE/ToolACE-8B",
+    "Qwen/Qwen2.5-7B-Instruct",
+    "meta-llama/Llama-3.1-8B-Instruct",
+    "Team-ACE/ToolACE-8B",
     # "ibm-granite/granite-3.1-8b-instruct",
     # "internlm/internlm2_5-7b-chat",
     # "meetkai/functionary-small-v3.1",
-    # "jinaai/jina-embeddings-v2-base-en"
+    # "jinaai/jina-embeddings-v2-base-en",
+    # "katanemo/Arch-Function-7B",
+    # "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+    # "openbmb/MiniCPM-o-2_6",
+    # "mistralai/Mistral-Small-24B-Instruct-2501",
+    "Qwen/QwQ-32B-Preview",
 ]
 OPENAI_MODELS="gpt-4o-mini"
 LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
