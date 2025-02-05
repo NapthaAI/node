@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from typing import Dict, List, Optional
 import yaml
-from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS
+from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER
 
 load_dotenv()
 
@@ -67,7 +67,7 @@ def generate_litellm_config() -> Dict:
                 'model_name': model,
                 'litellm_params': {
                     'model': f'ollama/{model}',
-                    'api_base': 'http://localhost:11434'
+                    'api_base': 'http://localhost:11434' if not LAUNCH_DOCKER else 'http://ollama:11434'
                 }
             })
     elif LLM_BACKEND == "vllm":
