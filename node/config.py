@@ -19,9 +19,9 @@ NODE_IP="localhost"
 ROUTING_TYPE="direct"
 ROUTING_URL="wss://node.naptha.ai"
 
-# LLMs Inference
+# LLMs Inference: ollama or vllm
 LLM_BACKEND="ollama"
-OLLAMA_MODELS="hermes3" # use string of models separated by commas
+OLLAMA_MODELS="hermes3:8b" # use string of models separated by commas
 VLLM_MODELS=[
     "NousResearch/Hermes-3-Llama-3.1-8B",
     # "Qwen/Qwen2.5-7B-Instruct",
