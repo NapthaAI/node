@@ -177,31 +177,26 @@ def allocate_gpus(model_map, vllm_models):
     return " ".join(gpu_assignments)
 
 def main():
-    # Generate config
     config = generate_litellm_config()
     
     if not config['model_list']:
-        print("Error: No models configured. Please check OPENAI_MODELS and OLLAMA_MODELS in your configuration.", file=sys.stderr)
+        print("Error: No models configured.", file=sys.stderr)
         sys.exit(1)
     
-    # Determine the output path - this should be in the litellm directory
     script_dir = Path(__file__).parent
     output_path = script_dir / 'litellm_config.yml'
     
-    # Write the configuration
     try:
         yaml_content = dict_to_yaml(config)
         with open(output_path, 'w') as f:
             f.write(yaml_content)
-        print(f"Successfully generated LiteLLM config at {output_path}", file=sys.stderr)
     except Exception as e:
-        print(f"Error writing config file: {e}", file=sys.stderr)
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Generate GPU assignments
     if LLM_BACKEND == "vllm":
         gpu_assignments = allocate_gpus(MODEL_SERVICE_MAP, VLLM_MODELS)
-        print(gpu_assignments)  # This will go to stdout
-
+        with open('gpu_assignments.txt', 'w') as f:
+            f.write(gpu_assignments)
 if __name__ == "__main__":
     main()

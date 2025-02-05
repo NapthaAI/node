@@ -1932,7 +1932,9 @@ launch_docker() {
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [ "$LLM_BACKEND" = "vllm" ]; then
         # Only capture stdout for GPU assignments
-        GPU_ASSIGNMENTS=$(python node/inference/litellm/generate_litellm_config.py)
+        (python node/inference/litellm/generate_litellm_config.py)
+        GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
+        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" $BLUE
         if [ $? -ne 0 ]; then
             echo "GPU allocation failed" | log_with_service_name "LiteLLM" $RED
             exit 1
@@ -1959,20 +1961,14 @@ launch_docker() {
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/hub.yml"
     fi
 
-    # Add the base compose file ONCE at the start
-    BASE_COMPOSE="-f docker-compose.script.yml"
-    
+    # create network if it doesn't exist
+    docker network inspect naptha-network >/dev/null 2>&1 || docker network create naptha-network
+
     echo "Starting services..."
     if [ "$LLM_BACKEND" = "vllm" ]; then
-        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" $BLUE
-        # Execute docker compose with environment variables
-        # env $GPU_ASSIGNMENTS docker compose $COMPOSE_FILES up
-        # echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up $GPU_ASSIGNMENTS" > docker_compose_command.sh
+        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up $GPU_ASSIGNMENTS" > docker_compose_command.sh
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up
     else
-        # start network if it's not already running
-        if ! docker network ls | grep -q "naptha-network"; then
-            docker network create naptha-network
-        fi
         docker compose -f docker-compose.script.yml $COMPOSE_FILES up
     fi
 }
