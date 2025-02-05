@@ -31,9 +31,15 @@ def dict_to_yaml(data: Dict, indent: int = 0) -> str:
             yaml_str.append(f"{spaces}{key}:")
             for item in value:
                 if isinstance(item, dict):
-                    yaml_str.append(dict_to_yaml(item, indent + 2))
+                    # Start dictionary items in a list with "- key:" format
+                    first_key = next(iter(item))
+                    yaml_str.append(f"{spaces}- {first_key}: {format_yaml_value(item[first_key])}")
+                    # Handle remaining key-value pairs with increased indentation
+                    remaining = {k: v for k, v in item.items() if k != first_key}
+                    if remaining:
+                        yaml_str.append(dict_to_yaml(remaining, indent + 2))
                 else:
-                    yaml_str.append(f"{spaces}  - {format_yaml_value(item)}")
+                    yaml_str.append(f"{spaces}- {format_yaml_value(item)}")
         else:
             yaml_str.append(f"{spaces}{key}: {format_yaml_value(value)}")
     
