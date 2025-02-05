@@ -12,7 +12,7 @@ def format_yaml_value(value: any) -> str:
     """Format a value for YAML output."""
     if isinstance(value, str):
         if any(c in value for c in ":{}\n[]'\""):
-            return f"'{value.replace('\'', '\'\'')}'"
+            return "'{}'".format(value.replace("'", "''"))
         return value
     if isinstance(value, (bool, int, float)):
         return str(value).lower()

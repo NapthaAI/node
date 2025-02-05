@@ -1928,11 +1928,11 @@ launch_docker() {
     fi
 
     if [ "$LLM_BACKEND" = "ollama" ]; then
-        poetry run python node/inference/litellm/generate_litellm_config.py
+        python node/inference/litellm/generate_litellm_config.py
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [ "$LLM_BACKEND" = "vllm" ]; then
         # Only capture stdout for GPU assignments
-        GPU_ASSIGNMENTS=$(poetry run python node/inference/litellm/generate_litellm_config.py)
+        GPU_ASSIGNMENTS=$(python node/inference/litellm/generate_litellm_config.py)
         if [ $? -ne 0 ]; then
             echo "GPU allocation failed" | log_with_service_name "LiteLLM" $RED
             exit 1
@@ -1967,10 +1967,13 @@ launch_docker() {
         echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" $BLUE
         # Execute docker compose with environment variables
         # env $GPU_ASSIGNMENTS docker compose $COMPOSE_FILES up
-        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up $GPU_ASSIGNMENTS" > docker_compose_command.sh
+        # echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up $GPU_ASSIGNMENTS" > docker_compose_command.sh
     else
-        # docker compose $COMPOSE_FILES up
-        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up" > docker_compose_command.sh
+        # start network if it's not already running
+        if ! docker network ls | grep -q "naptha-network"; then
+            docker network create naptha-network
+        fi
+        docker compose -f docker-compose.script.yml $COMPOSE_FILES up
     fi
 }
 
