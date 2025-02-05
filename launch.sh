@@ -1927,15 +1927,28 @@ launch_docker() {
         done < .env
     fi
 
-    echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
-    output=$(poetry run python node/inference/litellm/generate_litellm_config.py)
-    echo "$output" | log_with_service_name "LiteLLM" $BLUE
-    
     if [ "$LLM_BACKEND" = "ollama" ]; then
+        poetry run python node/inference/litellm/generate_litellm_config.py
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [ "$LLM_BACKEND" = "vllm" ]; then
-        for model in "${VLLM_MODELS[@]}"; do
-            COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model}.yml"
+        # Only capture stdout for GPU assignments
+        GPU_ASSIGNMENTS=$(poetry run python node/inference/litellm/generate_litellm_config.py)
+        if [ $? -ne 0 ]; then
+            echo "GPU allocation failed" | log_with_service_name "LiteLLM" $RED
+            exit 1
+        fi
+        
+        # Convert comma-separated string to array and process each model
+        IFS=',' read -ra VLLM_MODEL_ARRAY <<< "$VLLM_MODELS"
+        for model in "${VLLM_MODEL_ARRAY[@]}"; do
+            # Trim whitespace
+            model=$(echo "$model" | xargs)
+            model_name=${model##*/}
+            if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
+                COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
+            else
+                echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" $YELLOW
+            fi
         done
     else
         echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" $RED
@@ -1946,26 +1959,19 @@ launch_docker() {
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/hub.yml"
     fi
 
-    echo "Using compose files:" | log_with_service_name "Docker" $BLUE
-    echo "- docker-compose.script.yml" | log_with_service_name "Docker" $BLUE
+    # Add the base compose file ONCE at the start
+    BASE_COMPOSE="-f docker-compose.script.yml"
     
-    # Fix: Process the compose files string properly for basename
-    for file in $(echo "$COMPOSE_FILES" | sed 's/-f //g'); do
-        echo "- $(basename "$file")" | log_with_service_name "Docker" $BLUE
-    done
-
-    # save the compose files to a file
-    echo "COMPOSE_FILES=$COMPOSE_FILES"
-
-    # Uncomment and fix the docker compose command
-    echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up"
-    echo "Creating network if it doesn't exist..."
-    if ! docker network ls | grep -q naptha-network; then
-        docker network create naptha-network
-    fi
-    echo "Creating network... done"
     echo "Starting services..."
-    docker compose -f docker-compose.script.yml $COMPOSE_FILES up
+    if [ "$LLM_BACKEND" = "vllm" ]; then
+        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" $BLUE
+        # Execute docker compose with environment variables
+        # env $GPU_ASSIGNMENTS docker compose $COMPOSE_FILES up
+        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up $GPU_ASSIGNMENTS" > docker_compose_command.sh
+    else
+        # docker compose $COMPOSE_FILES up
+        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up" > docker_compose_command.sh
+    fi
 }
 
 main() {
