@@ -1,0 +1,32 @@
+services:
+  MiniCPM-o-2_6:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "openbmb/MiniCPM-o-2_6",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "32768",
+      "--trust-remote-code"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "1" ]
+          
+networks:
+  naptha-network:
+    external: true
