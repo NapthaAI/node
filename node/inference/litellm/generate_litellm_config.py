@@ -1,13 +1,42 @@
 #!/usr/bin/env python3
-from dotenv import load_dotenv
 import os
 from pathlib import Path
 import sys
 from typing import Dict, List, Optional
-import yaml
+root_dir = Path(__file__).parent.parent.parent.parent
+sys.path.append(str(root_dir))
 from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER, MODEL_SERVICE_MAP
 
-load_dotenv()
+def format_yaml_value(value: any) -> str:
+    """Format a value for YAML output."""
+    if isinstance(value, str):
+        if any(c in value for c in ":{}\n[]'\""):
+            return f"'{value.replace('\'', '\'\'')}'"
+        return value
+    if isinstance(value, (bool, int, float)):
+        return str(value).lower()
+    return str(value)
+
+def dict_to_yaml(data: Dict, indent: int = 0) -> str:
+    """Convert a dictionary to YAML string."""
+    yaml_str = []
+    spaces = " " * indent
+    
+    for key, value in data.items():
+        if isinstance(value, dict):
+            yaml_str.append(f"{spaces}{key}:")
+            yaml_str.append(dict_to_yaml(value, indent + 2))
+        elif isinstance(value, list):
+            yaml_str.append(f"{spaces}{key}:")
+            for item in value:
+                if isinstance(item, dict):
+                    yaml_str.append(dict_to_yaml(item, indent + 2))
+                else:
+                    yaml_str.append(f"{spaces}  - {format_yaml_value(item)}")
+        else:
+            yaml_str.append(f"{spaces}{key}: {format_yaml_value(value)}")
+    
+    return "\n".join(yaml_str)
 
 def validate_openai_key() -> Optional[str]:
     """Validate OpenAI API key from environment."""
@@ -118,8 +147,9 @@ def main():
     
     # Write the configuration
     try:
+        yaml_content = dict_to_yaml(config)
         with open(output_path, 'w') as f:
-            yaml.safe_dump(config, f, default_flow_style=False, sort_keys=False)
+            f.write(yaml_content)
         print(f"Successfully generated LiteLLM config at {output_path}")
     except Exception as e:
         print(f"Error writing config file: {e}")

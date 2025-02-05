@@ -1911,6 +1911,22 @@ launch_docker() {
     echo "Launching Docker..."
     COMPOSE_DIR="node/compose-files"
     COMPOSE_FILES=""
+
+    # Read and export environment variables from .env
+    if [ -f .env ]; then
+        echo "Loading environment variables from .env file..." | log_with_service_name "LiteLLM" $BLUE
+        while IFS='=' read -r key value; do
+            # Skip comments and empty lines
+            if [[ $key =~ ^[[:space:]]*# ]] || [[ -z $key ]]; then
+                continue
+            fi
+            # Remove any leading/trailing whitespace and quotes
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+            export "$key=$value"
+        done < .env
+    fi
+
     echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
     output=$(poetry run python node/inference/litellm/generate_litellm_config.py)
     echo "$output" | log_with_service_name "LiteLLM" $BLUE
@@ -1957,7 +1973,6 @@ main() {
     load_config_constants
     os="$(uname)"
     if [ "$LAUNCH_DOCKER" = "true" ]; then
-        setup_poetry
         launch_docker
     else
         # use systemd/launchd
