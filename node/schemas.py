@@ -492,3 +492,7 @@ class ChatCompletionRequest(BaseModel):
     tool_choice: Optional[str] = None
     parallel_tool_calls: Optional[bool] = None
 
+class SecretInput(BaseModel):
+    user_id: str
+    secret_value: str
+    key_name: str
