@@ -6,7 +6,7 @@ import time
 from typing import Dict, List, Optional
 root_dir = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(root_dir))
-from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER, MODEL_SERVICE_MAP
+from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER, VLLM_MODELS
 
 def format_yaml_value(value: any) -> str:
     """Format a value for YAML output."""
@@ -71,12 +71,6 @@ def get_ollama_models() -> List[str]:
      # NOTE requires that we
     return [model.strip() for model in OLLAMA_MODELS.split(',') if model.strip()]
 
-def get_vllm_models() -> List[str]:
-    """Get VLLM models from config."""
-    if not VLLM_MODELS:
-        return []
-    return VLLM_MODELS
-
 def generate_litellm_config() -> Dict:
     """Generate LiteLLM configuration."""
     config = {
@@ -140,6 +134,12 @@ def generate_litellm_config() -> Dict:
     
     return config
 
+def get_vllm_models() -> List[str]:
+    """Get VLLM models from config."""
+    if not VLLM_MODELS:
+        return []
+    return list(VLLM_MODELS.keys())
+
 def get_gpu_var_name(model_name: str) -> str:
     """Generate standardized GPU ID variable name from model name."""
     # Get the part after the last slash
@@ -148,7 +148,7 @@ def get_gpu_var_name(model_name: str) -> str:
     normalized = base_name.lower().replace('-', '_').replace('.', '_')
     return f"GPU_ID_{normalized}"
 
-def allocate_gpus(model_map, vllm_models):
+def allocate_gpus(model_map):
     """
     Allocate GPUs based on model requirements.
     Returns a space-separated string of GPU assignments for docker compose.
@@ -156,12 +156,7 @@ def allocate_gpus(model_map, vllm_models):
     current_gpu = 0
     gpu_assignments = []
 
-    for model in vllm_models:
-        if model not in model_map:
-            print(f"Warning: {model} not found in MODEL_SERVICE_MAP", file=sys.stderr)
-            continue
-
-        gpu_count = model_map[model]  # Now directly get the GPU count
+    for model, gpu_count in model_map.items():
         gpu_var_name = get_gpu_var_name(model)
         
         # Check if we have enough GPUs
@@ -195,8 +190,9 @@ def main():
         sys.exit(1)
 
     if LLM_BACKEND == "vllm":
-        gpu_assignments = allocate_gpus(MODEL_SERVICE_MAP, VLLM_MODELS)
+        gpu_assignments = allocate_gpus(VLLM_MODELS)
         with open('gpu_assignments.txt', 'w') as f:
             f.write(gpu_assignments)
+
 if __name__ == "__main__":
     main()
