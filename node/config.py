@@ -39,7 +39,7 @@ VLLM_MODELS = {
 }
 OPENAI_MODELS="gpt-4o-mini"
 LITELLM_URL = "http://litellm:4000" if LAUNCH_DOCKER else "http://localhost:4000"
-MODELS = OLLAMA_MODELS if LLM_BACKEND == "ollama" else VLLM_MODELS
+MODELS = list(VLLM_MODELS.keys()) if LLM_BACKEND == "vllm" else OLLAMA_MODELS
 
 # Local DB
 LOCAL_DB_POSTGRES_PORT=5432
