@@ -1676,7 +1676,7 @@ startup_summary() {
             logs+=("")
         else
             statuses+=("❌")
-            logs+=("$(tail -n 20 /tmp/celeryworker.out 2>/dev/null || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/celeryworker.log 2>/dev/null || echo 'Log file not found')")
         fi
     else
         if systemctl is-active --quiet celeryworker; then
@@ -1700,7 +1700,7 @@ startup_summary() {
             logs+=("")
         else
             statuses+=("❌")
-            logs+=("$(tail -n 20 /tmp/nodeapp_http.out 2>/dev/null || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/nodeapp_http.log 2>/dev/null || echo 'Log file not found')")
         fi
     else
         if curl -s http://localhost:7001/health > /dev/null; then
@@ -1725,7 +1725,7 @@ startup_summary() {
                     logs+=("")
                 else
                     if [ "$os" = "Darwin" ]; then
-                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo 'Log file not found')")
+                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.log 2>/dev/null || echo 'Log file not found')")
                     else
                         logs+=("$(sudo journalctl -u nodeapp_ws_$port -n 20)")
                     fi
@@ -1758,7 +1758,7 @@ else:
                     logs+=("")
                 else
                     if [ "$os" = "Darwin" ]; then
-                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.out 2>/dev/null || echo 'Log file not found')")
+                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.log 2>/dev/null || echo 'Log file not found')")
                     else
                         logs+=("$(sudo journalctl -u nodeapp_grpc_$port -n 20)")
                     fi
