@@ -1966,11 +1966,16 @@ launch_docker() {
 
     echo "Starting services..."
     if [ "$LLM_BACKEND" = "vllm" ]; then
-        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES up $GPU_ASSIGNMENTS" > docker_compose_command.sh
         env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up
+        echo "env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v" > stop_docker.sh
+        chmod +x stop_docker.sh
+        rm gpu_assignments.txt
     else
         docker compose -f docker-compose.script.yml $COMPOSE_FILES up
+        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v" > stop_docker.sh
+        chmod +x stop_docker.sh
     fi
+
 }
 
 main() {
