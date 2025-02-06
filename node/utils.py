@@ -8,12 +8,14 @@ import psutil
 import requests
 import subprocess
 from typing import List
-from node.config import *
 from node.schemas import NodeConfigInput, NodeConfig, NodeServer
 
 _logging_initialized = False
 logger = logging.getLogger(__name__)
 load_dotenv()
+NUM_NODE_COMMUNICATION_SERVERS = int(os.getenv("NUM_NODE_COMMUNICATION_SERVERS"))
+NODE_COMMUNICATION_PORT = int(os.getenv("NODE_COMMUNICATION_PORT"))
+MODELS = os.getenv("VLLM_MODELS").split(",") if os.getenv("LLM_BACKEND") == "vllm" else os.getenv("OLLAMA_MODELS").split(",")
 
 def setup_logging(default_level=logging.INFO):
     """Setup logging configuration"""
@@ -190,23 +192,23 @@ def get_node_config():
         id=f"node:{public_key}",
         owner=os.getenv("HUB_USERNAME"),
         public_key=public_key,
-        ip=NODE_IP,
-        user_communication_protocol=USER_COMMUNICATION_PROTOCOL,
-        user_communication_port=USER_COMMUNICATION_PORT,
-        node_communication_protocol=NODE_COMMUNICATION_PROTOCOL,
-        num_node_communication_servers=NUM_NODE_COMMUNICATION_SERVERS,
-        provider_types=PROVIDER_TYPES,
-        servers=[NodeServer(communication_protocol=NODE_COMMUNICATION_PROTOCOL, port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
-        models=[MODELS] if isinstance(MODELS, str) else MODELS,
-        docker_jobs=DOCKER_JOBS,
-        routing_type=ROUTING_TYPE,
-        routing_url=ROUTING_URL,
+        ip=os.getenv("NODE_IP"),
+        user_communication_protocol=os.getenv("USER_COMMUNICATION_PROTOCOL"),
+        user_communication_port=os.getenv("USER_COMMUNICATION_PORT"),
+        node_communication_protocol=os.getenv("NODE_COMMUNICATION_PROTOCOL"),
+        num_node_communication_servers=os.getenv("NUM_NODE_COMMUNICATION_SERVERS"),
+        provider_types=os.getenv("PROVIDER_TYPES").split(","),
+        servers=[NodeServer(communication_protocol=os.getenv("NODE_COMMUNICATION_PROTOCOL"), port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
+        models=MODELS,
+        docker_jobs=os.getenv("DOCKER_JOBS"),
+        routing_type=os.getenv("ROUTING_TYPE"),
+        routing_url=os.getenv("ROUTING_URL"),
         ports=[NODE_COMMUNICATION_PORT+i for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
-        num_gpus=NUM_GPUS,
+        num_gpus=int(os.getenv("NUM_GPUS")),
         arch=platform.machine(),
         os=platform.system(),
         ram=psutil.virtual_memory().total,
-        vram=VRAM,
+        vram=os.getenv("VRAM"),
     )
     print("Created node config:", node_config)
     return node_config

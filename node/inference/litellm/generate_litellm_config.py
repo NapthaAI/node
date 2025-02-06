@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
+from dotenv import load_dotenv
 import os
 from pathlib import Path
 import sys
-import time
 from typing import Dict, List, Optional
 root_dir = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(root_dir))
-from node.config import LLM_BACKEND, OLLAMA_MODELS, OPENAI_MODELS, VLLM_MODELS, LAUNCH_DOCKER, VLLM_MODELS
+
+load_dotenv()
+
+LAUNCH_DOCKER = os.getenv("LAUNCH_DOCKER")
+LLM_BACKEND = os.getenv("LLM_BACKEND")
+OPENAI_MODELS = os.getenv("OPENAI_MODELS")
+OLLAMA_MODELS = os.getenv("OLLAMA_MODELS")
+VLLM_MODELS = os.getenv("VLLM_MODELS")
 
 def format_yaml_value(value: any) -> str:
     """Format a value for YAML output."""

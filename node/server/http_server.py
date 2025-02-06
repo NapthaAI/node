@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 
-from node.config import MODULES_SOURCE_DIR
 from node.module_manager import (
     setup_module_deployment,
 )
@@ -42,7 +41,6 @@ from node.schemas import (
 from node.storage.db.db import LocalDBPostgres
 from node.storage.hub.hub import HubDBSurreal
 from node.user import check_user, register_user, get_user_public_key, verify_signature
-from node.config import LITELLM_URL
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb, run_memory
 from node.client import Node as NodeClient
@@ -51,9 +49,10 @@ import os
 
 logger = logging.getLogger(__name__)
 load_dotenv()
-
+MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
 LITELLM_HTTP_TIMEOUT = 60*5
 LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY")
+LITELLM_URL = "http://litellm:4000" if os.getenv("LAUNCH_DOCKER") == "true" else "http://localhost:4000"
 if not LITELLM_MASTER_KEY:
     raise Exception("Missing LITELLM_MASTER_KEY for authentication")
 

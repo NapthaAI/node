@@ -1,4 +1,5 @@
 import asyncio
+from dotenv import load_dotenv
 import grpc
 import signal
 import logging
@@ -8,6 +9,7 @@ from pathlib import Path
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.json_format import MessageToDict
 from grpc import ServicerContext
+import os
 from typing import Dict, Any, Union
 from google.protobuf import struct_pb2
 from node.storage.db.db import LocalDBPostgres
@@ -35,7 +37,9 @@ from node.schemas import (
     ModuleExecutionType
 )
 from node.module_manager import setup_module_deployment
-from node.config import MODULES_SOURCE_DIR
+
+load_dotenv()
+MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
 
 logger = logging.getLogger(__name__)
 

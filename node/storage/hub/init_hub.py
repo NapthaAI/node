@@ -9,20 +9,12 @@ import getpass
 from node.storage.hub.hub import HubDBSurreal
 from node.user import get_public_key
 from node.utils import add_credentials_to_env, get_logger, get_node_config
-from node.config import ( 
-    HUB_DB_SURREAL_NS, 
-    HUB_DB_SURREAL_NAME, 
-    LOCAL_HUB, 
-    LAUNCH_DOCKER, 
-    HUB_DB_SURREAL_PORT,
-)
-
 
 load_dotenv(find_dotenv(), override=True)
 logger = get_logger(__name__)
 
 
-if LAUNCH_DOCKER:
+if os.getenv("LAUNCH_DOCKER"):
     HUB_URL = "http://surrealdb:8000"
 else:
     HUB_URL = "http://localhost:3001"
@@ -56,8 +48,8 @@ def import_surql():
                       --conn {HUB_URL} \
                       --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
                       --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
-                      --ns {HUB_DB_SURREAL_NS} \
-                      --db {HUB_DB_SURREAL_NAME} \
+                      --ns {os.getenv('HUB_DB_SURREAL_NS')} \
+                      --db {os.getenv('HUB_DB_SURREAL_NAME')} \
                     {file}"""
 
         try:
@@ -93,7 +85,7 @@ async def init_hub():
             # use file storage
             command = f"""surreal start -A \
                         --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
-                        --bind 0.0.0.0:{HUB_DB_SURREAL_PORT} \
+                        --bind 0.0.0.0:{os.getenv('HUB_DB_SURREAL_PORT')} \
                         --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
                         rocksdb://./node/storage/hub/hub.db"""
 

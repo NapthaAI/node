@@ -3,12 +3,13 @@ import os
 import platform
 import subprocess
 import sys
-from node.config import LOCAL_DB_POSTGRES_NAME, LOCAL_DB_POSTGRES_PORT
 
 load_dotenv()
 
 LOCAL_DB_POSTGRES_USERNAME = os.getenv("LOCAL_DB_POSTGRES_USERNAME")
 LOCAL_DB_POSTGRES_PASSWORD = os.getenv("LOCAL_DB_POSTGRES_PASSWORD")
+LOCAL_DB_POSTGRES_NAME = os.getenv("LOCAL_DB_POSTGRES_NAME")
+LOCAL_DB_POSTGRES_PORT = os.getenv("LOCAL_DB_POSTGRES_PORT")
 
 def reset_db():
     print("Starting database reset...")

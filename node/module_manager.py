@@ -38,12 +38,14 @@ from node.schemas import (
     OrchestratorRun
 )
 from node.worker.utils import download_from_ipfs, unzip_file
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR, NODE_IP
 from node.utils import get_node_config
 from node.storage.hub.hub import list_modules, list_nodes
 
 logger = logging.getLogger(__name__)
 load_dotenv()
+BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
+MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
+NODE_IP = os.getenv("NODE_IP")
 
 INSTALLED_MODULES = {}
 

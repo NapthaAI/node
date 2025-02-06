@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 import jwt
 import logging
 from node.utils import AsyncMixin
-from node.config import HUB_DB_SURREAL_NAME, HUB_DB_SURREAL_NS, LOCAL_HUB_URL, LOCAL_HUB, PUBLIC_HUB_URL
 from node.schemas import Module, NodeConfig, NodeServer
 import os
 from surrealdb import Surreal
@@ -12,15 +11,17 @@ from typing import Dict, List, Optional, Tuple
 load_dotenv()
 logger = logging.getLogger(__name__)
 
+LOCAL_HUB_URL="ws://surrealdb:8000/rpc" if os.getenv("LAUNCH_DOCKER") == "true" else "ws://localhost:3001/rpc"
+PUBLIC_HUB_URL="wss://hub.naptha.ai/rpc"
 
 class HubDBSurreal(AsyncMixin):
     def __init__(self, *args, **kwargs):
-        if LOCAL_HUB:
+        if os.getenv("LOCAL_HUB") == "true":
             self.hub_url = LOCAL_HUB_URL
         else:
             self.hub_url = PUBLIC_HUB_URL
-        self.ns = HUB_DB_SURREAL_NS
-        self.db = HUB_DB_SURREAL_NAME
+        self.ns = os.getenv("HUB_DB_SURREAL_NS")
+        self.db = os.getenv("HUB_DB_SURREAL_NAME")
 
         self.surrealdb = Surreal(self.hub_url)
         self.is_authenticated = False
