@@ -1940,11 +1940,9 @@ launch_docker() {
             exit 1
         fi
         
-        # Convert comma-separated string to array and process each model
-        IFS=',' read -ra VLLM_MODEL_ARRAY <<< "$VLLM_MODELS"
-        for model in "${VLLM_MODEL_ARRAY[@]}"; do
-            # Trim whitespace
-            model=$(echo "$model" | xargs)
+        # Process each model from VLLM_MODELS
+        for model in $(python -c "from node.config import VLLM_MODELS; print('\n'.join(VLLM_MODELS.keys()))")
+        do
             model_name=${model##*/}
             if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
                 COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
