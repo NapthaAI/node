@@ -818,72 +818,6 @@ load_env_file() {
     fi
 }
 
-load_config_constants() {
-    CURRENT_DIR=$(pwd)
-    CONFIG_FILE="$CURRENT_DIR/node/config.py"
-
-    echo "Config file path: $CONFIG_FILE" | log_with_service_name "Config"
-
-    if [ -f "$CONFIG_FILE" ]; then
-        echo "config.py file found." | log_with_service_name "Config" 
-        
-        # Create a temporary Python script to load and execute config.py
-        cat > /tmp/load_config.py << EOF
-import os
-import sys
-from pathlib import Path
-
-# Add the current directory to Python path
-sys.path.insert(0, '${CURRENT_DIR}')
-
-# Import the config module
-from node.config import *
-
-# Get all uppercase variables (constants)
-config_vars = {name: value for name, value in locals().items() 
-              if name.isupper() and not name.startswith('_')}
-
-# Print in a format that can be evaluated by bash
-for name, value in config_vars.items():
-    if isinstance(value, bool):
-        print(f'{name}={str(value).lower()}')
-    elif isinstance(value, (int, float)):
-        print(f'{name}={value}')
-    elif isinstance(value, str):
-        print(f'{name}="{value}"')
-    elif isinstance(value, list):
-        print(f'{name}="{",".join(str(x) for x in value)}"')
-EOF
-
-        echo "Executing config.py and loading variables..." | log_with_service_name "Config"
-        
-        # Execute the Python script and store output using system Python
-        output=$(env python3 /tmp/load_config.py)
-        
-        # Evaluate the output
-        eval "$output"
-        
-        # Echo key variables
-        echo "Key configuration values:" | log_with_service_name "Config"
-        echo "LAUNCH_DOCKER: $LAUNCH_DOCKER" | log_with_service_name "Config"
-        echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
-        echo "LITELLM_URL: $LITELLM_URL" | log_with_service_name "Config"
-        echo "LOCAL_DB_POSTGRES_PORT: $LOCAL_DB_POSTGRES_PORT" | log_with_service_name "Config"
-        echo "LOCAL_DB_POSTGRES_HOST: $LOCAL_DB_POSTGRES_HOST" | log_with_service_name "Config"
-        echo "NODE_COMMUNICATION_PORT: $NODE_COMMUNICATION_PORT" | log_with_service_name "Config"
-        echo "NODE_COMMUNICATION_PROTOCOL: $NODE_COMMUNICATION_PROTOCOL" | log_with_service_name "Config"
-        echo "HUB_DB_SURREAL_PORT: $HUB_DB_SURREAL_PORT" | log_with_service_name "Config"
-        
-        rm /tmp/load_config.py
-        
-    else
-        echo "config.py file does not exist in $CURRENT_DIR/node/." | log_with_service_name "Config"
-        exit 1
-    fi
-
-    echo "Config constants loaded successfully." | log_with_service_name "Config"
-}
-
 linux_start_servers() {
     # Echo start Servers
     echo "Starting Servers..." | log_with_service_name "Server" $BLUE
@@ -1978,7 +1912,7 @@ launch_docker() {
 
 main() {
     print_logo
-    load_config_constants
+    load_env_file
     os="$(uname)"
     if [ "$LAUNCH_DOCKER" = "true" ]; then
         launch_docker
@@ -1991,7 +1925,6 @@ main() {
             setup_poetry
             install_surrealdb
             check_and_copy_env
-            load_env_file
             darwin_install_ollama
             darwin_install_docker
             darwin_start_rabbitmq
@@ -2011,7 +1944,6 @@ main() {
             setup_poetry
             install_surrealdb
             check_and_copy_env
-            load_env_file
             linux_install_ollama
             linux_install_docker
             linux_start_rabbitmq
