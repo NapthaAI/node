@@ -49,16 +49,19 @@ import os
 
 logger = logging.getLogger(__name__)
 load_dotenv()
-MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
+
+file_path = Path(__file__).resolve()
+root_dir = file_path.parent.parent.parent
+MODULES_SOURCE_DIR = root_dir / os.getenv("MODULES_SOURCE_DIR")
 LITELLM_HTTP_TIMEOUT = 60*5
 LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY")
 LITELLM_URL = "http://litellm:4000" if os.getenv("LAUNCH_DOCKER") == "true" else "http://localhost:4000"
+
 if not LITELLM_MASTER_KEY:
     raise Exception("Missing LITELLM_MASTER_KEY for authentication")
 
 class TransientDatabaseError(Exception):
     pass
-
 
 class HTTPServer:
     def __init__(self, host: str, port: int):

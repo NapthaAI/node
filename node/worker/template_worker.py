@@ -22,10 +22,17 @@ from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upl
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 load_dotenv()
-BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
-MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
+
+file_path = Path(__file__).resolve()
+root_dir = file_path.parent.parent.parent
+
+_BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
+BASE_OUTPUT_DIR = root_dir / _BASE_OUTPUT_DIR
+
+_MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
+MODULES_SOURCE_DIR = root_dir / _MODULES_SOURCE_DIR
+
 if MODULES_SOURCE_DIR not in sys.path:
     sys.path.append(MODULES_SOURCE_DIR)
 
