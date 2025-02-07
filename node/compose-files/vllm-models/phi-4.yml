@@ -1,11 +1,11 @@
 services:
-  MiniCPM-o-2_6:
+  phi-4:
     image: vllm/vllm-openai:latest
     entrypoint: [
-      "vllm", "serve", "openbmb/MiniCPM-o-2_6",
+      "vllm", "serve", "microsoft/phi-4",
       "--enable-prefix-caching", "--enable-chunked-prefill",
       "--gpu-memory-utilization", "0.98",
-      "--max-model-len", "32768",
+      "--max-model-len", "16384",
       "--trust-remote-code"
     ]
     environment:
@@ -25,7 +25,7 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              device_ids: [ "${GPU_ID_minicpm_o_2_6:?error}" ]
+              device_ids: [ "${GPU_ID_phi_4:?error}" ]
     networks:
       - naptha-network
 
