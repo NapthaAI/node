@@ -16,6 +16,11 @@ load_dotenv()
 NUM_NODE_COMMUNICATION_SERVERS = int(os.getenv("NUM_NODE_COMMUNICATION_SERVERS"))
 NODE_COMMUNICATION_PORT = int(os.getenv("NODE_COMMUNICATION_PORT"))
 MODELS = os.getenv("VLLM_MODELS").split(",") if os.getenv("LLM_BACKEND") == "vllm" else os.getenv("OLLAMA_MODELS").split(",")
+# in future we will make it optional for nodes to provide certain services 
+# such as inference, storage and deployment of agents and other modules 
+# provider types will be used to display which services are available on a node
+PROVIDER_TYPES=["models", "storage", "modules"]
+VRAM = 0 
 
 def setup_logging(default_level=logging.INFO):
     """Setup logging configuration"""
@@ -197,7 +202,7 @@ def get_node_config():
         user_communication_port=os.getenv("USER_COMMUNICATION_PORT"),
         node_communication_protocol=os.getenv("NODE_COMMUNICATION_PROTOCOL"),
         num_node_communication_servers=os.getenv("NUM_NODE_COMMUNICATION_SERVERS"),
-        provider_types=os.getenv("PROVIDER_TYPES").split(","),
+        provider_types=PROVIDER_TYPES,
         servers=[NodeServer(communication_protocol=os.getenv("NODE_COMMUNICATION_PROTOCOL"), port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
         models=MODELS,
         docker_jobs=os.getenv("DOCKER_JOBS"),
