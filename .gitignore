@@ -188,5 +188,5 @@ node/storage/fs
 node/storage/hub/modules
 .vscode/
 gpu_assignments.txt
-stop_docker.sh
 docker-ctl.sh
+node/inference/litellm/litellm_config.yml
