@@ -250,7 +250,3 @@ services:
       - ./node/inference/litellm/litellm_config.vllm.yml:/app/config.yaml # this should be the litellm config file
     ports:
       - '4000:4000'
-
-networks:
-  default:
-    name: node-network

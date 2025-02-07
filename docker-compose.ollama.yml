@@ -32,7 +32,3 @@ services:
       - ./node/inference/litellm/litellm_config.ollama.yml:/app/config.yaml
     ports:
       - '4000:4000' # TODO do not expose in production
-
-networks:
-  default:
-    name: node-network
