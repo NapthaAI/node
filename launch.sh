@@ -105,6 +105,14 @@ linux_install_ollama() {
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
+    # Set up directory paths based on current location
+    CURRENT_DIR=$(pwd)
+    PROJECT_MODELS_DIR="$CURRENT_DIR/node/ollama/models"
+    
+    # Create the directory structure
+    sudo mkdir -p "$PROJECT_MODELS_DIR"
+    echo "Created models directory at: $PROJECT_MODELS_DIR" | log_with_service_name "Ollama" $RED
+
     install_ollama_app() {
         sudo curl -fsSL https://ollama.com/install.sh | sh
     }
@@ -118,6 +126,7 @@ After=network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/ollama serve
+Environment=OLLAMA_MODELS=/var/lib/ollama/models
 User=ollama
 Group=ollama
 Restart=always
@@ -126,7 +135,26 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-    sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+        sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+    }
+
+    create_ollama_directories() {
+        # Create ollama user and group
+        sudo useradd -r -s /bin/false ollama 2>/dev/null || true
+
+        # Create and set permissions for ollama directories
+        sudo mkdir -p /usr/share/ollama
+        sudo mkdir -p /var/lib/ollama/models
+        sudo chown -R ollama:ollama /usr/share/ollama /var/lib/ollama
+        sudo chmod -R 755 /usr/share/ollama /var/lib/ollama
+
+        # Create and link project models directory
+        sudo mkdir -p "$PROJECT_MODELS_DIR"
+        sudo chown -R ollama:ollama "$PROJECT_MODELS_DIR"
+        sudo chmod -R 755 "$PROJECT_MODELS_DIR"
+        
+        # Create symbolic link from system models to project models
+        sudo ln -sf "$PROJECT_MODELS_DIR" /var/lib/ollama/models
     }
 
     restart_ollama_linux() {
@@ -155,7 +183,7 @@ EOF
 
     # Case 1: Ollama not installed
     if ! command -v ollama >/dev/null 2>&1; then
-        echo "Ollama is not installed. Installing..." | log_with_service_name "Ollama" $RED
+        echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
         install_ollama_app
         echo "Ollama installed successfully" | log_with_service_name "Ollama" $RED
 
@@ -172,9 +200,20 @@ EOF
 
     # Create and install systemd service file
     create_ollama_service
+    
+    # Create necessary directories and set permissions
+    create_ollama_directories
+    
+    # Restart the service
     restart_ollama_linux
 
-    pull_ollama_models
+    # Pull Ollama models
+    echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    for model in "${MODELS[@]}"; do
+        echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
+        ollama pull "$model"
+    done
 }
 
 pull_ollama_models() {
@@ -1535,7 +1574,7 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR
 Environment=PATH=$VENV_PATH:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=$CURRENT_DIR/.env
-ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.ollama.yml
+ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.yml
 Restart=always
 RestartSec=3
 
@@ -1592,7 +1631,7 @@ darwin_start_litellm() {
     <array>
         <string>$VENV_PATH/litellm</string>
         <string>--config</string>
-        <string>$PROJECT_DIR/litellm_config.ollama.yml</string>
+        <string>$PROJECT_DIR/litellm_config.yml</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$PROJECT_DIR</string>
