@@ -32,7 +32,7 @@ services:
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # init SQL script to create databases etc.
     environment:
       POSTGRES_USER: ${LOCAL_DB_POSTGRES_USERNAME?:error}
-      PGUSER: ${LOCAL_DB_POSTGRES_USERNAME?:error}
+      PGUSER: ${LOCAL_DB_POSTGRES_USERNAME:?error}
       POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
     restart: unless-stopped
     healthcheck:
@@ -53,11 +53,6 @@ services:
       dockerfile: Dockerfile-node-dev
     env_file:
       - ./.env
-    environment:
-      LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
-      RMQ_USER: ${RMQ_USER:?error}
-      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions

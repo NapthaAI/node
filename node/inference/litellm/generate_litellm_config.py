@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from dotenv import load_dotenv
 import os
 from pathlib import Path
 import sys
@@ -7,7 +6,6 @@ from typing import Dict, List, Optional
 root_dir = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(root_dir))
 
-load_dotenv()
 
 LAUNCH_DOCKER = os.getenv("LAUNCH_DOCKER").lower() == "true"
 LLM_BACKEND = os.getenv("LLM_BACKEND")
@@ -15,6 +13,31 @@ OPENAI_MODELS = os.getenv("OPENAI_MODELS")
 OLLAMA_MODELS = os.getenv("OLLAMA_MODELS")
 VLLM_MODELS = os.getenv("VLLM_MODELS")
 
+MODEL_DEVICE_REQUIREMENTS = {
+    "NousResearch/Hermes-3-Llama-3.1-8B": 1,
+    "Qwen/Qwen2.5-7B-Instruct": 1,
+    "meta-llama/Llama-3.1-8B-Instruct": 1,
+    "Team-ACE/ToolACE-8B": 1,
+    "ibm-granite/granite-3.1-8b-instruct": 1,
+    "internlm/internlm2_5-7b-chat": 1,
+    "meetkai/functionary-small-v3.1": 1,
+    "jinaai/jina-embeddings-v2-base-en": 1,
+    "katanemo/Arch-Function-7B": 1,
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": 2,
+    "openbmb/MiniCPM-o-2_6": 1,
+    "mistralai/Mistral-Small-24B-Instruct-2501": 2,
+    "Qwen/QwQ-32B-Preview": 2
+}
+
+if VLLM_MODELS:
+    VLLM_MODELS = VLLM_MODELS.split(",")
+    VLLM_MODELS = {model.strip(): MODEL_DEVICE_REQUIREMENTS[model.strip()] for model in VLLM_MODELS}
+
+print(f"LAUNCH_DOCKER: {LAUNCH_DOCKER}")
+print(f"LLM_BACKEND: {LLM_BACKEND}")
+print(f"OPENAI_MODELS: {OPENAI_MODELS}")
+print(f"OLLAMA_MODELS: {OLLAMA_MODELS}")
+print(f"VLLM_MODELS: {VLLM_MODELS}")
 
 def format_yaml_value(value: any) -> str:
     """Format a value for YAML output."""

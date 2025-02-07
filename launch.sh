@@ -1892,66 +1892,53 @@ launch_docker() {
 
     # Read and export environment variables from .env
     if [ -f .env ]; then
-        echo "Loading environment variables from .env file..." | log_with_service_name "LiteLLM" $BLUE
-        while IFS='=' read -r key value; do
-            # Skip comments and empty lines
-            if [[ $key =~ ^[[:space:]]*# ]] || [[ -z $key ]]; then
-                continue
-            fi
-            # Remove any leading/trailing whitespace and quotes
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
-            export "$key=$value"
-        done < .env
+        echo "Loading environment variables from .env file..." | log_with_service_name "LiteLLM" "$BLUE"
+        
+        # Use a simpler env var loading approach
+        set -a
+        source .env
+        set +a
     fi
 
-    if [ "$LLM_BACKEND" = "ollama" ]; then
+    if [[ "$LLM_BACKEND" == "ollama" ]]; then
         python node/inference/litellm/generate_litellm_config.py
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
-    elif [ "$LLM_BACKEND" = "vllm" ]; then
-        # Only capture stdout for GPU assignments
-        (python node/inference/litellm/generate_litellm_config.py)
+    elif [[ "$LLM_BACKEND" == "vllm" ]]; then
+        python node/inference/litellm/generate_litellm_config.py
         GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
-        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" $BLUE
-        if [ $? -ne 0 ]; then
-            echo "GPU allocation failed" | log_with_service_name "LiteLLM" $RED
-            exit 1
-        fi
+        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
         
-        # Process each model from VLLM_MODELS
         for model in $(python -c "from node.config import VLLM_MODELS; print('\n'.join(VLLM_MODELS.keys()))")
         do
             model_name=${model##*/}
             if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
                 COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
             else
-                echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" $YELLOW
+                echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" "$YELLOW"
             fi
         done
     else
-        echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" $RED
+        echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" "$RED"
         exit 1
     fi
 
-    if [ "$LOCAL_HUB" = "true" ]; then
+    if [[ "$LOCAL_HUB" == "true" ]]; then
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/hub.yml"
     fi
 
-    # create network if it doesn't exist
     docker network inspect naptha-network >/dev/null 2>&1 || docker network create naptha-network
 
     echo "Starting services..."
-    if [ "$LLM_BACKEND" = "vllm" ]; then
-        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up
+    if [[ "$LLM_BACKEND" == "vllm" ]]; then
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up --build
         echo "env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v" > stop_docker.sh
         chmod +x stop_docker.sh
-        rm gpu_assignments.txt
+        rm -f gpu_assignments.txt
     else
         docker compose -f docker-compose.script.yml $COMPOSE_FILES up
         echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v" > stop_docker.sh
         chmod +x stop_docker.sh
     fi
-
 }
 
 main() {
