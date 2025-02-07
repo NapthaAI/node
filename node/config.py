@@ -46,8 +46,8 @@ IPFS_GATEWAY_URL="http://ipfs.naptha.work:30798"
 # Hub
 LOCAL_HUB=False
 REGISTER_NODE_WITH_HUB=False # set to true if you want your node to be available as a provider
-LOCAL_HUB_URL="ws://surrealdb:8000/rpc" if LAUNCH_DOCKER else "ws://localhost:3001/rpc"
-PUBLIC_HUB_URL="ws://node.naptha.ai:3001/rpc"
+LOCAL_HUB_URL="ws://surrealdb:8000/rpc" is LAUNCH_DOCKER else "ws://localhost:3001/rpc"
+PUBLIC_HUB_URL="wss://hub.naptha.ai/rpc"
 HUB_DB_SURREAL_PORT=3001
 HUB_DB_SURREAL_NS="naptha"
 HUB_DB_SURREAL_NAME="naptha"
