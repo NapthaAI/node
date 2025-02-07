@@ -9,11 +9,12 @@ sys.path.append(str(root_dir))
 
 load_dotenv()
 
-LAUNCH_DOCKER = os.getenv("LAUNCH_DOCKER")
+LAUNCH_DOCKER = os.getenv("LAUNCH_DOCKER").lower() == "true"
 LLM_BACKEND = os.getenv("LLM_BACKEND")
 OPENAI_MODELS = os.getenv("OPENAI_MODELS")
 OLLAMA_MODELS = os.getenv("OLLAMA_MODELS")
 VLLM_MODELS = os.getenv("VLLM_MODELS")
+
 
 def format_yaml_value(value: any) -> str:
     """Format a value for YAML output."""
