@@ -107,7 +107,7 @@ linux_install_ollama() {
 
     # Set up directory paths based on current location
     CURRENT_DIR=$(pwd)
-    PROJECT_MODELS_DIR="$CURRENT_DIR/node/ollama/models"
+    PROJECT_MODELS_DIR="$CURRENT_DIR/node/inference/ollama/models"
     
     # Create the directory structure
     sudo mkdir -p "$PROJECT_MODELS_DIR"
@@ -148,13 +148,18 @@ EOF
         sudo chown -R ollama:ollama /usr/share/ollama /var/lib/ollama
         sudo chmod -R 755 /usr/share/ollama /var/lib/ollama
 
-        # Create and link project models directory
-        sudo mkdir -p "$PROJECT_MODELS_DIR"
-        sudo chown -R ollama:ollama "$PROJECT_MODELS_DIR"
-        sudo chmod -R 755 "$PROJECT_MODELS_DIR"
+        # Create project directory structure
+        sudo mkdir -p "$(dirname "$PROJECT_MODELS_DIR")"
         
-        # Create symbolic link from system models to project models
-        sudo ln -sf "$PROJECT_MODELS_DIR" /var/lib/ollama/models
+        # Remove existing directory or link if it exists
+        sudo rm -rf "$PROJECT_MODELS_DIR"
+        
+        # Create symbolic link from project directory to system models
+        sudo ln -sf /var/lib/ollama/models "$PROJECT_MODELS_DIR"
+        
+        # Set permissions for the project directory and link
+        sudo chown -R ollama:ollama "$(dirname "$PROJECT_MODELS_DIR")"
+        sudo chmod -R 755 "$(dirname "$PROJECT_MODELS_DIR")"
     }
 
     restart_ollama_linux() {
