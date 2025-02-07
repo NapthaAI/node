@@ -1904,23 +1904,22 @@ launch_docker() {
         python node/inference/litellm/generate_litellm_config.py
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [[ "$LLM_BACKEND" == "vllm" ]]; then
-            python node/inference/litellm/generate_litellm_config.py
-            GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
-            echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
-            
-            IFS=',' read -ra MODEL_ARRAY <<< "${VLLM_MODELS//$'\\\n'}"
-            for model in "${MODEL_ARRAY[@]}"  # Changed this line
-            do
-                # Trim whitespace from model name
-                model=$(echo "$model" | tr -d '[:space:]')
-                model_name=${model##*/}
-                echo "Model Name: $model_name" | log_with_service_name "Docker" "$BLUE"
-                if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
-                    COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
-                else
-                    echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" "$YELLOW"
-                fi
-            done
+        python node/inference/litellm/generate_litellm_config.py
+        GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
+        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
+        
+        IFS=',' read -ra MODEL_ARRAY <<< "${VLLM_MODELS//$'\\\n'}"
+        for model in "${MODEL_ARRAY[@]}"
+        do
+            model=$(echo "$model" | tr -d '[:space:]')
+            model_name=${model##*/}
+            echo "Model Name: $model_name" | log_with_service_name "Docker" "$BLUE"
+            if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
+                COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
+            else
+                echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" "$YELLOW"
+            fi
+        done
     else
         echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" "$RED"
         exit 1
@@ -1934,14 +1933,42 @@ launch_docker() {
 
     echo "Starting services..."
     if [[ "$LLM_BACKEND" == "vllm" ]]; then
-        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up
-        echo "env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v" > stop_docker.sh
-        chmod +x stop_docker.sh
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up --build -d
+        cat > docker-ctl.sh << EOF
+#!/bin/bash
+case "\$1" in
+    "down")
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v
+        ;;
+    "logs")
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES logs -f
+        ;;
+    *)
+        echo "Usage: ./docker-ctl.sh [down|logs]"
+        exit 1
+        ;;
+esac
+EOF
+        chmod +x docker-ctl.sh
         rm -f gpu_assignments.txt
     else
-        docker compose -f docker-compose.script.yml $COMPOSE_FILES up
-        echo "docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v" > stop_docker.sh
-        chmod +x stop_docker.sh
+        docker compose -f docker-compose.script.yml $COMPOSE_FILES up -d
+        cat > docker-ctl.sh << EOF
+#!/bin/bash
+case "\$1" in
+    "down")
+        docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v
+        ;;
+    "logs")
+        docker compose -f docker-compose.script.yml $COMPOSE_FILES logs -f
+        ;;
+    *)
+        echo "Usage: ./docker-ctl.sh [down|logs]"
+        exit 1
+        ;;
+esac
+EOF
+        chmod +x docker-ctl.sh
     fi
 }
 
