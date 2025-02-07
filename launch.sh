@@ -1933,15 +1933,15 @@ launch_docker() {
 
     echo "Starting services..."
     if [[ "$LLM_BACKEND" == "vllm" ]]; then
-        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES up --build -d
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES up --build -d
         cat > docker-ctl.sh << EOF
 #!/bin/bash
 case "\$1" in
     "down")
-        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES down -v
         ;;
     "logs")
-        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.script.yml $COMPOSE_FILES logs -f
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES logs -f
         ;;
     *)
         echo "Usage: ./docker-ctl.sh [down|logs]"
@@ -1952,15 +1952,15 @@ EOF
         chmod +x docker-ctl.sh
         rm -f gpu_assignments.txt
     else
-        docker compose -f docker-compose.script.yml $COMPOSE_FILES up -d
+        docker compose -f docker-compose.yml $COMPOSE_FILES up -d
         cat > docker-ctl.sh << EOF
 #!/bin/bash
 case "\$1" in
     "down")
-        docker compose -f docker-compose.script.yml $COMPOSE_FILES down -v
+        docker compose -f docker-compose.yml $COMPOSE_FILES down -v
         ;;
     "logs")
-        docker compose -f docker-compose.script.yml $COMPOSE_FILES logs -f
+        docker compose -f docker-compose.yml $COMPOSE_FILES logs -f
         ;;
     *)
         echo "Usage: ./docker-ctl.sh [down|logs]"
