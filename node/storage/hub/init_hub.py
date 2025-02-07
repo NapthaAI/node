@@ -14,15 +14,17 @@ load_dotenv(find_dotenv(), override=True)
 logger = get_logger(__name__)
 
 
-if os.getenv("LAUNCH_DOCKER"):
-    HUB_URL = "http://surrealdb:8000"
-else:
-    HUB_URL = "http://localhost:3001"
 
 file_path = os.path.dirname(os.path.realpath(__file__))
 surql_path = os.path.join(file_path, "data_structures")
 root_dir = Path(file_path).parent.parent
+LOCAL_HUB = os.getenv("LOCAL_HUB").lower() == "true"
+LAUNCH_DOCKER = os.getenv("LAUNCH_DOCKER").lower() == "true"
 
+if LAUNCH_DOCKER:
+    HUB_URL = "http://surrealdb:8000"
+else:
+    HUB_URL = "http://localhost:3001"
 
 
 def import_surql():
