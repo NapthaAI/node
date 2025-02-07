@@ -39,7 +39,10 @@ from node.schemas import (
 from node.module_manager import setup_module_deployment
 
 load_dotenv()
-MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
+
+file_path = Path(__file__).resolve()
+root_dir = file_path.parent.parent.parent
+MODULES_SOURCE_DIR = root_dir / os.getenv("MODULES_SOURCE_DIR")
 
 logger = logging.getLogger(__name__)
 
