@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import sys
+import subprocess
 from typing import Dict, List, Optional
 root_dir = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(root_dir))
@@ -179,23 +180,44 @@ def get_gpu_var_name(model_name: str) -> str:
     normalized = base_name.lower().replace('-', '_').replace('.', '_')
     return f"GPU_ID_{normalized}"
 
+def count_available_gpus() -> int:
+    """Count available GPUs using nvidia-smi."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        gpu_list = [gpu for gpu in result.stdout.strip().split("\n") if gpu.strip()]
+        print(f"Found {len(gpu_list)} GPUs")
+        return len(gpu_list)
+    except Exception as e:
+        print(f"Warning: Could not detect GPUs via nvidia-smi: {e}", file=sys.stderr)
+        # Fallback to a default value
+        return 8
+    
 def allocate_gpus(model_map):
     """
     Allocate GPUs based on model requirements.
     Returns a space-separated string of GPU assignments for docker compose.
     """
+    available_gpus = count_available_gpus()
+    total_required = sum(model_map.values())
+
+    if total_required > available_gpus:
+        print(
+            f"Error: Insufficient GPUs available. The system has {available_gpus} GPUs, "
+            f"but the selected models require a total of {total_required} GPUs.",
+            file=sys.stderr
+        )
+        sys.exit(1)
+
     current_gpu = 0
     gpu_assignments = []
-
     for model, gpu_count in model_map.items():
         gpu_var_name = get_gpu_var_name(model)
-        
-        # Check if we have enough GPUs
-        if current_gpu + gpu_count > 8:  # Assuming 8 GPUs
-            print(f"Error: Not enough GPUs for {model}", file=sys.stderr)
-            sys.exit(1)
-        
-        # Create GPU list for this model
         gpu_list = ",".join(str(i) for i in range(current_gpu, current_gpu + gpu_count))
         gpu_assignments.append(f"{gpu_var_name}={gpu_list}")
         current_gpu += gpu_count
