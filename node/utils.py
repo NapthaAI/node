@@ -213,7 +213,7 @@ def get_node_config():
         arch=platform.machine(),
         os=platform.system(),
         ram=psutil.virtual_memory().total,
-        vram=os.getenv("VRAM"),
+        vram=VRAM,
     )
     print("Created node config:", node_config)
     return node_config
