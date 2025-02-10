@@ -1,0 +1,35 @@
+services:
+  functionary-small-v3.1:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "meetkai/functionary-small-v3.1",
+      "--enable-auto-tool-choice", "--enable-chunked-prefill", # no prefix caching bc sliding window
+      "--tool-parser-plugin", "/usr/app/tool-parsers/llama3_xml.py", # uses llama 3.1's XML-like format
+      "--tool-call-parser", "functionary_31",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "131072",
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN:?error}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: ["${GPU_ID_functionary_small_v3_1:?error}"]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

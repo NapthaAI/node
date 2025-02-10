@@ -1,4 +1,4 @@
-# Setting up your Naptha Node with systemd/launchd
+# Managing your Naptha Node with systemd/launchd
 
 The Naptha Node can be run using systemd/launchd services. This is closer to metal than using docker compose, and is useful if you want to run the node on a server.
 

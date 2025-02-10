@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import os
 import json
 import asyncio
@@ -20,7 +21,6 @@ from node.schemas import (
     ModuleExecutionType,
 )
 from node.storage.db.db import LocalDBPostgres
-from node.config import MODULES_SOURCE_DIR
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import (
@@ -33,7 +33,11 @@ from node.worker.template_worker import (
 from node.module_manager import setup_module_deployment
 
 logger = logging.getLogger(__name__)
+load_dotenv()
 
+file_path = Path(__file__).resolve()
+root_dir = file_path.parent.parent.parent
+MODULES_SOURCE_DIR = root_dir / os.getenv("MODULES_SOURCE_DIR")
 
 class ConnectionManager:
     def __init__(self):

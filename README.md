@@ -18,6 +18,31 @@
 
 Naptha is a framework and infrastructure for developing and running multi-agent systems across many devices. The Naptha Node packages everything that your need to run agents locally, that interact with other agents in the network. 
 
+## Quick Start
+
+Download the source code:
+
+```bash
+git clone https://github.com/NapthaAI/node.git
+cd node
+```
+
+Launch the node:
+
+```bash
+bash launch.sh
+```
+
+By default, the node will launch using docker compose, and will use ollama with the Nous Research Hermes 3 model.
+
+If `PRIVATE_KEY`, `HUB_USERNAME` and `HUB_PASSWORD` are not set in the .env file, you will be prompted to set them. You will also be prompted as to whether you want to set `OPENAI_API_KEY` and `STABILITY_API_KEY`.
+
+## Customizing the node
+
+The node packages a number of services, with several options and combinations of services available. The services that you would like to run are configured using the .env file, and the `launch.sh` script will automatically start the services you have configured.
+
+### Node Services
+
 - [Local Inference](node/inference/): Using either VLLM (or Ollama). Not many open source models support tool calling out of the box. The Naptha Node (soon) supports tool calling with 8 open source models, with more to come.
 - [LiteLLM Proxy Server](node/inference/litellm): A proxy server that provides a unified OpenAI-compatible API interface for multiple LLM providers and models. This allows seamless switching between different models while maintaining consistent API calls.
 - [Local Server](node/server): The Naptha Node runs a local server that can be accessed by other agents in the network (via HTTP, Web Sockets, or gRPC). Agents and other modules that you publish on Naptha are accessible via API.
@@ -27,24 +52,32 @@ Naptha is a framework and infrastructure for developing and running multi-agent 
 
 - (Optional) [Local Hub](node/storage/hub): The Naptha Node can run a local Hub, which is a registry for modules (agents, tools, agent orchestrators, environments, and personas) and nodes by setting LOCAL_HUB=True in the Config. This is useful for testing locally before publishing to the main Naptha Hub. For the Hub DB, we use SurrealDB.
 
+### Configuring the Node Services
 
-# Install and run
+Make sure the `.env` file has been created:
 
-From source:
-
-```bash
-git clone https://github.com/NapthaAI/node.git
-cd node
+```shell
+cp .env.example .env
 ```
 
+Modify any relevant variables in the .env file:
 
-# Launch the node
+- `LAUNCH_DOCKER`: Set to `true` if you want to launch the node using docker compose, or `false` if you want to launch the node using systemd/launchd.
+- `LLM_BACKEND`: Should be set to `ollama` if on a laptop, or to `vllm` if you want to use a GPU machine.
+- `OLLAMA_MODELS`: If using ollama, set this to the models you want to use, separated by commas. By default, the node will use the Nous Research Hermes 3 model.
+- `VLLM_MODELS`: If using VLLM, set this to the models you want to use, separated by commas.
 
-There are two ways to launch the node:
+For more details on node configuration for docker or systemd/launchd, see the relevant readme files for [docker](READMEs/docker.md) and [systemd/launchd](READMEs/systemd.md). For advanced configuration settings, see the [Advanced Configuration](READMEs/advanced.md) guide.
 
-1. [Launch with docker compose](READMEs/docker.md)
-2. [Launch with systemd/launchd](READMEs/systemd.md)
+### Launching 
 
+Launch the node using:
+
+```bash
+bash launch.sh
+```
+
+For more details on ensuring the node launched successfully, checking the logs and troubleshooting you can check out the relevant readme files for [docker](READMEs/docker.md) and [systemd/launchd](READMEs/systemd.md).
 
 # Run AI agents on your node
 
@@ -52,4 +85,9 @@ To run agents, keep your node running and follow the instructions using the [Nap
 
 
 
+## Become a contributor to the Naptha Node
+
+* Check out our guide for [contributing to the Naptha Node](https://docs.naptha.ai/Contributing/infrastructure-contributor)
+* Apply to join our [Discord community](https://naptha.ai/naptha-community) 
+* Check our open positions at [naptha.ai/careers](https://naptha.ai/careers)
 

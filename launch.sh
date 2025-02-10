@@ -105,6 +105,14 @@ linux_install_ollama() {
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
+    # Set up directory paths based on current location
+    CURRENT_DIR=$(pwd)
+    PROJECT_MODELS_DIR="$CURRENT_DIR/node/inference/ollama/models"
+    
+    # Create the directory structure
+    sudo mkdir -p "$PROJECT_MODELS_DIR"
+    echo "Created models directory at: $PROJECT_MODELS_DIR" | log_with_service_name "Ollama" $RED
+
     install_ollama_app() {
         sudo curl -fsSL https://ollama.com/install.sh | sh
     }
@@ -118,6 +126,7 @@ After=network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/ollama serve
+Environment=OLLAMA_MODELS=/var/lib/ollama/models
 User=ollama
 Group=ollama
 Restart=always
@@ -126,7 +135,31 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-    sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+        sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+    }
+
+    create_ollama_directories() {
+        # Create ollama user and group
+        sudo useradd -r -s /bin/false ollama 2>/dev/null || true
+
+        # Create and set permissions for ollama directories
+        sudo mkdir -p /usr/share/ollama
+        sudo mkdir -p /var/lib/ollama/models
+        sudo chown -R ollama:ollama /usr/share/ollama /var/lib/ollama
+        sudo chmod -R 755 /usr/share/ollama /var/lib/ollama
+
+        # Create project directory structure
+        sudo mkdir -p "$(dirname "$PROJECT_MODELS_DIR")"
+        
+        # Remove existing directory or link if it exists
+        sudo rm -rf "$PROJECT_MODELS_DIR"
+        
+        # Create symbolic link from project directory to system models
+        sudo ln -sf /var/lib/ollama/models "$PROJECT_MODELS_DIR"
+        
+        # Set permissions for the project directory and link
+        sudo chown -R ollama:ollama "$(dirname "$PROJECT_MODELS_DIR")"
+        sudo chmod -R 755 "$(dirname "$PROJECT_MODELS_DIR")"
     }
 
     restart_ollama_linux() {
@@ -155,7 +188,7 @@ EOF
 
     # Case 1: Ollama not installed
     if ! command -v ollama >/dev/null 2>&1; then
-        echo "Ollama is not installed. Installing..." | log_with_service_name "Ollama" $RED
+        echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
         install_ollama_app
         echo "Ollama installed successfully" | log_with_service_name "Ollama" $RED
 
@@ -172,9 +205,20 @@ EOF
 
     # Create and install systemd service file
     create_ollama_service
+    
+    # Create necessary directories and set permissions
+    create_ollama_directories
+    
+    # Restart the service
     restart_ollama_linux
 
-    pull_ollama_models
+    # Pull Ollama models
+    echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    for model in "${MODELS[@]}"; do
+        echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
+        ollama pull "$model"
+    done
 }
 
 pull_ollama_models() {
@@ -816,72 +860,6 @@ load_env_file() {
         echo ".env file does not exist in $CURRENT_DIR." | log_with_service_name "Config" 
         exit 1
     fi
-}
-
-load_config_constants() {
-    CURRENT_DIR=$(pwd)
-    CONFIG_FILE="$CURRENT_DIR/node/config.py"
-
-    echo "Config file path: $CONFIG_FILE" | log_with_service_name "Config"
-
-    if [ -f "$CONFIG_FILE" ]; then
-        echo "config.py file found." | log_with_service_name "Config" 
-        
-        # Create a temporary Python script to load and execute config.py
-        cat > /tmp/load_config.py << EOF
-import os
-import sys
-from pathlib import Path
-
-# Add the current directory to Python path
-sys.path.insert(0, '${CURRENT_DIR}')
-
-# Import the config module
-from node.config import *
-
-# Get all uppercase variables (constants)
-config_vars = {name: value for name, value in locals().items() 
-              if name.isupper() and not name.startswith('_')}
-
-# Print in a format that can be evaluated by bash
-for name, value in config_vars.items():
-    if isinstance(value, bool):
-        print(f'{name}={str(value).lower()}')
-    elif isinstance(value, (int, float)):
-        print(f'{name}={value}')
-    elif isinstance(value, str):
-        print(f'{name}="{value}"')
-    elif isinstance(value, list):
-        print(f'{name}="{",".join(str(x) for x in value)}"')
-EOF
-
-        echo "Executing config.py and loading variables..." | log_with_service_name "Config"
-        
-        # Execute the Python script and store output using system Python
-        output=$(env python3 /tmp/load_config.py)
-        
-        # Evaluate the output
-        eval "$output"
-        
-        # Echo key variables
-        echo "Key configuration values:" | log_with_service_name "Config"
-        echo "LAUNCH_DOCKER: $LAUNCH_DOCKER" | log_with_service_name "Config"
-        echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
-        echo "LITELLM_URL: $LITELLM_URL" | log_with_service_name "Config"
-        echo "LOCAL_DB_POSTGRES_PORT: $LOCAL_DB_POSTGRES_PORT" | log_with_service_name "Config"
-        echo "LOCAL_DB_POSTGRES_HOST: $LOCAL_DB_POSTGRES_HOST" | log_with_service_name "Config"
-        echo "NODE_COMMUNICATION_PORT: $NODE_COMMUNICATION_PORT" | log_with_service_name "Config"
-        echo "NODE_COMMUNICATION_PROTOCOL: $NODE_COMMUNICATION_PROTOCOL" | log_with_service_name "Config"
-        echo "HUB_DB_SURREAL_PORT: $HUB_DB_SURREAL_PORT" | log_with_service_name "Config"
-        
-        rm /tmp/load_config.py
-        
-    else
-        echo "config.py file does not exist in $CURRENT_DIR/node/." | log_with_service_name "Config"
-        exit 1
-    fi
-
-    echo "Config constants loaded successfully." | log_with_service_name "Config"
 }
 
 linux_start_servers() {
@@ -1601,7 +1579,7 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR
 Environment=PATH=$VENV_PATH:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=$CURRENT_DIR/.env
-ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.ollama.yml
+ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.yml
 Restart=always
 RestartSec=3
 
@@ -1658,7 +1636,7 @@ darwin_start_litellm() {
     <array>
         <string>$VENV_PATH/litellm</string>
         <string>--config</string>
-        <string>$PROJECT_DIR/litellm_config.ollama.yml</string>
+        <string>$PROJECT_DIR/litellm_config.yml</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$PROJECT_DIR</string>
@@ -1742,7 +1720,7 @@ startup_summary() {
             logs+=("")
         else
             statuses+=("❌")
-            logs+=("$(tail -n 20 /tmp/celeryworker.out 2>/dev/null || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/celeryworker.log 2>/dev/null || echo 'Log file not found')")
         fi
     else
         if systemctl is-active --quiet celeryworker; then
@@ -1766,7 +1744,7 @@ startup_summary() {
             logs+=("")
         else
             statuses+=("❌")
-            logs+=("$(tail -n 20 /tmp/nodeapp_http.out 2>/dev/null || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/nodeapp_http.log 2>/dev/null || echo 'Log file not found')")
         fi
     else
         if curl -s http://localhost:7001/health > /dev/null; then
@@ -1791,7 +1769,7 @@ startup_summary() {
                     logs+=("")
                 else
                     if [ "$os" = "Darwin" ]; then
-                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo 'Log file not found')")
+                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.log 2>/dev/null || echo 'Log file not found')")
                     else
                         logs+=("$(sudo journalctl -u nodeapp_ws_$port -n 20)")
                     fi
@@ -1824,7 +1802,7 @@ else:
                     logs+=("")
                 else
                     if [ "$os" = "Darwin" ]; then
-                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.out 2>/dev/null || echo 'Log file not found')")
+                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.log 2>/dev/null || echo 'Log file not found')")
                     else
                         logs+=("$(sudo journalctl -u nodeapp_grpc_$port -n 20)")
                     fi
@@ -1909,18 +1887,94 @@ print_logo(){
 
 launch_docker() {
     echo "Launching Docker..."
-    if [ "$LLM_BACKEND" = "ollama" ]; then
-        echo "Generating LiteLLM config..." | log_with_service_name "LiteLLM" $BLUE
-        poetry run python node/node/inference/litellm/generate_litellm_config.py
-        docker compose -f docker-compose.development.yml up
+    COMPOSE_DIR="node/compose-files"
+    COMPOSE_FILES=""
+
+    # Read and export environment variables from .env
+    if [ -f .env ]; then
+        echo "Loading environment variables from .env file..." | log_with_service_name "LiteLLM" "$BLUE"
+        
+        # Use a simpler env var loading approach
+        set -a
+        source .env
+        set +a
+    fi
+
+    if [[ "$LLM_BACKEND" == "ollama" ]]; then
+        python node/inference/litellm/generate_litellm_config.py
+        COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
+    elif [[ "$LLM_BACKEND" == "vllm" ]]; then
+        python node/inference/litellm/generate_litellm_config.py
+        GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
+        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
+        
+        IFS=',' read -ra MODEL_ARRAY <<< "${VLLM_MODELS//$'\\\n'}"
+        for model in "${MODEL_ARRAY[@]}"
+        do
+            model=$(echo "$model" | tr -d '[:space:]')
+            model_name=${model##*/}
+            echo "Model Name: $model_name" | log_with_service_name "Docker" "$BLUE"
+            if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
+                COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
+            else
+                echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" "$YELLOW"
+            fi
+        done
     else
-        docker compose -f docker-compose.vllm up
+        echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" "$RED"
+        exit 1
+    fi
+
+    if [[ "$LOCAL_HUB" == "true" ]]; then
+        COMPOSE_FILES+=" -f ${COMPOSE_DIR}/hub.yml"
+    fi
+
+    docker network inspect naptha-network >/dev/null 2>&1 || docker network create naptha-network
+
+    echo "Starting services..."
+    if [[ "$LLM_BACKEND" == "vllm" ]]; then
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES up -d
+        cat > docker-ctl.sh << EOF
+#!/bin/bash
+case "\$1" in
+    "down")
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES down -v
+        ;;
+    "logs")
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES logs -f
+        ;;
+    *)
+        echo "Usage: ./docker-ctl.sh [down|logs]"
+        exit 1
+        ;;
+esac
+EOF
+        chmod +x docker-ctl.sh
+        rm -f gpu_assignments.txt
+    else
+        docker compose -f docker-compose.yml $COMPOSE_FILES up -d
+        cat > docker-ctl.sh << EOF
+#!/bin/bash
+case "\$1" in
+    "down")
+        docker compose -f docker-compose.yml $COMPOSE_FILES down -v
+        ;;
+    "logs")
+        docker compose -f docker-compose.yml $COMPOSE_FILES logs -f
+        ;;
+    *)
+        echo "Usage: ./docker-ctl.sh [down|logs]"
+        exit 1
+        ;;
+esac
+EOF
+        chmod +x docker-ctl.sh
     fi
 }
 
 main() {
     print_logo
-    load_config_constants
+    load_env_file
     os="$(uname)"
     if [ "$LAUNCH_DOCKER" = "true" ]; then
         launch_docker
@@ -1933,7 +1987,6 @@ main() {
             setup_poetry
             install_surrealdb
             check_and_copy_env
-            load_env_file
             darwin_install_ollama
             darwin_install_docker
             darwin_start_rabbitmq
@@ -1953,7 +2006,6 @@ main() {
             setup_poetry
             install_surrealdb
             check_and_copy_env
-            load_env_file
             linux_install_ollama
             linux_install_docker
             linux_start_rabbitmq

@@ -1,0 +1,35 @@
+services:
+  Mistral-Small-24B-Instruct-2501:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "mistralai/Mistral-Small-24B-Instruct-2501",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "32768",
+      "--trust-remote-code",
+      "--tensor-parallel-size", "2", # split across the 2 GPUs
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "${GPU_ID_mistral_small_24b_instruct_2501:?error}" ]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

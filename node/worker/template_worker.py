@@ -9,14 +9,12 @@ import os
 import pytz
 from pathlib import Path
 import sys
-import subprocess
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
 from typing import Union
 import sys
 
-from node.config import BASE_OUTPUT_DIR, MODULES_SOURCE_DIR
 from node.module_manager import install_module_with_lock, load_and_validate_input_schema
 from node.schemas import AgentRun, MemoryRun, ToolRun, EnvironmentRun, OrchestratorRun, KBRun
 from node.worker.main import app
@@ -24,10 +22,16 @@ from node.worker.utils import prepare_input_dir, update_db_with_status_sync, upl
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv(".env")
-os.environ["BASE_OUTPUT_DIR"] = f"{BASE_OUTPUT_DIR}"
+load_dotenv()
 
+file_path = Path(__file__).resolve()
+root_dir = file_path.parent.parent.parent
+
+_BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
+BASE_OUTPUT_DIR = root_dir / _BASE_OUTPUT_DIR
+
+_MODULES_SOURCE_DIR = os.getenv("MODULES_SOURCE_DIR")
+MODULES_SOURCE_DIR = root_dir / _MODULES_SOURCE_DIR
 
 if MODULES_SOURCE_DIR not in sys.path:
     sys.path.append(MODULES_SOURCE_DIR)

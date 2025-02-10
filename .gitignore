@@ -187,4 +187,7 @@ node/inference/ollama/*
 node/storage/fs
 node/storage/hub/modules
 .vscode/
-
+gpu_assignments.txt
+docker-ctl.sh
+node/inference/litellm/litellm_config.yml
+docker_compose_command.sh

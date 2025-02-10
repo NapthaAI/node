@@ -17,6 +17,8 @@ For development purposes, it is sometimes useful to run a local hub DB (e.g. to 
 
 By default, the local hub will be available at `ws://localhost:3001/rpc` with the namespace defined by `HUB_DB_SURREAL_NS`, the database name defined by `HUB_DB_SURREAL_NAME` in the config.py file, and the root user and password defined by `HUB_DB_SURREAL_ROOT_USER` and `HUB_DB_SURREAL_ROOT_PASS` in the .env file.
 
+If using docker, you should see the `surrealdb` service in the `docker ps -a` output. You can also check the logs of the `surrealdb` service with `docker logs -f surrealdb`.
+
 ## Make your node available to other nodes on the network
 
 By default, the node will not register with the Naptha Hub, which means that running `naptha nodes` will not show your node. If you would like your node to be available to other nodes on the network, you can set the following variable:

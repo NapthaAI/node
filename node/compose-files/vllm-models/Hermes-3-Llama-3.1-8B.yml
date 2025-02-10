@@ -1,10 +1,5 @@
-include:
-  - docker-compose.yml
-
 services:
-
-  # vllm service(s)
-  vllm-0:
+  Hermes-3-Llama-3.1-8B:
     image: vllm/vllm-openai:latest
     entrypoint: [
       "vllm", "serve", "NousResearch/Hermes-3-Llama-3.1-8B",
@@ -29,22 +24,10 @@ services:
           devices:
             - driver: "nvidia"
               capabilities: [ "gpu" ]
-              count: 1
+              device_ids: ["${GPU_ID_hermes_3_llama_3_1_8b:?error}"]
+    networks:
+      - naptha-network
 
-
-  litellm:
-    container_name: litellm
-    image: ghcr.io/berriai/litellm:main-latest
-    command: --config /app/config.yaml
-    restart: unless-stopped
-    depends_on:
-      pgvector:
-        condition: service_healthy
-    environment:
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
-      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
-      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME?:error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
-    volumes:
-      - ./node/inference/litellm/litellm_config.single_gpu.yml:/app/config.yaml # this should be the litellm config file
-    ports:
-      - '4000:4000'
+networks:
+  naptha-network:
+    external: true

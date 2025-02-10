@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
+from dotenv import load_dotenv
 import os
-from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
 from uuid import uuid4
 from pathlib import Path
 import ipfshttpclient
@@ -15,10 +15,11 @@ from typing import Any, Dict, Union, BinaryIO, List
 from node.storage.db.db import LocalDBPostgres
 from node.storage.schemas import StorageLocation, StorageObject, StorageType, DatabaseReadOptions, IPFSOptions, StorageMetadata
 from node.storage.utils import zip_directory, get_api_url, to_multiaddr
-from node.config import IPFS_GATEWAY_URL
 
 logger = logging.getLogger(__name__)
-
+load_dotenv()
+IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
+BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
 
 class StorageProvider(ABC):
     """Abstract base class for storage providers"""

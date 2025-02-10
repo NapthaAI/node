@@ -1,0 +1,20 @@
+# ollama.yml
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: node-ollama
+    entrypoint: /bin/bash -c "(/bin/ollama serve &); sleep 5 && /bin/ollama run hermes3:8b"
+    tty: true
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    volumes:
+      - ./node/inference/ollama/models:/root/.ollama
+    ports:
+      - '11434:11434'
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

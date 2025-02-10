@@ -8,7 +8,6 @@ import traceback
 import resource
 from node.grpc_pool_manager import get_grpc_pool_instance, close_grpc_pool
 import psutil
-from node.config import RMQ_HOST
 
 logger = get_logger(__name__)
 
@@ -48,6 +47,7 @@ except KeyError:
 # Celery config
 RMQ_USER = os.environ.get("RMQ_USER")
 RMQ_PASSWORD = os.environ.get("RMQ_PASSWORD")
+RMQ_HOST = "rabbitmq" if os.getenv("LAUNCH_DOCKER") == "true" else "localhost"
 BROKER_URL = f"amqp://{RMQ_USER}:{RMQ_PASSWORD}@{RMQ_HOST}:5672/"
 BACKEND_URL = f"rpc://{RMQ_USER}:{RMQ_PASSWORD}@{RMQ_HOST}:5672/"
 NUM_GRPC_CONNECTIONS = 200

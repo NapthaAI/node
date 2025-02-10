@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Source the launch.sh script to import functions
-source ./launch.sh
-
 # Function to stop SurrealDB
 stop_surrealdb() {
     # Find and kill the SurrealDB process running on port 3001
@@ -17,13 +14,14 @@ stop_surrealdb() {
 
 # Load the .env file
 if [ -f .env ]; then
-    export $(cat .env | grep -v '^#' | xargs)
+    set -o allexport
+    source .env
+    set +o allexport
 else
     echo ".env file not found. Using default values."
     NUM_NODE_COMMUNICATION_SERVERS=1
 fi
 
-load_config_constants
 node_communication_protocol=${NODE_COMMUNICATION_PROTOCOL:-"ws"}
 start_port=${NODE_COMMUNICATION_PORT:-7002} 
 

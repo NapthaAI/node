@@ -21,55 +21,79 @@ services:
     ports:
       - '5672:5672' # exposed for testing, but should not be in production.
       # - '15672:15672' # this is the management port, e.g. if you want rabbitmq:4-management
-
+    networks:
+      - naptha-network
   pgvector:
     image: pgvector/pgvector:pg17
     container_name: node-pgvector
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql # init SQL script to create databases etc.
+      - ./scripts/init.sh:/docker-entrypoint-initdb.d/init.sh
     environment:
-      POSTGRES_USER: ${LOCAL_DB_POSTGRES_USERNAME?:error}
-      PGUSER: ${LOCAL_DB_POSTGRES_USERNAME?:error}
-      POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
+      - POSTGRES_USER=${LOCAL_DB_POSTGRES_USERNAME:?error}
+      - POSTGRES_PASSWORD=${LOCAL_DB_POSTGRES_PASSWORD:?error}
+      - PGUSER=${LOCAL_DB_POSTGRES_USERNAME:?error}
     restart: unless-stopped
     healthcheck:
-      test: pg_isready -d postgres
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${LOCAL_DB_POSTGRES_USERNAME} -d postgres"]
+      interval: "30s"
+      timeout: "10s"
       retries: 5
+      start_period: "40s"
     ports:
-      - '5433:5432' # exposed for testing, but should not be for production
+      - '5433:5432'
+    networks:
+      - naptha-network
 
   node-app:
     # can replace this with naptha image once it's published to hub, then we just
     # need to use the .env file UNLESS config.py is modified
     container_name: node-app
-    image: napthaai/node:latest
+    build:
+      dockerfile: Dockerfile-node-dev
     env_file:
       - ./.env
-    environment:
-      LOCAL_DB_POSTGRES_PASSWORD: ${LOCAL_DB_POSTGRES_PASSWORD:?error}
-      RMQ_USER: ${RMQ_USER:?error}
-      RMQ_PASSWORD: ${RMQ_PASSWORD:?error}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?error}
-      LAUNCH_DOCKER: true
     volumes:
       - ./node/config.py:/app/node/config/config.py
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
       - ./node/storage/fs:/app/node/storage/fs
       - ./node/storage/hub/modules:/app/node/storage/hub/modules
-    # restart: unless-stopped
+    restart: unless-stopped
     depends_on:
       pgvector:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-
     ports:
       - '7001:7001'
       - '7002:7002'
+    networks:
+      - naptha-network
+
+  litellm:
+    container_name: litellm
+    image: ghcr.io/berriai/litellm:main-latest
+    command: --config /app/config.yaml
+    restart: unless-stopped
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?error}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?error}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DATABASE_URL: postgresql://${LOCAL_DB_POSTGRES_USERNAME:?error}:${LOCAL_DB_POSTGRES_PASSWORD:?error}@pgvector:5432/litellm
+    volumes:
+      - ./node/inference/litellm/litellm_config.yml:/app/config.yaml # this should be the litellm config file
+    ports:
+      - '4000:4000'
+    networks:
+      - naptha-network
 
 volumes:
   rabbitmq_data: # persist rabbitMQ data e.g. anything durable; users & credentials; configs
   postgres_data:
+
+networks:
+  naptha-network:
+    driver: bridge
