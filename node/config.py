@@ -49,7 +49,7 @@ MODULES_SOURCE_DIR=f"{repo_dir}/node/storage/hub/modules"
 IPFS_GATEWAY_URL="http://ipfs.naptha.work:30798"
 
 # Hub
-LOCAL_HUB=False
+LOCAL_HUB=True
 REGISTER_NODE_WITH_HUB=False # set to true if you want your node to be available as a provider
 LOCAL_HUB_URL="ws://localhost:3001/rpc"
 PUBLIC_HUB_URL="wss://hub.naptha.ai/rpc"
