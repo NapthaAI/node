@@ -25,7 +25,7 @@ MODEL_DEVICE_REQUIREMENTS = {
     "jinaai/jina-embeddings-v2-base-en": 1,
     "katanemo/Arch-Function-7B": 1,
     "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": 2,
-    "openbmb/MiniCPM-o-2_6": 1,
+    "microsoft/phi-4": 1,
     "mistralai/Mistral-Small-24B-Instruct-2501": 2,
     "Qwen/QwQ-32B-Preview": 2
 }
