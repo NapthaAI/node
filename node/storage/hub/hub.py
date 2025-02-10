@@ -179,7 +179,7 @@ class HubDBSurreal(AsyncMixin):
             alt_ports = [
                 server['port'] 
                 for server in servers
-                if server['communication_protocol'] in ['ws', 'grpc']
+                if server['communication_protocol'] in ['ws', 'wss', 'grpc']
             ]
             node['ports'] = alt_ports
             return NodeConfig(**node)
