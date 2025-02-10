@@ -1933,7 +1933,7 @@ launch_docker() {
 
     echo "Starting services..."
     if [[ "$LLM_BACKEND" == "vllm" ]]; then
-        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES up --build -d
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES up -d
         cat > docker-ctl.sh << EOF
 #!/bin/bash
 case "\$1" in
