@@ -47,8 +47,9 @@ except KeyError:
 # Celery config
 RMQ_USER = os.environ.get("RMQ_USER")
 RMQ_PASSWORD = os.environ.get("RMQ_PASSWORD")
-BROKER_URL = f"amqp://{RMQ_USER}:{RMQ_PASSWORD}@localhost:5672/"
-BACKEND_URL = f"rpc://{RMQ_USER}:{RMQ_PASSWORD}@localhost:5672/"
+RMQ_HOST = "rabbitmq" if os.getenv("LAUNCH_DOCKER") == "true" else "localhost"
+BROKER_URL = f"amqp://{RMQ_USER}:{RMQ_PASSWORD}@{RMQ_HOST}:5672/"
+BACKEND_URL = f"rpc://{RMQ_USER}:{RMQ_PASSWORD}@{RMQ_HOST}:5672/"
 NUM_GRPC_CONNECTIONS = 200
 BUFFER_SIZE = 20
 

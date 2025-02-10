@@ -105,6 +105,14 @@ linux_install_ollama() {
     # Echo start Ollama
     echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
 
+    # Set up directory paths based on current location
+    CURRENT_DIR=$(pwd)
+    PROJECT_MODELS_DIR="$CURRENT_DIR/node/inference/ollama/models"
+    
+    # Create the directory structure
+    sudo mkdir -p "$PROJECT_MODELS_DIR"
+    echo "Created models directory at: $PROJECT_MODELS_DIR" | log_with_service_name "Ollama" $RED
+
     install_ollama_app() {
         sudo curl -fsSL https://ollama.com/install.sh | sh
     }
@@ -118,6 +126,7 @@ After=network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/ollama serve
+Environment=OLLAMA_MODELS=/var/lib/ollama/models
 User=ollama
 Group=ollama
 Restart=always
@@ -126,7 +135,31 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-    sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+        sudo mv /tmp/ollama.service /etc/systemd/system/ollama.service
+    }
+
+    create_ollama_directories() {
+        # Create ollama user and group
+        sudo useradd -r -s /bin/false ollama 2>/dev/null || true
+
+        # Create and set permissions for ollama directories
+        sudo mkdir -p /usr/share/ollama
+        sudo mkdir -p /var/lib/ollama/models
+        sudo chown -R ollama:ollama /usr/share/ollama /var/lib/ollama
+        sudo chmod -R 755 /usr/share/ollama /var/lib/ollama
+
+        # Create project directory structure
+        sudo mkdir -p "$(dirname "$PROJECT_MODELS_DIR")"
+        
+        # Remove existing directory or link if it exists
+        sudo rm -rf "$PROJECT_MODELS_DIR"
+        
+        # Create symbolic link from project directory to system models
+        sudo ln -sf /var/lib/ollama/models "$PROJECT_MODELS_DIR"
+        
+        # Set permissions for the project directory and link
+        sudo chown -R ollama:ollama "$(dirname "$PROJECT_MODELS_DIR")"
+        sudo chmod -R 755 "$(dirname "$PROJECT_MODELS_DIR")"
     }
 
     restart_ollama_linux() {
@@ -155,7 +188,7 @@ EOF
 
     # Case 1: Ollama not installed
     if ! command -v ollama >/dev/null 2>&1; then
-        echo "Ollama is not installed. Installing..." | log_with_service_name "Ollama" $RED
+        echo "Installing Ollama..." | log_with_service_name "Ollama" $RED
         install_ollama_app
         echo "Ollama installed successfully" | log_with_service_name "Ollama" $RED
 
@@ -172,8 +205,23 @@ EOF
 
     # Create and install systemd service file
     create_ollama_service
+    
+    # Create necessary directories and set permissions
+    create_ollama_directories
+    
+    # Restart the service
     restart_ollama_linux
 
+    # Pull Ollama models
+    echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
+    IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
+    for model in "${MODELS[@]}"; do
+        echo "Pulling model: $model" | log_with_service_name "Ollama" $RED
+        ollama pull "$model"
+    done
+}
+
+pull_ollama_models() {
     # Pull Ollama models
     echo "Pulling Ollama models: $OLLAMA_MODELS" | log_with_service_name "Ollama" $RED
     IFS=',' read -ra MODELS <<< "$OLLAMA_MODELS"
@@ -243,6 +291,8 @@ darwin_install_ollama() {
         echo "Failed to start Ollama" | log_with_service_name "Ollama" $RED
         exit 1
     fi
+
+    pull_ollama_models
 
     echo "Ollama is now running" | log_with_service_name "Ollama" $RED
 }
@@ -651,7 +701,7 @@ install_python312() {
 start_hub_surrealdb() {
     PWD=$(pwd)
     echo "LOCAL_HUB: $LOCAL_HUB" | log_with_service_name "Config"
-    if [ "$LOCAL_HUB" == "True" ]; then
+    if [ "$LOCAL_HUB" == "true" ]; then
         echo "Running Hub DB (SurrealDB) locally..." | log_with_service_name "HubDBSurreal" $RED
         
         INIT_PYTHON_PATH="$PWD/node/storage/hub/init_hub.py"
@@ -659,7 +709,6 @@ start_hub_surrealdb() {
 
         poetry run python "$INIT_PYTHON_PATH" 2>&1
         PYTHON_EXIT_STATUS=$?
-
         if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
             echo "Hub DB (SurrealDB) initialization failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
             exit 1
@@ -678,7 +727,7 @@ start_hub_surrealdb() {
 
     poetry run python "$PWD/node/storage/hub/init_hub.py" --user 2>&1
     PYTHON_EXIT_STATUS=$?
-
+    echo "PYTHON_EXIT_STATUS: $PYTHON_EXIT_STATUS"
     if [ $PYTHON_EXIT_STATUS -ne 0 ]; then
         echo "Hub DB (SurrealDB) sign in flow failed. Python script exited with status $PYTHON_EXIT_STATUS." | log_with_service_name "HubDBSurreal" $RED
         exit 1
@@ -811,43 +860,6 @@ load_env_file() {
         echo ".env file does not exist in $CURRENT_DIR." | log_with_service_name "Config" 
         exit 1
     fi
-}
-
-load_config_constants() {
-    CURRENT_DIR=$(pwd)
-    CONFIG_FILE="$CURRENT_DIR/node/config.py"
-
-    echo "Config file path: $CONFIG_FILE" | log_with_service_name "Config"
-
-    if [ -f "$CONFIG_FILE" ]; then
-        echo "config.py file found." | log_with_service_name "Config" 
-        # Extract constants from config.py using Python
-        eval "$(python3 -c "
-import re
-import ast
-
-def parse_value(value):
-    try:
-        return ast.literal_eval(value)
-    except:
-        return value
-
-with open('$CONFIG_FILE', 'r') as f:
-    content = f.read()
-constants = re.findall(r'^([A-Z_]+)\s*=\s*(.+)$', content, re.MULTILINE)
-for name, value in constants:
-    parsed_value = parse_value(value.strip())
-    if isinstance(parsed_value, str):
-        print(f'{name}=\"{parsed_value}\"')
-    else:
-        print(f'{name}={parsed_value}')
-        ")"
-    else
-        echo "config.py file does not exist in $CURRENT_DIR/node/." | log_with_service_name "Config"
-        exit 1
-    fi
-
-    echo "Config constants loaded successfully." | log_with_service_name "Config"
 }
 
 linux_start_servers() {
@@ -1014,9 +1026,9 @@ darwin_start_servers() {
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp_http.out</string>
+    <string>/tmp/nodeapp_http.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp_http.err</string>
+    <string>/tmp/nodeapp_http.log</string>
 </dict>
 </plist>
 EOF
@@ -1083,9 +1095,9 @@ EOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.out</string>
+    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.err</string>
+    <string>/tmp/nodeapp_${node_communication_protocol}_${current_port}.log</string>
 </dict>
 </plist>
 EOF
@@ -1184,7 +1196,7 @@ set -e
 
 # Log function
 log_error() {
-    echo "\$(date '+%Y-%m-%d %H:%M:%S') ERROR: \$1" >> /tmp/celeryworker.err
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') ERROR: \$1" >> /tmp/celeryworker.log
 }
 
 # Check if virtual environment exists
@@ -1248,9 +1260,9 @@ EOF
         <false/>
     </dict>
     <key>StandardOutPath</key>
-    <string>/tmp/celeryworker.out</string>
+    <string>/tmp/celeryworker.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/celeryworker.err</string>
+    <string>/tmp/celeryworker.log</string>
 </dict>
 </plist>
 EOF
@@ -1541,7 +1553,7 @@ linux_start_litellm() {
     
     # Get absolute paths
     CURRENT_DIR=$(pwd)
-    PROJECT_DIR="$CURRENT_DIR/node/litellm"
+    PROJECT_DIR="$CURRENT_DIR/node/inference/litellm"
     VENV_PATH="$PROJECT_DIR/.venv/bin"
     
     # Install dependencies using poetry with --no-root flag
@@ -1567,7 +1579,7 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR
 Environment=PATH=$VENV_PATH:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=$CURRENT_DIR/.env
-ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.yaml
+ExecStart=$VENV_PATH/litellm --config $PROJECT_DIR/litellm_config.yml
 Restart=always
 RestartSec=3
 
@@ -1598,7 +1610,7 @@ darwin_start_litellm() {
     
     # Get absolute paths
     CURRENT_DIR=$(pwd)
-    PROJECT_DIR="$CURRENT_DIR/node/litellm"
+    PROJECT_DIR="$CURRENT_DIR/node/inference/litellm"
     VENV_PATH="$PROJECT_DIR/.venv/bin"
     
     # Install dependencies using poetry with --no-root flag
@@ -1624,7 +1636,7 @@ darwin_start_litellm() {
     <array>
         <string>$VENV_PATH/litellm</string>
         <string>--config</string>
-        <string>$PROJECT_DIR/litellm_config.yaml</string>
+        <string>$PROJECT_DIR/litellm_config.yml</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$PROJECT_DIR</string>
@@ -1640,7 +1652,7 @@ darwin_start_litellm() {
     <key>StandardOutPath</key>
     <string>/tmp/litellm.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/litellm.error.log</string>
+    <string>/tmp/litellm.log</string>
 </dict>
 </plist>
 EOF
@@ -1689,7 +1701,7 @@ startup_summary() {
     fi
 
     # Check Local Hub if enabled
-    if [ "$LOCAL_HUB" == "True" ]; then
+    if [ "$LOCAL_HUB" == "true" ]; then
         services+=("Hub_DB")
         if curl -s http://localhost:$HUB_DB_SURREAL_PORT/health > /dev/null; then
             statuses+=("✅")
@@ -1708,7 +1720,7 @@ startup_summary() {
             logs+=("")
         else
             statuses+=("❌")
-            logs+=("$(tail -n 20 /tmp/celeryworker.out 2>/dev/null || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/celeryworker.log 2>/dev/null || echo 'Log file not found')")
         fi
     else
         if systemctl is-active --quiet celeryworker; then
@@ -1732,7 +1744,7 @@ startup_summary() {
             logs+=("")
         else
             statuses+=("❌")
-            logs+=("$(tail -n 20 /tmp/nodeapp_http.out 2>/dev/null || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/nodeapp_http.log 2>/dev/null || echo 'Log file not found')")
         fi
     else
         if curl -s http://localhost:7001/health > /dev/null; then
@@ -1757,7 +1769,7 @@ startup_summary() {
                     logs+=("")
                 else
                     if [ "$os" = "Darwin" ]; then
-                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.out 2>/dev/null || echo 'Log file not found')")
+                        logs+=("$(tail -n 20 /tmp/nodeapp_ws_$port.log 2>/dev/null || echo 'Log file not found')")
                     else
                         logs+=("$(sudo journalctl -u nodeapp_ws_$port -n 20)")
                     fi
@@ -1790,7 +1802,7 @@ else:
                     logs+=("")
                 else
                     if [ "$os" = "Darwin" ]; then
-                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.out 2>/dev/null || echo 'Log file not found')")
+                        logs+=("$(tail -n 20 /tmp/nodeapp_grpc_$port.log 2>/dev/null || echo 'Log file not found')")
                     else
                         logs+=("$(sudo journalctl -u nodeapp_grpc_$port -n 20)")
                     fi
@@ -1873,53 +1885,140 @@ print_logo(){
     echo -e "\n"
 }
 
-main() {
-    os="$(uname)"
-    # Main execution flow
-    if [ "$os" = "Darwin" ]; then
-        print_logo
-        install_python312
-        install_surrealdb
-        check_and_copy_env
-        load_env_file
-        load_config_constants
-        darwin_install_ollama
-        darwin_install_miniforge
-        darwin_install_docker
-        darwin_clean_node
-        darwin_start_rabbitmq
-        setup_poetry
-        check_and_set_private_key
-        check_and_set_stability_key
-        start_hub_surrealdb
-        darwin_setup_local_db
-        darwin_start_local_db
-        darwin_start_servers
-        darwin_start_celery_worker
-        darwin_start_litellm
-        startup_summary
+launch_docker() {
+    echo "Launching Docker..."
+    COMPOSE_DIR="node/compose-files"
+    COMPOSE_FILES=""
+
+    # Read and export environment variables from .env
+    if [ -f .env ]; then
+        echo "Loading environment variables from .env file..." | log_with_service_name "LiteLLM" "$BLUE"
+        
+        # Use a simpler env var loading approach
+        set -a
+        source .env
+        set +a
+    fi
+
+    if [[ "$LLM_BACKEND" == "ollama" ]]; then
+        python node/inference/litellm/generate_litellm_config.py
+        COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
+    elif [[ "$LLM_BACKEND" == "vllm" ]]; then
+        python node/inference/litellm/generate_litellm_config.py
+        GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
+        echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
+        
+        IFS=',' read -ra MODEL_ARRAY <<< "${VLLM_MODELS//$'\\\n'}"
+        for model in "${MODEL_ARRAY[@]}"
+        do
+            model=$(echo "$model" | tr -d '[:space:]')
+            model_name=${model##*/}
+            echo "Model Name: $model_name" | log_with_service_name "Docker" "$BLUE"
+            if [ -f "${COMPOSE_DIR}/vllm-models/${model_name}.yml" ]; then
+                COMPOSE_FILES+=" -f ${COMPOSE_DIR}/vllm-models/${model_name}.yml"
+            else
+                echo "Warning: Compose file not found for ${model_name}" | log_with_service_name "Docker" "$YELLOW"
+            fi
+        done
     else
-        print_logo
-        install_python312
-        install_surrealdb
-        check_and_copy_env
-        load_env_file
-        load_config_constants
-        linux_install_ollama
-        linux_install_miniforge
-        linux_install_docker
-        linux_clean_node
-        linux_start_rabbitmq
-        setup_poetry
-        check_and_set_private_key
-        check_and_set_stability_key
-        start_hub_surrealdb
-        linux_setup_local_db
-        linux_start_local_db
-        linux_start_servers
-        linux_start_celery_worker
-        linux_start_litellm
-        startup_summary
+        echo "Invalid LLM backend: $LLM_BACKEND" | log_with_service_name "LiteLLM" "$RED"
+        exit 1
+    fi
+
+    if [[ "$LOCAL_HUB" == "true" ]]; then
+        COMPOSE_FILES+=" -f ${COMPOSE_DIR}/hub.yml"
+    fi
+
+    docker network inspect naptha-network >/dev/null 2>&1 || docker network create naptha-network
+
+    echo "Starting services..."
+    if [[ "$LLM_BACKEND" == "vllm" ]]; then
+        env $(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES up -d
+        cat > docker-ctl.sh << EOF
+#!/bin/bash
+case "\$1" in
+    "down")
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES down -v
+        ;;
+    "logs")
+        env \$(cat .env | grep -v '^#' | xargs) $GPU_ASSIGNMENTS docker compose -f docker-compose.yml $COMPOSE_FILES logs -f
+        ;;
+    *)
+        echo "Usage: ./docker-ctl.sh [down|logs]"
+        exit 1
+        ;;
+esac
+EOF
+        chmod +x docker-ctl.sh
+        rm -f gpu_assignments.txt
+    else
+        docker compose -f docker-compose.yml $COMPOSE_FILES up -d
+        cat > docker-ctl.sh << EOF
+#!/bin/bash
+case "\$1" in
+    "down")
+        docker compose -f docker-compose.yml $COMPOSE_FILES down -v
+        ;;
+    "logs")
+        docker compose -f docker-compose.yml $COMPOSE_FILES logs -f
+        ;;
+    *)
+        echo "Usage: ./docker-ctl.sh [down|logs]"
+        exit 1
+        ;;
+esac
+EOF
+        chmod +x docker-ctl.sh
+    fi
+}
+
+main() {
+    print_logo
+    load_env_file
+    os="$(uname)"
+    if [ "$LAUNCH_DOCKER" = "true" ]; then
+        launch_docker
+    else
+        # use systemd/launchd
+        if [ "$os" = "Darwin" ]; then
+            install_python312
+            darwin_install_miniforge
+            darwin_clean_node
+            setup_poetry
+            install_surrealdb
+            check_and_copy_env
+            darwin_install_ollama
+            darwin_install_docker
+            darwin_start_rabbitmq
+            check_and_set_private_key
+            check_and_set_stability_key
+            start_hub_surrealdb
+            darwin_setup_local_db
+            darwin_start_local_db
+            darwin_start_servers
+            darwin_start_celery_worker
+            darwin_start_litellm
+            startup_summary
+        else
+            install_python312
+            linux_install_miniforge
+            linux_clean_node
+            setup_poetry
+            install_surrealdb
+            check_and_copy_env
+            linux_install_ollama
+            linux_install_docker
+            linux_start_rabbitmq
+            check_and_set_private_key
+            check_and_set_stability_key
+            start_hub_surrealdb
+            linux_setup_local_db
+            linux_start_local_db
+            linux_start_servers
+            linux_start_celery_worker
+            linux_start_litellm
+            startup_summary
+        fi
     fi
 
     echo "Setup complete. Applications are running." | log_with_service_name "System" $GREEN

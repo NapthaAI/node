@@ -1,15 +1,26 @@
+from dotenv import load_dotenv
 import logging
 import logging.config
 import os
-import requests
 from pathlib import Path
+import platform
+import psutil
+import requests
 import subprocess
 from typing import List
-from node.schemas import NodeConfigInput
+from node.schemas import NodeConfigInput, NodeConfig, NodeServer
 
 _logging_initialized = False
 logger = logging.getLogger(__name__)
-
+load_dotenv()
+NUM_NODE_COMMUNICATION_SERVERS = int(os.getenv("NUM_NODE_COMMUNICATION_SERVERS"))
+NODE_COMMUNICATION_PORT = int(os.getenv("NODE_COMMUNICATION_PORT"))
+MODELS = os.getenv("VLLM_MODELS").split(",") if os.getenv("LLM_BACKEND") == "vllm" else os.getenv("OLLAMA_MODELS").split(",")
+# in future we will make it optional for nodes to provide certain services 
+# such as inference, storage and deployment of agents and other modules 
+# provider types will be used to display which services are available on a node
+PROVIDER_TYPES=["models", "storage", "modules"]
+VRAM = 0 
 
 def setup_logging(default_level=logging.INFO):
     """Setup logging configuration"""
@@ -177,3 +188,32 @@ class AsyncMixin:
 
     def __await__(self):
         return self.__initobj().__await__()
+
+def get_node_config():
+    """Get the node configuration."""
+    from node.user import get_public_key
+    public_key = get_public_key(os.getenv("PRIVATE_KEY"))
+    node_config = NodeConfig(
+        id=f"node:{public_key}",
+        owner=os.getenv("HUB_USERNAME"),
+        public_key=public_key,
+        ip=os.getenv("NODE_IP"),
+        user_communication_protocol=os.getenv("USER_COMMUNICATION_PROTOCOL"),
+        user_communication_port=os.getenv("USER_COMMUNICATION_PORT"),
+        node_communication_protocol=os.getenv("NODE_COMMUNICATION_PROTOCOL"),
+        num_node_communication_servers=os.getenv("NUM_NODE_COMMUNICATION_SERVERS"),
+        provider_types=PROVIDER_TYPES,
+        servers=[NodeServer(communication_protocol=os.getenv("NODE_COMMUNICATION_PROTOCOL"), port=NODE_COMMUNICATION_PORT+i, node_id=f"node:{public_key}") for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
+        models=MODELS,
+        docker_jobs=os.getenv("DOCKER_JOBS"),
+        routing_type=os.getenv("ROUTING_TYPE"),
+        routing_url=os.getenv("ROUTING_URL"),
+        ports=[NODE_COMMUNICATION_PORT+i for i in range(NUM_NODE_COMMUNICATION_SERVERS)],
+        num_gpus=int(os.getenv("NUM_GPUS")),
+        arch=platform.machine(),
+        os=platform.system(),
+        ram=psutil.virtual_memory().total,
+        vram=VRAM,
+    )
+    print("Created node config:", node_config)
+    return node_config

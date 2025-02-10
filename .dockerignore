@@ -1,0 +1,14 @@
+# .dockerignore
+
+# Ignore virtual environment
+.venv/
+venv/
+.env
+*.env
+.env*
+.venv
+.git
+.idea
+node/inference/ollama/*
+node/storage/fs
+node/storage/hub/modules

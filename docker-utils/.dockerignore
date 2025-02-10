@@ -1,6 +1,0 @@
-# .dockerignore
-
-# Ignore virtual environment
-.venv/
-venv/
-.env

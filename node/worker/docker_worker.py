@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import asyncio
 import time
 from typing import Dict, Optional
@@ -13,7 +14,6 @@ from node.utils import get_logger
 from node.worker.main import app
 from node.worker.utils import (
     handle_ipfs_input,
-    BASE_OUTPUT_DIR,
     update_db_with_status_sync,
     upload_to_ipfs,
 )
@@ -21,6 +21,8 @@ import traceback
 
 logger = get_logger(__name__)
 
+load_dotenv()
+BASE_OUTPUT_DIR = os.getenv("BASE_OUTPUT_DIR")
 
 def prepare_volume_directory(
     base_dir: str,

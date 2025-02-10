@@ -179,4 +179,15 @@ node/storage/db/alembic/versions
 celery_worker_start.sh
 ops/systemd/*
 
+.idea/
+.idea/*
+
+node/inference/ollama/*
+!node/inference/ollama/.gitkeep
+node/storage/fs
+node/storage/hub/modules
 .vscode/
+gpu_assignments.txt
+docker-ctl.sh
+node/inference/litellm/litellm_config.yml
+docker_compose_command.sh

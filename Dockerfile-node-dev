@@ -1,0 +1,41 @@
+# This version of the node dockerfile includes the SurrealDB CLI utilities, and includes initialization for surrealdb
+FROM condaforge/miniforge3:24.9.2-0
+
+WORKDIR /app
+COPY . .
+
+# use bash instead of sh
+SHELL ["/bin/bash", "-c"]
+
+
+# install deps
+RUN apt-get update
+RUN apt-get install curl gcc curl git -y
+
+# add conda install to path; use base environment
+ENV PATH="/opt/conda/bin:${PATH}"
+RUN conda create -n node python=3.12
+RUN echo "source activate node" > /root/.bashrc
+ENV PATH="/opt/conda/envs/node/bin:$PATH"
+RUN echo
+
+# set up poetry
+ENV PATH="/root/.local/share/pypoetry/venv/bin/:${PATH}"
+RUN pip install poetry
+RUN poetry config virtualenvs.in-project true
+RUN poetry lock
+RUN poetry install --only main
+
+# install surrealDB so that we have the command line tool
+RUN curl -sSf https://install.surrealdb.com | sh
+
+EXPOSE 7001 7002
+
+# run db migrations / config & server
+CMD (poetry run python -m node.storage.db.init_db | tee /dev/stdout) && \
+    (poetry run python -m node.storage.hub.init_hub | tee /dev/stdout) && \
+    (poetry run python -m node.storage.hub.init_hub --user | tee /dev/stdout) && \
+    ((poetry run celery -A node.worker.main:app worker --loglevel=info | tee /dev/stdout) & ) && \
+    (poetry run python -m node.server.server --communication-protocol http --port 7001 | tee /dev/stdout) & \
+    poetry run python -m node.server.server --communication-protocol ws --port 7002 | tee /dev/stdout
+

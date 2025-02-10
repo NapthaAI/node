@@ -4,21 +4,27 @@ import os
 from pathlib import Path
 import subprocess
 import time
-import logging
 import getpass
 
-from node.config import get_node_config, HUB_DB_SURREAL_PORT, HUB_DB_SURREAL_NS, HUB_DB_SURREAL_NAME
 from node.storage.hub.hub import HubDBSurreal
 from node.user import get_public_key
-from node.utils import add_credentials_to_env, get_logger
-
+from node.utils import add_credentials_to_env, get_logger, get_node_config
 
 load_dotenv(find_dotenv(), override=True)
 logger = get_logger(__name__)
 
+
+
 file_path = os.path.dirname(os.path.realpath(__file__))
 surql_path = os.path.join(file_path, "data_structures")
 root_dir = Path(file_path).parent.parent
+LOCAL_HUB = os.getenv("LOCAL_HUB").lower() == "true"
+LAUNCH_DOCKER = os.getenv("LAUNCH_DOCKER").lower() == "true"
+
+if LAUNCH_DOCKER:
+    HUB_URL = "http://surrealdb:8000"
+else:
+    HUB_URL = "http://localhost:3001"
 
 
 def import_surql():
@@ -41,11 +47,11 @@ def import_surql():
 
     for file in import_files:
         command = f"""surreal import \
-                      --conn http://localhost:{HUB_DB_SURREAL_PORT} \
+                      --conn {HUB_URL} \
                       --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
                       --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
-                      --ns {HUB_DB_SURREAL_NS} \
-                      --db {HUB_DB_SURREAL_NAME} \
+                      --ns {os.getenv('HUB_DB_SURREAL_NS')} \
+                      --db {os.getenv('HUB_DB_SURREAL_NAME')} \
                     {file}"""
 
         try:
@@ -68,34 +74,42 @@ def import_surql():
 
 async def init_hub():
     """Initialize the database"""
-    logger.info("Initializing database")
+    if not LOCAL_HUB:
+        logger.info("Local hub disabled; skipping importing surql files")
+        return
+    else:
+        if LAUNCH_DOCKER:
+            # NOTE: surrealdb is running in docker
+            time.sleep(5)
+            import_surql()
+        else:
+            logger.info("Initializing database")
+            # use file storage
+            command = f"""surreal start -A \
+                        --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
+                        --bind 0.0.0.0:{os.getenv('HUB_DB_SURREAL_PORT')} \
+                        --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
+                        rocksdb://./node/storage/hub/hub.db"""
 
-    # use file storage
-    command = f"""surreal start -A \
-                  --user {os.getenv('HUB_DB_SURREAL_ROOT_USER')} \
-                  --bind 0.0.0.0:{HUB_DB_SURREAL_PORT} \
-                  --pass {os.getenv('HUB_DB_SURREAL_ROOT_PASS')} \
-                  rocksdb://./node/storage/hub/hub.db"""
+            try:
+                # Start the command in a new process and detach it
+                _ = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    preexec_fn=os.setsid,
+                )
+                logger.info("Database initialization command executed")
+            except Exception as e:
+                logger.error("Error initializing database")
+                logger.error(str(e))
+                raise
 
-    try:
-        # Start the command in a new process and detach it
-        _ = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            preexec_fn=os.setsid,
-        )
-        logger.info("Database initialization command executed")
-    except Exception as e:
-        logger.error("Error initializing database")
-        logger.error(str(e))
-        raise
-
-    time.sleep(5)
-    logger.info("Database initialized")
-    import_surql()
+            time.sleep(5)
+            logger.info("Database initialized")
+            import_surql()
 
 
 async def register_node():

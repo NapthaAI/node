@@ -1,0 +1,36 @@
+services:
+  ToolACE-8B:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "Team-ACE/ToolACE-8B",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "131072",
+      "--enable-auto-tool-choice", "--tool-call-parser", "pythonic",
+      "--tool-parser-plugin", "/usr/app/tool-parsers/pythonic_tool_parser.py",
+      "--chat-template", "/usr/app/chat-templates/tool_ace.jinja"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN:?error}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "${GPU_ID_toolace_8b:?error}" ]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

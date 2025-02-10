@@ -1,0 +1,35 @@
+services:
+  Llama-3.1-8B-Instruct:
+    image: vllm/vllm-openai:latest
+    entrypoint: [
+      "vllm", "serve", "meta-llama/Llama-3.1-8B-Instruct",
+      "--enable-prefix-caching", "--enable-chunked-prefill",
+      "--gpu-memory-utilization", "0.98",
+      "--max-model-len", "131072",
+      "--enable-auto-tool-choice", "--tool-call-parser", "llama3_json",
+      "--chat-template", "/usr/app/chat-templates/llama_3_1.jinja"
+    ]
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGINGFACE_TOKEN:?error}
+    volumes:
+      - type: bind
+        source: ${HF_HOME:?error}
+        target: /root/.cache/huggingface
+      - type: bind
+        source: ./node/inference/configs
+        target: /usr/app # configs like chat templates, vllm configs, tool parsers
+    ipc: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "nvidia"
+              capabilities: [ "gpu" ]
+              device_ids: [ "${GPU_ID_llama_3_1_8b_instruct:?error}" ]
+    networks:
+      - naptha-network
+
+networks:
+  naptha-network:
+    external: true

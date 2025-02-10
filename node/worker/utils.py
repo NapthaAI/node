@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from functools import wraps
 import ipfshttpclient
 import logging
-from node.config import BASE_OUTPUT_DIR, IPFS_GATEWAY_URL
 from node.schemas import AgentRun, EnvironmentRun, OrchestratorRun, KBRun, MemoryRun, ToolRun
 from node.storage.db.db import LocalDBPostgres
 import os
@@ -19,6 +18,7 @@ from node.storage.utils import get_api_url
 load_dotenv()
 logger = logging.getLogger(__name__)
 
+IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
 
 MAX_RETRIES = 3
 RETRY_DELAY = 1
@@ -160,7 +160,7 @@ def prepare_input_dir(
         raise ValueError("Only one of input_dir or input_ipfs_hash can be provided")
 
     if input_dir:
-        input_dir = f"{BASE_OUTPUT_DIR}/{input_dir}"
+        input_dir = f"{os.getenv('BASE_OUTPUT_DIR')}/{input_dir}"
         parameters["input_dir"] = input_dir
 
         if not os.path.exists(input_dir):

@@ -1,0 +1,87 @@
+{{- bos_token }}
+{%- if messages[0]["role"] == "system" %}
+    {%- set system_message = messages[0]["content"] %}
+    {%- set messages = messages[1:] %}
+{%- else %}
+    {%- set system_message = "" %}
+{%- endif %}
+{%- if not tools is defined %}
+    {%- set tools = none %}
+{%- endif %}
+{%- if not date_string is defined %}
+    {%- set date_string = "24 Aug 2024" %}
+{%- endif %}
+{{- bos_token }}
+{{- "<|start_header_id|>system<|end_header_id|>\n\n" }}
+{{- "Environment: ipython\n" }}
+{{- "Cutting Knowledge Date: December 2023\n" }}
+{{- "Today's Date: " + date_string}}
+
+{%- if tools is defined and tools is iterable and tools | length > 0%}
+    {{- "You are a helpful assistant with tool-calling capabilities. In response to a user message, you can either " }}
+    {{- "provide an answer in natural language, or you can call one of the tools you are provided with below to get " }}
+    {{- "a tool response to help you respond to the user's question/instructions. You should only call a tool if it " }}
+    {{- "is directly relevant to the user's query - remember that if you don't have a relevant tool, you should " }}
+    {{- "respond to the user in natural language and be as helpful as possible. If you do decide to call a tool, " }}
+    {{- "the output of the tool call will be provided to you so that you can use it to help you respond to the user. " }}
+    {{- "The user cannot see the output of a tool call, so when you receive it, YOU must use it to answer the user's " }}
+    {{- "question - you must summarize, explain, or otherwise use the information to answer the user's query. " }}
+    {{- "DO NOT SAY ANYTHING ABOUT IT BEING A RESPONSE, or talk about tools - just use the information to answer the user.\n\n" }}
+
+    {{- 'If you decide to call a tool, do not say that you\'re calling a tool - just respond in the following JSON format: {"name": function name, "parameters": dictionary of argument name and its value} ' }}
+    {{- "without saying anything else. Don't tell the user you're calling a tool." }}
+    {{- "Do not use variables. The following tools are provided to you." }}
+    {%- for tool in tools %}
+        {{- tool | tojson(indent=4) }}
+        {{- "\n\n" }}
+    {%- endfor %}
+{%- endif %}
+{%- if system_message is defined %}
+    {{- system_message }}
+{%- endif %}
+{{- eos_token  }}
+{# message handing #}
+{%- for message in messages %}
+    {%- if not (message.role == 'ipython' or message.role == 'tool' or 'tool_calls' in message) %}
+        {{- '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + eos_token }}
+    {%- elif 'tool_calls' in message %}
+        {%- if not message.tool_calls|length == 1 %}
+            {{- raise_exception("This model only supports single tool-calls at once!") }}
+        {%- endif %}
+        {%- set tool_call = message.tool_calls[0].function %}
+        {%- if builtin_tools is defined and tool_call.name in builtin_tools %}
+            {{- "<|start_header_id|>assistant<|end_header_id|>\n\n" -}}
+            {{- "<|python_tag|>" + tool_call.name + ".call(" }}
+            {%- for arg_name, arg_val in tool_call.arguments | items %}
+                {{- arg_name + '="' + arg_val + '"' }}
+                {%- if not loop.last %}
+                    {{- ", " }}
+                {%- endif %}
+                {%- endfor %}
+            {{- ")" }}
+        {%- else  %}
+            {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' -}}
+            {{- '{"name": "' + tool_call.name + '", ' }}
+            {{- '"parameters": ' }}
+            {{- tool_call.arguments  }}
+            {{- "}" }}
+        {%- endif %}
+        {%- if builtin_tools is defined %}
+            {#- This means we're in ipython mode #}
+            {{- "<|eom_id|>" }}
+        {%- else %}
+            {{- eos_token }}
+        {%- endif %}
+    {%- elif message.role == "tool" or message.role == "ipython" %}
+        {{- "<|start_header_id|>ipython<|end_header_id|>\n\n" }}
+        {%- if message.content is mapping or message.content is iterable %}
+            {{- message.content | tojson }}
+        {%- else %}
+            {{- message.content }}
+        {%- endif %}
+        {{- eos_token }}
+    {%- endif %}
+{%- endfor %}
+{%- if add_generation_prompt %}
+    {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
+{%- endif %}

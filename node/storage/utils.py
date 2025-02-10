@@ -2,7 +2,10 @@ import os
 import zipfile
 from pathlib import Path
 import io
-from node.config import IPFS_GATEWAY_URL
+from dotenv import load_dotenv
+
+load_dotenv()
+IPFS_GATEWAY_URL = os.getenv("IPFS_GATEWAY_URL")
 
 def zip_dir(directory_path: str) -> io.BytesIO:
     """
