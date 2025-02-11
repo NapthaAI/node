@@ -45,6 +45,7 @@ install_surrealdb() {
     else
         SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
     fi
+    mkdir -p "$SURREALDB_INSTALL_PATH"
     SURREALDB_BINARY="$SURREALDB_INSTALL_PATH/surreal"
 
     # Check if SurrealDB is already installed
@@ -62,7 +63,8 @@ install_surrealdb() {
     echo "Installing SurrealDB version 2..." | log_with_service_name "SurrealDB" $GREEN
 
     # Install SurrealDB
-    curl -sSf https://install.surrealdb.com | sh
+    curl -sSf https://install.surrealdb.com > /tmp/surreal_install.sh
+    sh /tmp/surreal_install.sh -- "$SURREALDB_INSTALL_PATH"
 
     if [ -f "$SURREALDB_BINARY" ]; then
         echo "Moving SurrealDB binary to /usr/local/bin..." | log_with_service_name "SurrealDB" $GREEN
