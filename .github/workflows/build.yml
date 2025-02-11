@@ -1,0 +1,14 @@
+name: Install and launch node
+run-name: ${{ github.actor }} is learning GitHub Actions
+
+on:
+  workflow_call:
+
+jobs:
+  install-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - run: bash launch.sh
