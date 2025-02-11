@@ -16,6 +16,11 @@ jobs:
       - run: echo -e "\n" >> .env
       - run: echo "OLLAMA_MODELS=" >> .env
       - run: echo "VLLM_MODELS=" >> .env
+      - run: echo "OPENAI_MODELS=" >> .env
+      - run: echo "LOCAL_HUB=true" >> .env
+      
+      
+
       
       - run: echo "PRIVATE_KEY=138f0cf400f34e8c8ac821c7a86bca98186b880dc0b48f2c55de47bc7f121d56" >> .env
       - run: echo "HUB_USERNAME=cicd_dummy" >> .env
