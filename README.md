@@ -1,3 +1,5 @@
+[![Visit naptha.ai](https://img.shields.io/badge/Visit-naptha.ai-FF4B45?style=flat-square&logo=safari&logoColor=white)](https://naptha.ai/?utm_source=github_node) [![Discord](https://img.shields.io/badge/Join-Discord-7289DA?style=flat-square&logo=discord&logoColor=white)](https://form.typeform.com/to/Cgiz63Yp?utm_source=github_node)
+
                  █▀█                  
               ▄▄▄▀█▀            
               █▄█ █    █▀█        
@@ -14,7 +16,7 @@
               ▀▀█ █ ██▀▀                                                    
  
 
-# NapthaAI Node  
+# NapthaAI Node  ![GitHub release (latest by date)](https://img.shields.io/github/v/release/NapthaAI/naptha-node?style=flat-square)
 
 Naptha is a framework and infrastructure for developing and running multi-agent systems across many devices. The Naptha Node packages everything that your need to run agents locally, that interact with other agents in the network. 
 
