@@ -14,9 +14,9 @@ jobs:
       
       # override defaults
       - run: echo -e "\n" >> .env
-      - run: echo "OLLAMA_MODELS=" >> .env
-      - run: echo "VLLM_MODELS=" >> .env
-      - run: echo "OPENAI_MODELS=" >> .env
+      # - run: echo "OLLAMA_MODELS=" >> .env
+      # - run: echo "VLLM_MODELS=" >> .env
+      # - run: echo "OPENAI_MODELS=" >> .env
       - run: echo "LOCAL_HUB=true" >> .env
       
       
