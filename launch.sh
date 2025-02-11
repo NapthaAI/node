@@ -1886,7 +1886,76 @@ print_logo(){
 }
 
 launch_docker() {
-    echo "Launching Docker..."
+    echo "Launching Docker..." | log_with_service_name "Docker" "$BLUE"
+    # Check and generate PRIVATE_KEY if not set
+    # Check and generate PRIVATE_KEY if not set
+    private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
+    if [ -z "$private_key_value" ]; then
+        echo "PRIVATE_KEY not found. Generating PRIVATE_KEY..." | log_with_service_name "Docker" "$BLUE"
+        # Install ecdsa module if not present
+        if ! python -c "import ecdsa" &>/dev/null; then
+            echo "ecdsa module not found. Installing via pip..." | log_with_service_name "Docker" "$BLUE"
+            pip install ecdsa
+        fi
+        generated_key=$(python -c "from ecdsa import SigningKey, SECP256k1; print(SigningKey.generate(curve=SECP256k1).to_string().hex())")
+        if grep -q '^PRIVATE_KEY=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$generated_key/" .env
+            else
+                sed -i "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$generated_key/" .env
+            fi
+        else
+            echo "PRIVATE_KEY=$generated_key" >> .env
+        fi
+        echo "PRIVATE_KEY generated and saved." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "PRIVATE_KEY already set." | log_with_service_name "Docker" "$BLUE"
+    fi
+
+    # Ensure HUB_USERNAME is set, otherwise prompt and update .env
+    hub_username=$(grep -oP '(?<=^HUB_USERNAME=).*' .env)
+    if [ -z "$hub_username" ]; then
+        read -p "HUB_USERNAME is not set. Please enter HUB_USERNAME: " hub_username
+        if [ -z "$hub_username" ]; then
+            echo "HUB_USERNAME cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        if grep -q '^HUB_USERNAME=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^HUB_USERNAME=.*/HUB_USERNAME=$hub_username/" .env
+            else
+                sed -i "s/^HUB_USERNAME=.*/HUB_USERNAME=$hub_username/" .env
+            fi
+        else
+            echo "HUB_USERNAME=$hub_username" >> .env
+        fi
+        echo "HUB_USERNAME set to $hub_username." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "HUB_USERNAME already set to $hub_username." | log_with_service_name "Docker" "$BLUE"
+    fi
+
+    # Ensure HUB_PASSWORD is set, otherwise prompt and update .env
+    hub_password=$(grep -oP '(?<=^HUB_PASSWORD=).*' .env)
+    if [ -z "$hub_password" ]; then
+        read -p "HUB_PASSWORD is not set. Please enter HUB_PASSWORD: " hub_password
+        if [ -z "$hub_password" ]; then
+            echo "HUB_PASSWORD cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        if grep -q '^HUB_PASSWORD=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^HUB_PASSWORD=.*/HUB_PASSWORD=$hub_password/" .env
+            else
+                sed -i "s/^HUB_PASSWORD=.*/HUB_PASSWORD=$hub_password/" .env
+            fi
+        else
+            echo "HUB_PASSWORD=$hub_password" >> .env
+        fi
+        echo "HUB_PASSWORD set." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "HUB_PASSWORD already set." | log_with_service_name "Docker" "$BLUE"
+    fi
+
     COMPOSE_DIR="node/compose-files"
     COMPOSE_FILES=""
 
