@@ -243,10 +243,11 @@ darwin_install_ollama() {
     fi
 
     # Get latest version from GitHub release
-    local latest_version=""
-    latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
-                    grep '"tag_name":' | 
-                    sed -E 's/.*"v([^"]+)".*/\1/')
+    # local latest_version=""
+    local latest_version="0.5.7"
+    # latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
+    #                 grep '"tag_name":' | 
+    #                 sed -E 's/.*"v([^"]+)".*/\1/')
     
     if [ -z "$latest_version" ]; then
         echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
