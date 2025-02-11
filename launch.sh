@@ -179,6 +179,7 @@ EOF
     latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
                     grep '"tag_name":' | 
                     sed -E 's/.*"v([^"]+)".*/\1/')
+    echo "Latest version: $latest_version" | log_with_service_name "Ollama" $RED
     
     if [ -z "$latest_version" ]; then
         echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
