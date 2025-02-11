@@ -4,7 +4,7 @@ run-name: ${{ github.actor }} is learning GitHub Actions
 on: [push]
 
 jobs:
-  install-deps:
+  launch-node:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
