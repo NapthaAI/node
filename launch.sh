@@ -247,9 +247,6 @@ darwin_install_ollama() {
     latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
                     grep '"tag_name":' | 
                     sed -E 's/.*"v([^"]+)".*/\1/')
-
-    echo $(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | grep '"tag_name":')
-    echo "Latest version: $latest_version" | log_with_service_name "Ollama" $RED
     
     if [ -z "$latest_version" ]; then
         echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
@@ -288,7 +285,7 @@ darwin_install_ollama() {
 
     # Start Ollama.app
     echo "Starting Ollama..." | log_with_service_name "Ollama" $RED
-    open -a Ollama
+    open -a /Applications/Ollama.app
     sleep 2
 
     # Verify Ollama is running
