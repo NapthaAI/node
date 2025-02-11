@@ -10,4 +10,5 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - run: cp .env.example .env
       - run: bash launch.sh
