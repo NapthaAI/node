@@ -16,5 +16,8 @@ jobs:
       - run: echo -e "\n" >> .env
       - run: echo "OLLAMA_MODELS=" >> .env
       - run: echo "VLLM_MODELS=" >> .env
+      
+      - run: echo "PRIVATE_KEY=ee58fab683fdf7017050563e8b335c71f6dc9028ca12ff579558be1132339003" >> .env
+          
 
       - run: bash launch.sh
