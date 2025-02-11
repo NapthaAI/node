@@ -11,4 +11,9 @@ jobs:
         uses: actions/checkout@v4
       
       - run: cp .env.example .env
+      
+      # override defaults
+      - run: echo "OLLAMA_MODELS=" >> .env
+      - run: echo "VLLM_MODELS=" >> .env
+
       - run: bash launch.sh
