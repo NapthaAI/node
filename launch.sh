@@ -247,6 +247,8 @@ darwin_install_ollama() {
     latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
                     grep '"tag_name":' | 
                     sed -E 's/.*"v([^"]+)".*/\1/')
+
+    echo $(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | grep '"tag_name":')
     echo "Latest version: $latest_version" | log_with_service_name "Ollama" $RED
     
     if [ -z "$latest_version" ]; then
