@@ -244,6 +244,7 @@ darwin_install_ollama() {
 
     # Get latest version from GitHub release
     # local latest_version=""
+    # TODO (@enricorotundo): remove the hardcoded version
     local latest_version="0.5.7"
     # latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
     #                 grep '"tag_name":' | 
