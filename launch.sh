@@ -1885,9 +1885,66 @@ print_logo(){
     echo -e "\n"
 }
 
-launch_docker() {
-    echo "Launching Docker..." | log_with_service_name "Docker" "$BLUE"
-    # Check and generate PRIVATE_KEY if not set
+# Function to check and set Hugging Face environment variables
+# Function to check and set Hugging Face environment variables
+check_huggingface_env() {
+    # Check HUGGINGFACE_TOKEN
+    hf_token=$(grep -oP '(?<=^HUGGINGFACE_TOKEN=).*' .env)
+    if [ -z "$hf_token" ]; then
+        read -p "HUGGINGFACE_TOKEN is not set. Please enter your HUGGINGFACE_TOKEN: " hf_token
+        if [ -z "$hf_token" ]; then
+            echo "HUGGINGFACE_TOKEN cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        if grep -q '^HUGGINGFACE_TOKEN=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^HUGGINGFACE_TOKEN=.*/HUGGINGFACE_TOKEN=$hf_token/" .env
+            else
+                sed -i "s/^HUGGINGFACE_TOKEN=.*/HUGGINGFACE_TOKEN=$hf_token/" .env
+            fi
+        else
+            echo "HUGGINGFACE_TOKEN=$hf_token" >> .env
+        fi
+        echo "HUGGINGFACE_TOKEN set." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "HUGGINGFACE_TOKEN already set." | log_with_service_name "Docker" "$BLUE"
+    fi
+
+    # Check HF_HOME
+    hf_home=$(grep -oP '(?<=^HF_HOME=).*' .env)
+    # If HF_HOME is empty or contains the placeholder "<youruser>", it's not valid
+    if [ -z "$hf_home" ] || [[ "$hf_home" == *"<youruser>"* ]]; then
+        echo "HF_HOME is not set to a valid directory." | log_with_service_name "Docker" "$RED"
+        read -p "Please enter a valid directory for HF_HOME (e.g., \$HOME/.cache/huggingface): " hf_home_input
+        if [ -z "$hf_home_input" ]; then
+            echo "HF_HOME cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        hf_home="$hf_home_input"
+        if ! [ -d "$hf_home" ]; then
+            echo "Directory $hf_home does not exist. Creating it..." | log_with_service_name "Docker" "$BLUE"
+            mkdir -p "$hf_home"
+        fi
+        if grep -q '^HF_HOME=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s|^HF_HOME=.*|HF_HOME=$hf_home|" .env
+            else
+                sed -i "s|^HF_HOME=.*|HF_HOME=$hf_home|" .env
+            fi
+        else
+            echo "HF_HOME=$hf_home" >> .env
+        fi
+        echo "HF_HOME set to $hf_home." | log_with_service_name "Docker" "$BLUE"
+    else
+        if ! [ -d "$hf_home" ]; then
+            echo "HF_HOME directory $hf_home does not exist. Creating it..." | log_with_service_name "Docker" "$BLUE"
+            mkdir -p "$hf_home"
+        fi
+        echo "HF_HOME already set and valid: $hf_home." | log_with_service_name "Docker" "$BLUE"
+    fi
+}
+
+check_and_set_private_key_docker() {
     # Check and generate PRIVATE_KEY if not set
     private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
     if [ -z "$private_key_value" ]; then
@@ -1911,8 +1968,10 @@ launch_docker() {
     else
         echo "PRIVATE_KEY already set." | log_with_service_name "Docker" "$BLUE"
     fi
+}
 
-    # Ensure HUB_USERNAME is set, otherwise prompt and update .env
+check_and_set_hub_credentials_docker() {
+# Ensure HUB_USERNAME is set, otherwise prompt and update .env
     hub_username=$(grep -oP '(?<=^HUB_USERNAME=).*' .env)
     if [ -z "$hub_username" ]; then
         read -p "HUB_USERNAME is not set. Please enter HUB_USERNAME: " hub_username
@@ -1955,6 +2014,14 @@ launch_docker() {
     else
         echo "HUB_PASSWORD already set." | log_with_service_name "Docker" "$BLUE"
     fi
+}
+
+launch_docker() {
+    echo "Launching Docker..." | log_with_service_name "Docker" "$BLUE"
+    # Check and generate PRIVATE_KEY if not set
+    check_and_set_private_key_docker
+    # Check and set HUB_USERNAME and HUB_PASSWORD if not set
+    check_and_set_hub_credentials_docker
 
     COMPOSE_DIR="node/compose-files"
     COMPOSE_FILES=""
@@ -1973,6 +2040,8 @@ launch_docker() {
         python node/inference/litellm/generate_litellm_config.py
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [[ "$LLM_BACKEND" == "vllm" ]]; then
+        check_huggingface_env
+        echo "Generating Litellm Config..." | log_with_service_name "Docker" "$BLUE"
         python node/inference/litellm/generate_litellm_config.py
         GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
         echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
