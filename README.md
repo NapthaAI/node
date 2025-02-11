@@ -67,7 +67,7 @@ Modify any relevant variables in the .env file:
 - `OLLAMA_MODELS`: If using ollama, set this to the models you want to use, separated by commas. By default, the node will use the Nous Research Hermes 3 model.
 - `VLLM_MODELS`: If using VLLM, set this to the models you want to use, separated by commas.
 
-For more details on node configuration for docker or systemd/launchd, see the relevant readme files for [docker](READMEs/docker.md) and [systemd/launchd](READMEs/systemd.md). For advanced configuration settings, see the [Advanced Configuration](READMEs/advanced.md) guide.
+For more details on node configuration for docker or systemd/launchd, see the relevant readme files for [docker](docs/docker.md) and [systemd/launchd](docs/systemd.md). For advanced configuration settings, see the [Advanced Configuration](docs/advanced.md) guide.
 
 ### Launching 
 
@@ -77,7 +77,7 @@ Launch the node using:
 bash launch.sh
 ```
 
-For more details on ensuring the node launched successfully, checking the logs and troubleshooting you can check out the relevant readme files for [docker](READMEs/docker.md) and [systemd/launchd](READMEs/systemd.md).
+For more details on ensuring the node launched successfully, checking the logs and troubleshooting you can check out the relevant readme files for [docker](docs/docker.md) and [systemd/launchd](docs/systemd.md).
 
 # Run AI agents on your node
 

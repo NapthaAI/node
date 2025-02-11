@@ -19,7 +19,7 @@ Configure the following variables in the `.env` file:
 - `HUGGINGFACE_TOKEN`: If you plan to access private/gated models (such as Llama 3.1 8B, or others by Meta and Mistral) you need to make sure to request access to this model on HuggingFace and set a HuggingFace access token in the `.env` file.
 - `HF_HOME`: If you plan to serve models with vLLM, make sure to set the `HF_HOME` environment variable to the path to your HuggingFace cache directory, so the models can be mounted as volumes rather than being re-downloaded every time a container is created. Your cache directory will be mounted into vLLM containers, so that models are downloaded and cached on your disk and can be easily re-loaded and re-used. If you're not sure what to set this to, `/home/<your user>/.cache/huggingface` is the default path on linux and MacOS systems.
 
-For advanced configuration settings, see the [Advanced Configuration](READMEs/advanced.md) guide.
+For advanced configuration settings, see the [Advanced Configuration](./advanced.md) guide.
 
 ## Launching the Naptha Node
 
@@ -31,7 +31,7 @@ bash launch.sh
 
 This will automatically call `docker compose up` with the appropriate compose file based on your configuration. 
 
-The images will be pulled from `napthaai/node:latest` on Docker hub. It will not build the image from source (see the development workflows in the [Advanced Configuration](READMEs/advanced.md) guide to build the container from source.)
+The images will be pulled from `napthaai/node:latest` on Docker hub. It will not build the image from source (see the development workflows in the [Advanced Configuration](./advanced.md) guide to build the container from source.)
 
 ## Checking the logs 
 
