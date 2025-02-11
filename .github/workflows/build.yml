@@ -17,7 +17,8 @@ jobs:
       - run: echo "OLLAMA_MODELS=" >> .env
       - run: echo "VLLM_MODELS=" >> .env
       
-      - run: echo "PRIVATE_KEY=ee58fab683fdf7017050563e8b335c71f6dc9028ca12ff579558be1132339003" >> .env
-          
+      - run: echo "PRIVATE_KEY=138f0cf400f34e8c8ac821c7a86bca98186b880dc0b48f2c55de47bc7f121d56" >> .env
+      - run: echo "HUB_USERNAME=cicd_dummy" >> .env
+      - run: echo "HUB_PASSWORD=cicd_dummy" >> .env
 
       - run: bash launch.sh
