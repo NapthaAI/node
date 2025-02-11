@@ -13,6 +13,7 @@ jobs:
       - run: cp .env.example .env
       
       # override defaults
+      - run: echo -e "\n" >> .env
       - run: echo "OLLAMA_MODELS=" >> .env
       - run: echo "VLLM_MODELS=" >> .env
 
