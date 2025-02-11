@@ -1,8 +1,7 @@
 name: Install and launch node
 run-name: ${{ github.actor }} is learning GitHub Actions
 
-on:
-  workflow_call:
+on: [push]
 
 jobs:
   install-deps:
