@@ -26,9 +26,10 @@ jobs:
           echo -e "\n" >> .env
           echo "LOCAL_HUB=true" >> .env
           
-          echo "NAPTHA_HUB_USERNAME"
-          echo "${NAPTHA_HUB_USERNAME}"
-
+          # avoid downloading large models
+          echo "OLLAMA_MODELS=" >> .env
+          echo "VLLM_MODELS=" >> .env
+          
           # set dummy user
           echo "PRIVATE_KEY=${NAPTHA_HUB_PVT_KEY}" >> .env
           echo "HUB_USERNAME=${NAPTHA_HUB_USERNAME}" >> .env
