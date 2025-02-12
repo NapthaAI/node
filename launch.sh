@@ -45,6 +45,7 @@ install_surrealdb() {
     else
         SURREALDB_INSTALL_PATH="/home/$(whoami)/.surrealdb"
     fi
+    mkdir -p "$SURREALDB_INSTALL_PATH"
     SURREALDB_BINARY="$SURREALDB_INSTALL_PATH/surreal"
 
     # Check if SurrealDB is already installed
@@ -62,7 +63,8 @@ install_surrealdb() {
     echo "Installing SurrealDB version 2..." | log_with_service_name "SurrealDB" $GREEN
 
     # Install SurrealDB
-    curl -sSf https://install.surrealdb.com | sh
+    curl -sSf https://install.surrealdb.com > /tmp/surreal_install.sh
+    sh /tmp/surreal_install.sh -- "$SURREALDB_INSTALL_PATH"
 
     if [ -f "$SURREALDB_BINARY" ]; then
         echo "Moving SurrealDB binary to /usr/local/bin..." | log_with_service_name "SurrealDB" $GREEN
@@ -177,7 +179,7 @@ EOF
     latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
                     grep '"tag_name":' | 
                     sed -E 's/.*"v([^"]+)".*/\1/')
-    
+
     if [ -z "$latest_version" ]; then
         echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
         exit 1
@@ -241,10 +243,12 @@ darwin_install_ollama() {
     fi
 
     # Get latest version from GitHub release
-    local latest_version=""
-    latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
-                    grep '"tag_name":' | 
-                    sed -E 's/.*"v([^"]+)".*/\1/')
+    # local latest_version=""
+    # TODO (@enricorotundo): remove the hardcoded version
+    local latest_version="0.5.7"
+    # latest_version=$(curl -sf https://api.github.com/repos/ollama/ollama/releases/latest | 
+    #                 grep '"tag_name":' | 
+    #                 sed -E 's/.*"v([^"]+)".*/\1/')
     
     if [ -z "$latest_version" ]; then
         echo "Failed to get latest version from GitHub" | log_with_service_name "Ollama" $RED
@@ -283,7 +287,7 @@ darwin_install_ollama() {
 
     # Start Ollama.app
     echo "Starting Ollama..." | log_with_service_name "Ollama" $RED
-    open -a Ollama
+    open -a /Applications/Ollama.app
     sleep 2
 
     # Verify Ollama is running
@@ -1734,7 +1738,7 @@ startup_summary() {
 
     # Wait before checking HTTP and WS servers
     echo "Waiting for HTTP and WebSocket servers to fully initialize..." | log_with_service_name "Summary" $BLUE
-    sleep 5
+    sleep 8
 
     # Check Node HTTP Server
     services+=("HTTP_Server")

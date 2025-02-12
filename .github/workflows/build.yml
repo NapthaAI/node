@@ -1,0 +1,38 @@
+name: Install and launch node
+
+on: [push]
+
+jobs:
+  launch-node:
+    runs-on: ${{ matrix.os }}
+    environment: development
+    strategy:
+      matrix:
+          os: [ubuntu-latest, macos-14]
+          
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up env variables
+        env: 
+          NAPTHA_HUB_USERNAME: ${{ vars.NAPTHA_HUB_USERNAME }}
+          NAPTHA_HUB_PVT_KEY: ${{ secrets.NAPTHA_HUB_PVT_KEY }}
+          NAPTHA_HUB_PASSWORD: ${{ secrets.NAPTHA_HUB_PASSWORD }}
+        run: |
+          cp .env.example .env
+      
+          # override defaults
+          echo -e "\n" >> .env
+          echo "LOCAL_HUB=true" >> .env
+          
+          echo "NAPTHA_HUB_USERNAME"
+          echo "${NAPTHA_HUB_USERNAME}"
+
+          # set dummy user
+          echo "PRIVATE_KEY=${NAPTHA_HUB_PVT_KEY}" >> .env
+          echo "HUB_USERNAME=${NAPTHA_HUB_USERNAME}" >> .env
+          echo "HUB_PASSWORD=${NAPTHA_HUB_PASSWORD}" >> .env
+
+      - name: Install node
+        run: bash launch.sh
