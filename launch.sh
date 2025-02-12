@@ -806,45 +806,6 @@ check_and_set_private_key() {
     fi
 }
 
-check_and_set_stability_key() {
-    os="$(uname)"
-    if [[ -f .env ]]; then
-        if [ "$os" = "Darwin" ]; then
-            stability_key_value=$(grep '^STABILITY_API_KEY=' .env | cut -d '=' -f2)
-        else
-            stability_key_value=$(grep -oP '(?<=^STABILITY_API_KEY=).*' .env)
-        fi
-        if [[ -n "$stability_key_value" ]]; then
-            echo "STABILITY_API_KEY already set."
-            return
-        fi
-    else
-        touch .env
-    fi
-
-    read -p "No value for STABILITY_API_KEY set. You will need this to run the image agent examples. Would you like to enter a value for STABILITY_API_KEY? (yes/no): " response
-    if [[ "$response" == "yes" ]]; then
-        read -p "Enter the value for STABILITY_API_KEY: " stability_key
-
-        # Ensure stability_key is not empty
-        if [[ -z "$stability_key" ]]; then
-            echo "No value entered for STABILITY_API_KEY."
-            return
-        fi
-
-        # Remove existing STABILITY_API_KEY line if it exists and add the new one
-        if [ "$os" = "Darwin" ]; then
-            sed -i '' "s/^STABILITY_API_KEY=.*/STABILITY_API_KEY=\"$stability_key\"/" .env
-        else
-            sed -i "/^STABILITY_API_KEY=/c\STABILITY_API_KEY=\"$stability_key\"" .env
-        fi
-
-        echo "STABILITY_API_KEY has been updated in the .env file."
-    else
-        echo "STABILITY_API_KEY update aborted."
-    fi
-}
-
 
 load_env_file() {
     CURRENT_DIR=$(pwd)
@@ -2142,7 +2103,6 @@ main() {
             darwin_install_docker
             darwin_start_rabbitmq
             check_and_set_private_key
-            check_and_set_stability_key
             start_hub_surrealdb
             darwin_setup_local_db
             darwin_start_local_db
@@ -2161,7 +2121,6 @@ main() {
             linux_install_docker
             linux_start_rabbitmq
             check_and_set_private_key
-            check_and_set_stability_key
             start_hub_surrealdb
             linux_setup_local_db
             linux_start_local_db
