@@ -34,7 +34,5 @@ jobs:
           echo "HUB_USERNAME=${NAPTHA_HUB_USERNAME}" >> .env
           echo "HUB_PASSWORD=${NAPTHA_HUB_PASSWORD}" >> .env
 
-          cat .env
-
-      # - name: Install node
-      #   run: bash launch.sh
+      - name: Install node
+        run: bash launch.sh
