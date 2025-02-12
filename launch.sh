@@ -1738,7 +1738,7 @@ startup_summary() {
 
     # Wait before checking HTTP and WS servers
     echo "Waiting for HTTP and WebSocket servers to fully initialize..." | log_with_service_name "Summary" $BLUE
-    sleep 5
+    sleep 8
 
     # Check Node HTTP Server
     services+=("HTTP_Server")
