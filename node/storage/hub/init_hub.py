@@ -7,7 +7,7 @@ import time
 import getpass
 
 from node.storage.hub.hub import HubDBSurreal
-from node.user import get_public_key
+from node.user import get_public_key_from_pem
 from node.utils import add_credentials_to_env, get_logger, get_node_config
 
 load_dotenv(find_dotenv(), override=True)
@@ -125,7 +125,7 @@ async def user_setup_flow():
     async with HubDBSurreal() as hub:
         username, password = os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
         username_exists, password_exists = len(username) > 1, len(password) > 1
-        public_key = get_public_key(os.getenv("PRIVATE_KEY"))
+        public_key = get_public_key_from_pem(os.getenv("PRIVATE_KEY"))
         logger.info(f"Public key: {public_key}")
         logger.info(f"Checking if user exists... User: {username}")
         user = await hub.get_user_by_username(username)

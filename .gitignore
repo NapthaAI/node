@@ -193,4 +193,5 @@ node/inference/litellm/litellm_config.yml
 docker_compose_command.sh
 
 .DS_Store
+user_private.pem
 *.pem
