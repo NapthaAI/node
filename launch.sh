@@ -775,6 +775,7 @@ check_and_copy_env() {
 
 # Function to check and set the private key
 check_and_set_private_key() {
+    check_and_set_hub_credentials
     os="$(uname)"
     if [[ -f .env ]]; then
         if [ "$os" = "Darwin" ]; then
@@ -792,7 +793,8 @@ check_and_set_private_key() {
 
     read -p "No valid PRIVATE_KEY set. Would you like to generate one? (yes/no): " response
     if [[ "$response" == "yes" ]]; then
-        key_file=$(poetry run python scripts/generate_user.py)
+        source .env
+        key_file=$(poetry run python scripts/generate_user.py "$HUB_USERNAME")
         key_file=$(echo "$key_file" | tr -d '\n')
         key_file=$(basename "$key_file")
         if [ "$os" = "Darwin" ]; then
@@ -1917,8 +1919,8 @@ check_and_set_private_key_docker() {
         fi
         echo "ecdsa package installed successfully."
     fi
-
-    pem_file="user_private.pem"
+    source .env
+    pem_file="${HUB_USERNAME}.pem"
     # If the PEM file exists, read its content; else generate a new key and save it.
     if [ -f "$pem_file" ]; then
         echo "PEM file $pem_file found."
@@ -1944,7 +1946,7 @@ check_and_set_private_key_docker() {
     fi
 }
 
-check_and_set_hub_credentials_docker() {
+check_and_set_hub_credentials() {
     # Ensure HUB_USERNAME is set, otherwise prompt and update .env
     hub_username=$(grep '^HUB_USERNAME=' .env | cut -d'=' -f2)
     if [ -z "$hub_username" ]; then
@@ -1992,10 +1994,8 @@ check_and_set_hub_credentials_docker() {
 
 launch_docker() {
     echo "Launching Docker..." | log_with_service_name "Docker" "$BLUE"
-    # Check and generate PRIVATE_KEY if not set
+    check_and_set_hub_credentials
     check_and_set_private_key_docker
-    # Check and set HUB_USERNAME and HUB_PASSWORD if not set
-    check_and_set_hub_credentials_docker
 
     COMPOSE_DIR="node/compose-files"
     COMPOSE_FILES=""

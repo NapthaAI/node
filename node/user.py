@@ -62,8 +62,8 @@ def get_public_key(private_key_hex):
     return public_key.to_string().hex()
 
 
-def generate_user():
-    pem_path = root_path / "user_private.pem"
+def generate_user(username: str):
+    pem_path = root_path / f"{username}.pem"
     logger.info(f"Generating user at {pem_path}")
     if pem_path.exists():
         with open(pem_path, "r") as f:
@@ -76,8 +76,8 @@ def generate_user():
         public_key = get_public_key(private_key)
     return public_key, pem_path
 
-def get_public_key_from_pem() -> str:
-    pem_path = root_path / "user_private.pem"
+def get_public_key_from_pem(private_key_path: str) -> str:
+    pem_path = root_path / private_key_path
     logger.info(f"Getting public key from {pem_path}")
     if not pem_path.exists():
         raise FileNotFoundError(f"User private key file not found at {pem_path}")

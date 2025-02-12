@@ -192,7 +192,7 @@ class AsyncMixin:
 def get_node_config():
     """Get the node configuration."""
     from node.user import get_public_key_from_pem
-    public_key = get_public_key_from_pem()
+    public_key = get_public_key_from_pem(os.getenv("PRIVATE_KEY"))
     node_config = NodeConfig(
         id=f"node:{public_key}",
         owner=os.getenv("HUB_USERNAME"),

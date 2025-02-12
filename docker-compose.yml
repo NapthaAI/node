@@ -58,7 +58,7 @@ services:
       - ./node/storage/db/alembic/versions:/app/node/storage/db/alembic/versions
       - ./node/storage/fs:/app/node/storage/fs
       - ./node/storage/hub/modules:/app/node/storage/hub/modules
-      - ./user_private.pem:/app/user_private.pem
+      - ./user_private.pem:/app/${PRIVATE_KEY}
     restart: unless-stopped
     depends_on:
       pgvector:
