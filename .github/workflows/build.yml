@@ -29,6 +29,7 @@ jobs:
           # avoid downloading large models
           echo "OLLAMA_MODELS=" >> .env
           echo "VLLM_MODELS=" >> .env
+          echo "OPENAI_MODELS=" >> .env
           
           # set dummy user
           echo "PRIVATE_KEY=${NAPTHA_HUB_PVT_KEY}" >> .env
