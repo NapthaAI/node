@@ -1,4 +1,4 @@
-[![Visit naptha.ai](https://img.shields.io/badge/Visit-naptha.ai-FF4B45?style=flat-square&logo=safari&logoColor=white)](https://naptha.ai/?utm_source=github_node) [![Discord](https://img.shields.io/badge/Join-Discord-7289DA?style=flat-square&logo=discord&logoColor=white)](https://form.typeform.com/to/Cgiz63Yp?utm_source=github_node)
+[![Visit naptha.ai](https://img.shields.io/badge/Visit-naptha.ai-FF4B45?style=flat-square&logo=safari&logoColor=white)](https://naptha.ai/?utm_source=github_node) [![Discord](https://img.shields.io/badge/Join-Discord-7289DA?style=flat-square&logo=discord&logoColor=white)](https://naptha.ai/naptha-community?utm_source=github_node)
 
 
                  █▀█                  
