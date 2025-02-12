@@ -15,7 +15,7 @@ from google.protobuf import struct_pb2
 from node.storage.db.db import LocalDBPostgres
 from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import (
+from node.worker.package_worker import (
     run_agent,
     run_memory,
     run_tool,

@@ -42,7 +42,7 @@ from node.storage.db.db import LocalDBPostgres
 from node.storage.hub.hub import HubDBSurreal
 from node.user import check_user, register_user, get_user_public_key, verify_signature
 from node.worker.docker_worker import execute_docker_agent
-from node.worker.template_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb, run_memory
+from node.worker.package_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb, run_memory
 from node.client import Node as NodeClient
 from node.storage.server import router as storage_router
 import os
