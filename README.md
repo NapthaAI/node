@@ -26,8 +26,8 @@ Naptha is a framework and infrastructure for developing and running multi-agent 
 Download the source code:
 
 ```bash
-git clone https://github.com/NapthaAI/node.git
-cd node
+git clone https://github.com/NapthaAI/naptha-node.git
+cd naptha-node
 ```
 
 Launch the node:
