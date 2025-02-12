@@ -1890,7 +1890,7 @@ print_logo(){
 
 check_huggingface_env() {
     # Check HUGGINGFACE_TOKEN
-    hf_token=$(grep -oP '(?<=^HUGGINGFACE_TOKEN=).*' .env)
+    hf_token=$(grep '^HUGGINGFACE_TOKEN=' .env | cut -d'=' -f2)
     if [ -z "$hf_token" ]; then
         read -p "HUGGINGFACE_TOKEN is not set. Please enter your HUGGINGFACE_TOKEN: " hf_token
         if [ -z "$hf_token" ]; then
@@ -1912,7 +1912,7 @@ check_huggingface_env() {
     fi
 
     # Check HF_HOME
-    hf_home=$(grep -oP '(?<=^HF_HOME=).*' .env)
+    hf_home=$(grep '^HF_HOME=' .env | cut -d'=' -f2)
     # If HF_HOME is empty or contains the placeholder "<youruser>", it's not valid
     if [ -z "$hf_home" ] || [[ "$hf_home" == *"<youruser>"* ]]; then
         echo "HF_HOME is not set to a valid directory." | log_with_service_name "Docker" "$RED"
@@ -1984,8 +1984,8 @@ check_and_set_private_key_docker() {
 }
 
 check_and_set_hub_credentials_docker() {
-# Ensure HUB_USERNAME is set, otherwise prompt and update .env
-    hub_username=$(grep -oP '(?<=^HUB_USERNAME=).*' .env)
+    # Ensure HUB_USERNAME is set, otherwise prompt and update .env
+    hub_username=$(grep '^HUB_USERNAME=' .env | cut -d'=' -f2)
     if [ -z "$hub_username" ]; then
         read -p "HUB_USERNAME is not set. Please enter HUB_USERNAME: " hub_username
         if [ -z "$hub_username" ]; then
@@ -2007,7 +2007,7 @@ check_and_set_hub_credentials_docker() {
     fi
 
     # Ensure HUB_PASSWORD is set, otherwise prompt and update .env
-    hub_password=$(grep -oP '(?<=^HUB_PASSWORD=).*' .env)
+    hub_password=$(grep '^HUB_PASSWORD=' .env | cut -d'=' -f2)
     if [ -z "$hub_password" ]; then
         read -p "HUB_PASSWORD is not set. Please enter HUB_PASSWORD: " hub_password
         if [ -z "$hub_password" ]; then
