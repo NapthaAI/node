@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 from node.user import generate_user
 
-public_key, private_key = generate_user()
-
-print(private_key)
+public_key, pem_file = generate_user()
+print(pem_file)
