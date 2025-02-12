@@ -133,7 +133,7 @@ app = Celery(
     "docker_tasks",
     broker=BROKER_URL,
     backend=BACKEND_URL,
-    include=["node.worker.template_worker", "node.worker.docker_worker"],
+    include=["node.worker.package_worker", "node.worker.docker_worker"],
 )
 
 @app.on_after_configure.connect
