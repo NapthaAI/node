@@ -56,11 +56,6 @@ CREATE category:tabular SET name="Tabular", parent_categories=[category:audio];
 CREATE category:tabular_classification SET name="Tabular Classification", parent_categories=[category:audio];
 CREATE category:tabular_regression SET name="Tabular Regression", parent_categories=[category:audio];
 
-CREATE category:reinforcement_learning SET name="Reinforcement Learning";
--- subcategories for Reinforcement Learning
-CREATE category:reinforcement_learning SET name="Reinforcement Learning", parent_categories=[category:reinforcement_learning];
-CREATE category:robotics SET name="Robotics", parent_categories=[category:reinforcement_learning];
-
 CREATE category:simulation SET name="Simulation";
 -- subcategories for Simulation
 CREATE category:human_behavior SET name="Simulate Human Behavior", parent_categories=[category:simulation];
@@ -105,9 +100,7 @@ CREATE agent:babyagi_task_finalizer SET name="babyagi_task_finalizer", descripti
 CREATE agent:prediction_agent SET name="prediction_agent", description="A simple agent for making predictions about events", parameters="{prompt: str}", author=user:naptha, module_url="https://github.com/NapthaAI/prediction_agent", module_type="agent", execution_type="package", module_version="v0.3", module_entrypoint="run.py";
 CREATE agent:debate_agent SET name="debate_agent", description="An agent for taking part in debate protocols", parameters="{agent_type: str, agent_name: str, conversation: List[ACLMessage]}", author=user:naptha, module_url="https://github.com/NapthaAI/debate_agent", module_type="agent", execution_type="package", module_version="v0.2", module_entrypoint="run.py";
 CREATE agent:napthaville_module SET name="napthaville_module", description="An agent for taking part in socail simulations", parameters="{task: str, task_params: Dict[str, Any]}", author=user:naptha, module_url="https://github.com/moarshy/napthaville_module", module_type="agent", execution_type="package", module_version="v0.36", module_entrypoint="run.py";
-CREATE agent:docker_hello_world SET name="docker_hello_world", description="A simple hello world app using docker", parameters="None", author=user:naptha, module_url="https://hub.docker.com/_/hello-world", module_type="agent", execution_type="docker", version="v0.1", module_entrypoint="run.py";
 CREATE agent:random_number_agent SET name="random_number_agent", description="A simple agent for taking part in Keynesian beauty contests", parameters="{agent_name: str}", author=user:naptha, module_url="https://github.com/NapthaAI/random_number_agent", module_type="agent", execution_type="package", module_version="v0.6", module_entrypoint="run.py";
-CREATE agent:test_personas SET name="test_personas", description="A simple test agent for testing personas", parameters="{question: str, num_personas: int}", author=user:naptha, module_url="https://github.com/moarshy/test_personas", module_type="agent", execution_type="package", module_version="v0.1", module_entrypoint="run.py";
 CREATE agent:tweets_to_character SET name="tweets_to_character", description="An agent for generating character personas from twitter data", parameters="{input_dir: str}", author=user:naptha, module_url="https://github.com/NapthaAI/tweets_to_character", module_type="agent", execution_type="package", module_version="v0.1", module_entrypoint="run.py";
 CREATE agent:wikipedia_agent SET name="wikipedia_agent", description="An agent for querying wikipedia", parameters="{query: str}", author=user:naptha, module_url="https://github.com/NapthaAI/wikipedia_agent", module_type="agent", execution_type="package", module_version="v0.8", module_entrypoint="run.py";
 CREATE agent:generate_image_agent SET name="generate_image_agent", description="An agent for generating images", parameters="{tool_name: str, tool_input_data: str}", author=user:naptha, module_url="https://github.com/NapthaAI/generate_image_agent", module_type="agent", execution_type="package", module_version="v0.4", module_entrypoint="run.py";

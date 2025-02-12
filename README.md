@@ -19,7 +19,9 @@
 
 # NapthaAI Node [![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square&logo=apache&logoColor=white)](https://github.com/NapthaAI/naptha-node/blob/main/LICENSE) ![GitHub release (latest by date)](https://img.shields.io/github/v/release/NapthaAI/naptha-node?style=flat-square) [![Documentation](https://img.shields.io/badge/Read-docs-blue?style=flat-square&logo=readthedocs&logoColor=white)](https://docs.naptha.ai/?utm_source=github_node)
 
-Naptha is a framework and infrastructure for developing and running multi-agent systems across many devices. The Naptha Node packages everything that your need to run agents locally, that interact with other agents in the network. 
+Naptha is a framework and infrastructure for developing and running multi-agent systems at scale with heterogeneous models, architectures and data. Agents and other modules can run on separate devices, while still interacting over the network. Our mission is to reimagine the internet - to bring forth the Web of Agents - by enabling the next-generation of AI applications and use cases.
+
+If you find this repo useful, please don't forget to star ⭐!
 
 ## Quick Start
 
@@ -42,18 +44,18 @@ If `PRIVATE_KEY`, `HUB_USERNAME` and `HUB_PASSWORD` are not set in the .env file
 
 ## Customizing the node
 
-The node packages a number of services, with several options and combinations of services available. The services that you would like to run are configured using the .env file, and the `launch.sh` script will automatically start the services you have configured.
+The node packages a number of services, with several options and combinations of services available. The services that you would like to run are configured using the `.env` file, and the `launch.sh` script will automatically start the services you have configured.
 
 ### Node Services
 
 - [Local Inference](node/inference/): Using either VLLM (or Ollama). Not many open source models support tool calling out of the box. The Naptha Node (soon) supports tool calling with 8 open source models, with more to come.
 - [LiteLLM Proxy Server](node/inference/litellm): A proxy server that provides a unified OpenAI-compatible API interface for multiple LLM providers and models. This allows seamless switching between different models while maintaining consistent API calls.
 - [Local Server](node/server): The Naptha Node runs a local server that can be accessed by other agents in the network (via HTTP, Web Sockets, or gRPC). Agents and other modules that you publish on Naptha are accessible via API.
-- [Local Storage](node/storage/db): Naptha Nodes support the deployment of Environment modules, which are things like group chats (think WhatsApp for agents), information boards (Reddit for agents), job boards (LinkedIn for agents), social networks (Twitter for agents), and auctions (eBay for agents). The state of these modules is stored in a local database (postgres) and file system. The Naptha Node also stores details of module runs and (soon) model inference (token usage, costs etc.) in the local database.
-- [Module Manager](node/module_manager.py): Supports downloading and installation of modules (agents, tools, agent orchestrators, environments, and personas) from GitHub, HuggingFace and IPFS. 
+- [Local Storage](node/storage/db): Naptha Nodes support the deployment of Knowledge Base, Memory and Environment modules, which all require storage. With Knowledge Bases and Environments, you can build things like group chats (think WhatsApp for agents), information boards (Reddit for agents), job boards (LinkedIn for agents), social networks (Twitter for agents), and auctions (eBay for agents). You can implement different types of memory like cognitive and episodic memory. The state of these modules is stored in a local database (postgres), file system or IPFS. The Naptha Node also stores details of module runs and (soon) model inference (token usage, costs etc.) in the local database.
+- [Module Manager](node/module_manager.py): Supports downloading and installation of modules (agents, tools, knowledge bases, memories, personas, agent orchestrators, environments) from GitHub, HuggingFace and IPFS. 
 - [Message Broker and Workers](node/worker/): The Naptha Node uses asynchronous processing and message queues (RabbitMQ) to pass messages between modules. Modules are executed using either Poetry or Docker. 
 
-- (Optional) [Local Hub](node/storage/hub): The Naptha Node can run a local Hub, which is a registry for modules (agents, tools, agent orchestrators, environments, and personas) and nodes by setting LOCAL_HUB=True in the Config. This is useful for testing locally before publishing to the main Naptha Hub. For the Hub DB, we use SurrealDB.
+- (Optional) [Local Hub](node/storage/hub): The Naptha Node can run a local Hub, which is a registry for modules (agents, tools, knowledge bases, memories, personas agent orchestrators, and environments) and nodes by setting `LOCAL_HUB=true` in the `.env` file. This is useful for testing locally before publishing to the main Naptha Hub. For the Hub DB, we use SurrealDB.
 
 ### Configuring the Node Services
 
