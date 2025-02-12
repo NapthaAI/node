@@ -227,13 +227,17 @@ def allocate_gpus(model_map):
 def main():
     config = generate_litellm_config()
     
-    if not config['model_list']:
-        print("Error: No models configured.", file=sys.stderr)
-        sys.exit(1)
-    
     script_dir = Path(__file__).parent
     output_path = script_dir / 'litellm_config.yml'
     
+    if not config['model_list']:
+        print("Warning: No models configured.", file=sys.stderr)
+        # write an empty config to avoid LiteLLM 'config file not found error'
+        yaml_content = dict_to_yaml({'model_list': []})
+        with open(output_path, 'w') as f:
+            f.write(yaml_content)
+        sys.exit(1)
+
     try:
         yaml_content = dict_to_yaml(config)
         with open(output_path, 'w') as f:
