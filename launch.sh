@@ -1946,6 +1946,17 @@ check_huggingface_env() {
 }
 
 check_and_set_private_key_docker() {
+    # First check if ecdsa is installed and install if needed
+    if ! python -c "import ecdsa" 2>/dev/null; then
+        echo "ecdsa package not found. Installing..."
+        pip install ecdsa
+        if [ $? -ne 0 ]; then
+            echo "Failed to install ecdsa package. Please check your Python/pip installation."
+            return 1
+        fi
+        echo "ecdsa package installed successfully."
+    fi
+
     pem_file="user_private.pem"
     # If the PEM file exists, read its content; else generate a new key and save it.
     if [ -f "$pem_file" ]; then
