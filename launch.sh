@@ -778,30 +778,29 @@ check_and_set_private_key() {
     os="$(uname)"
     if [[ -f .env ]]; then
         if [ "$os" = "Darwin" ]; then
-            private_key_value=$(grep '^PRIVATE_KEY=' .env | awk -F'=' '{print $2}')
+            key_file_value=$(grep '^PRIVATE_KEY=' .env | awk -F'=' '{print $2}')
         else
-            private_key_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
+            key_file_value=$(grep -oP '(?<=^PRIVATE_KEY=).*' .env)
         fi
-        if [[ -n "$private_key_value" ]]; then
-            echo "PRIVATE_KEY already set."
+        if [[ -n "$key_file_value" && -f "$key_file_value" ]]; then
+            echo "PRIVATE_KEY already set and file exists."
             return
         fi
     else
         touch .env
     fi
 
-    read -p "No value for PRIVATE_KEY set. Would you like to generate one? (yes/no): " response
+    read -p "No valid PRIVATE_KEY set. Would you like to generate one? (yes/no): " response
     if [[ "$response" == "yes" ]]; then
-        private_key=$(poetry run python scripts/generate_user.py)
-
-        # Remove existing PRIVATE_KEY line if it exists and add the new one without quotes
+        key_file=$(poetry run python scripts/generate_user.py)
+        key_file=$(echo "$key_file" | tr -d '\n')
+        key_file=$(basename "$key_file")
         if [ "$os" = "Darwin" ]; then
-            sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$private_key/" .env
+            sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$key_file/" .env
         else
-            sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=$private_key" .env
+            sed -i "/^PRIVATE_KEY=/c\PRIVATE_KEY=$key_file" .env
         fi
-
-        echo "Key pair generated and saved to .env file."
+        echo "Key pair generated and saved to PEM file. PRIVATE_KEY set in .env."
     else
         echo "Key pair generation aborted."
     fi
@@ -1889,8 +1888,143 @@ print_logo(){
     echo -e "\n"
 }
 
+check_huggingface_env() {
+    # Check HUGGINGFACE_TOKEN
+    hf_token=$(grep -oP '(?<=^HUGGINGFACE_TOKEN=).*' .env)
+    if [ -z "$hf_token" ]; then
+        read -p "HUGGINGFACE_TOKEN is not set. Please enter your HUGGINGFACE_TOKEN: " hf_token
+        if [ -z "$hf_token" ]; then
+            echo "HUGGINGFACE_TOKEN cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        if grep -q '^HUGGINGFACE_TOKEN=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^HUGGINGFACE_TOKEN=.*/HUGGINGFACE_TOKEN=$hf_token/" .env
+            else
+                sed -i "s/^HUGGINGFACE_TOKEN=.*/HUGGINGFACE_TOKEN=$hf_token/" .env
+            fi
+        else
+            echo "HUGGINGFACE_TOKEN=$hf_token" >> .env
+        fi
+        echo "HUGGINGFACE_TOKEN set." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "HUGGINGFACE_TOKEN already set." | log_with_service_name "Docker" "$BLUE"
+    fi
+
+    # Check HF_HOME
+    hf_home=$(grep -oP '(?<=^HF_HOME=).*' .env)
+    # If HF_HOME is empty or contains the placeholder "<youruser>", it's not valid
+    if [ -z "$hf_home" ] || [[ "$hf_home" == *"<youruser>"* ]]; then
+        echo "HF_HOME is not set to a valid directory." | log_with_service_name "Docker" "$RED"
+        read -p "Please enter a valid directory for HF_HOME (e.g., \$HOME/.cache/huggingface): " hf_home_input
+        if [ -z "$hf_home_input" ]; then
+            echo "HF_HOME cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        hf_home="$hf_home_input"
+        if ! [ -d "$hf_home" ]; then
+            echo "Directory $hf_home does not exist. Creating it..." | log_with_service_name "Docker" "$BLUE"
+            mkdir -p "$hf_home"
+        fi
+        if grep -q '^HF_HOME=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s|^HF_HOME=.*|HF_HOME=$hf_home|" .env
+            else
+                sed -i "s|^HF_HOME=.*|HF_HOME=$hf_home|" .env
+            fi
+        else
+            echo "HF_HOME=$hf_home" >> .env
+        fi
+        echo "HF_HOME set to $hf_home." | log_with_service_name "Docker" "$BLUE"
+    else
+        if ! [ -d "$hf_home" ]; then
+            echo "HF_HOME directory $hf_home does not exist. Creating it..." | log_with_service_name "Docker" "$BLUE"
+            mkdir -p "$hf_home"
+        fi
+        echo "HF_HOME already set and valid: $hf_home." | log_with_service_name "Docker" "$BLUE"
+    fi
+}
+
+check_and_set_private_key_docker() {
+    pem_file="user_private.pem"
+    # If the PEM file exists, read its content; else generate a new key and save it.
+    if [ -f "$pem_file" ]; then
+        echo "PEM file $pem_file found."
+        generated_key=$(tr -d '\n' < "$pem_file")
+    else
+        echo "PEM file $pem_file not found. Generating new key..."
+        generated_key=$(python -c "from ecdsa import SigningKey, SECP256k1; print(SigningKey.generate(curve=SECP256k1).to_string().hex())")
+        echo "$generated_key" > "$pem_file"
+        echo "New key generated and saved to $pem_file."
+    fi
+
+    # Update the .env file: set PRIVATE_KEY to point to the PEM file path.
+    if grep -q '^PRIVATE_KEY=' .env; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$pem_file/" .env
+        else
+            sed -i "s/^PRIVATE_KEY=.*/PRIVATE_KEY=$pem_file/" .env
+        fi
+        echo "Updated PRIVATE_KEY in .env to $pem_file."
+    else
+        echo "PRIVATE_KEY=$pem_file" >> .env
+        echo "Added PRIVATE_KEY to .env as $pem_file."
+    fi
+}
+
+check_and_set_hub_credentials_docker() {
+# Ensure HUB_USERNAME is set, otherwise prompt and update .env
+    hub_username=$(grep -oP '(?<=^HUB_USERNAME=).*' .env)
+    if [ -z "$hub_username" ]; then
+        read -p "HUB_USERNAME is not set. Please enter HUB_USERNAME: " hub_username
+        if [ -z "$hub_username" ]; then
+            echo "HUB_USERNAME cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        if grep -q '^HUB_USERNAME=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^HUB_USERNAME=.*/HUB_USERNAME=$hub_username/" .env
+            else
+                sed -i "s/^HUB_USERNAME=.*/HUB_USERNAME=$hub_username/" .env
+            fi
+        else
+            echo "HUB_USERNAME=$hub_username" >> .env
+        fi
+        echo "HUB_USERNAME set to $hub_username." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "HUB_USERNAME already set to $hub_username." | log_with_service_name "Docker" "$BLUE"
+    fi
+
+    # Ensure HUB_PASSWORD is set, otherwise prompt and update .env
+    hub_password=$(grep -oP '(?<=^HUB_PASSWORD=).*' .env)
+    if [ -z "$hub_password" ]; then
+        read -p "HUB_PASSWORD is not set. Please enter HUB_PASSWORD: " hub_password
+        if [ -z "$hub_password" ]; then
+            echo "HUB_PASSWORD cannot be empty." | log_with_service_name "Docker" "$RED"
+            exit 1
+        fi
+        if grep -q '^HUB_PASSWORD=' .env; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' "s/^HUB_PASSWORD=.*/HUB_PASSWORD=$hub_password/" .env
+            else
+                sed -i "s/^HUB_PASSWORD=.*/HUB_PASSWORD=$hub_password/" .env
+            fi
+        else
+            echo "HUB_PASSWORD=$hub_password" >> .env
+        fi
+        echo "HUB_PASSWORD set." | log_with_service_name "Docker" "$BLUE"
+    else
+        echo "HUB_PASSWORD already set." | log_with_service_name "Docker" "$BLUE"
+    fi
+}
+
 launch_docker() {
-    echo "Launching Docker..."
+    echo "Launching Docker..." | log_with_service_name "Docker" "$BLUE"
+    # Check and generate PRIVATE_KEY if not set
+    check_and_set_private_key_docker
+    # Check and set HUB_USERNAME and HUB_PASSWORD if not set
+    check_and_set_hub_credentials_docker
+
     COMPOSE_DIR="node/compose-files"
     COMPOSE_FILES=""
 
@@ -1908,6 +2042,8 @@ launch_docker() {
         python node/inference/litellm/generate_litellm_config.py
         COMPOSE_FILES+=" -f ${COMPOSE_DIR}/ollama.yml"
     elif [[ "$LLM_BACKEND" == "vllm" ]]; then
+        check_huggingface_env
+        echo "Generating Litellm Config..." | log_with_service_name "Docker" "$BLUE"
         python node/inference/litellm/generate_litellm_config.py
         GPU_ASSIGNMENTS=$(cat gpu_assignments.txt)
         echo "GPU Assignments: $GPU_ASSIGNMENTS" | log_with_service_name "Docker" "$BLUE"
