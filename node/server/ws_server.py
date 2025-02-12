@@ -13,11 +13,12 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from node.schemas import (
-    AgentRun, AgentRunInput, AgentDeployment,
+    AgentRunInput, AgentDeployment,
     MemoryRunInput, MemoryDeployment,
     ToolRunInput, ToolDeployment,
     EnvironmentRunInput, EnvironmentDeployment,
     KBRunInput, KBDeployment, 
+    OrchestratorRunInput, OrchestratorDeployment,
     ModuleExecutionType,
 )
 from node.storage.db.db import LocalDBPostgres
@@ -25,10 +26,12 @@ from node.user import register_user, check_user
 from node.worker.docker_worker import execute_docker_agent
 from node.worker.template_worker import (
     run_agent,
-    run_memory,
     run_tool,
+    run_kb,
+    run_memory,
+    run_orchestrator,
     run_environment,
-    run_kb
+
 )
 from node.module_manager import setup_module_deployment
 
@@ -205,10 +208,11 @@ class WebSocketServer:
             # Map deployment types to module types
             module_type_map = {
                 AgentDeployment: "agent",
-                MemoryDeployment: "memory",
                 ToolDeployment: "tool",
+                KBDeployment: "kb",
+                MemoryDeployment: "memory",
+                OrchestratorDeployment: "orchestrator",
                 EnvironmentDeployment: "environment",
-                KBDeployment: "kb"
             }
 
             # Determine module type based on deployment class
@@ -289,6 +293,20 @@ class WebSocketServer:
                     "worker": run_agent,
                     "docker_support": True
                 },
+                "tool": {
+                    "input_class": ToolRunInput,
+                    "db_create": lambda db, input: db.create_tool_run(input),
+                    "db_list": lambda db, id: db.list_tool_runs(id),
+                    "worker": run_tool,
+                    "docker_support": False
+                },
+                "kb": {
+                    "input_class": KBRunInput,
+                    "db_create": lambda db, input: db.create_kb_run(input),
+                    "db_list": lambda db, id: db.list_kb_runs(id),
+                    "worker": run_kb,
+                    "docker_support": False
+                },
                 "memory": {
                     "input_class": MemoryRunInput,
                     "db_create": lambda db, input: db.create_memory_run(input),
@@ -296,11 +314,11 @@ class WebSocketServer:
                     "worker": run_memory,
                     "docker_support": False
                 },
-                "tool": {
-                    "input_class": ToolRunInput,
-                    "db_create": lambda db, input: db.create_tool_run(input),
-                    "db_list": lambda db, id: db.list_tool_runs(id),
-                    "worker": run_tool,
+                "orchestrator": {
+                    "input_class": OrchestratorRunInput,
+                    "db_create": lambda db, input: db.create_orchestrator_run(input),
+                    "db_list": lambda db, id: db.list_orchestrator_runs(id),
+                    "worker": run_orchestrator,
                     "docker_support": False
                 },
                 "environment": {
@@ -310,13 +328,7 @@ class WebSocketServer:
                     "worker": run_environment,
                     "docker_support": False
                 },
-                "kb": {
-                    "input_class": KBRunInput,
-                    "db_create": lambda db, input: db.create_kb_run(input),
-                    "db_list": lambda db, id: db.list_kb_runs(id),
-                    "worker": run_kb,
-                    "docker_support": False
-                }
+
             }
 
             if module_type not in module_configs:

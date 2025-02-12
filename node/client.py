@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from node.server import grpc_server_pb2, grpc_server_pb2_grpc
 from google.protobuf.struct_pb2 import Struct
 from google.protobuf.json_format import MessageToDict
-from node.grpc_pool_manager import get_grpc_pool_instance
+from node.server.grpc_pool_manager import get_grpc_pool_instance
 from node.schemas import NodeConfigInput
 
 from node.utils import node_to_url

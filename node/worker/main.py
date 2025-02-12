@@ -6,7 +6,7 @@ import os
 import asyncio
 import traceback
 import resource
-from node.grpc_pool_manager import get_grpc_pool_instance, close_grpc_pool
+from node.server.grpc_pool_manager import get_grpc_pool_instance, close_grpc_pool
 import psutil
 
 logger = get_logger(__name__)
@@ -133,7 +133,7 @@ app = Celery(
     "docker_tasks",
     broker=BROKER_URL,
     backend=BACKEND_URL,
-    include=["node.worker.template_worker", "node.worker.docker_worker"],
+    include=["node.worker.package_worker", "node.worker.docker_worker"],
 )
 
 @app.on_after_configure.connect
