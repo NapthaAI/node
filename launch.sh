@@ -666,7 +666,19 @@ setup_poetry() {
     poetry lock
 
     # Install dependencies and create the virtual environment
-    poetry install
+    # pass env vars for as psycopg to build
+    # https://www.psycopg.org/docs/install.html#build-prerequisites
+    if [ "$os" = "Darwin" ]; then
+        PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH" && \
+        LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib" && \
+        CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include" && \
+        poetry install
+    else
+        export PATH="/usr/lib/postgresql/16/bin:$PATH" && \
+        export LDFLAGS="-L/usr/lib/postgresql/16//lib" && \
+        export CPPFLAGS="-I/usr/lib/postgresql/16/include" && \
+        poetry install
+    fi
 
     # Verify the presence of a .venv folder within the project directory
     if [ -d ".venv" ]; then
@@ -1780,6 +1792,7 @@ else:
 
     # Check LiteLLM
     services+=("LiteLLM")
+    sleep 2
     if curl -s http://localhost:4000/health > /dev/null; then
         statuses+=("✅")
         logs+=("")
@@ -2096,6 +2109,7 @@ main() {
             install_python312
             darwin_install_miniforge
             darwin_clean_node
+            darwin_setup_local_db
             setup_poetry
             install_surrealdb
             check_and_copy_env
@@ -2104,7 +2118,6 @@ main() {
             darwin_start_rabbitmq
             check_and_set_private_key
             start_hub_surrealdb
-            darwin_setup_local_db
             darwin_start_local_db
             darwin_start_servers
             darwin_start_celery_worker
@@ -2114,6 +2127,7 @@ main() {
             install_python312
             linux_install_miniforge
             linux_clean_node
+            linux_setup_local_db
             setup_poetry
             install_surrealdb
             check_and_copy_env
@@ -2122,7 +2136,6 @@ main() {
             linux_start_rabbitmq
             check_and_set_private_key
             start_hub_surrealdb
-            linux_setup_local_db
             linux_start_local_db
             linux_start_servers
             linux_start_celery_worker
