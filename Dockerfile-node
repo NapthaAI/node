@@ -22,6 +22,14 @@ RUN echo
 
 # install postgres (required for poetry to build psycopg2 from source)
 RUN conda install -y conda-forge::postgresql=17.2
+ENV LDFLAGS="-L/opt/conda/lib"
+ENV CPPFLAGS="-I/opt/conda/include"
+
+# RUN which psql
+# RUN ls -l 
+# PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+# LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib"
+# CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include"
 
 # set up poetry
 ENV PATH="/root/.local/share/pypoetry/venv/bin/:${PATH}"
