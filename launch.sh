@@ -1792,14 +1792,14 @@ else:
 
     # Check LiteLLM
     services+=("LiteLLM")
+    sleep 2
     if curl -s http://localhost:4000/health > /dev/null; then
         statuses+=("✅")
         logs+=("")
     else
         statuses+=("❌")
         if [ "$os" = "Darwin" ]; then
-            # logs+=("$(tail -n 20 /tmp/litellm.log 2>/dev/null || echo 'Log file not found')")
-            logs+=("$(cat /tmp/litellm.log || echo 'Log file not found')")
+            logs+=("$(tail -n 20 /tmp/litellm.log 2>/dev/null || echo 'Log file not found')")
         else
             logs+=("$(sudo journalctl -u litellm -n 20)")
         fi
