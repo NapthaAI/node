@@ -665,8 +665,7 @@ setup_poetry() {
 
     poetry lock
 
-    # psycopg build prerequisites
-    https://www.psycopg.org/docs/install.html#build-prerequisites
+    # psycopg build prerequisites https://www.psycopg.org/docs/install.html#build-prerequisites
     if [ "$os" = "Darwin" ]; then
         export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
         export LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib"
