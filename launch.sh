@@ -666,12 +666,16 @@ setup_poetry() {
     poetry lock
 
     # psycopg build prerequisites
-    # https://www.psycopg.org/docs/install.html#build-prerequisites
-    # if [ "$os" = "Darwin" ]; then
-    #     export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
-    # else
-    #     export PATH="/usr/lib/postgresql/16/bin:$PATH"
-    # fi
+    https://www.psycopg.org/docs/install.html#build-prerequisites
+    if [ "$os" = "Darwin" ]; then
+        export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+        export LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib"
+        export CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include"
+    else
+        export PATH="/usr/lib/postgresql/16/bin:$PATH"
+        export LDFLAGS="-L/usr/lib/postgresql/16//lib"
+        export CPPFLAGS="-I/usr/lib/postgresql/16/include"
+    fi
     
     # Install dependencies and create the virtual environment
     poetry install
