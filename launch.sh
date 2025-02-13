@@ -669,10 +669,7 @@ setup_poetry() {
     # pass env vars for as psycopg to build
     # https://www.psycopg.org/docs/install.html#build-prerequisites
     if [ "$os" = "Darwin" ]; then
-        export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH" && \
-        export LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib" && \
-        export CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include" && \
-        poetry install
+        PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH" LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib" CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include" poetry install
     else
         export PATH="/usr/lib/postgresql/16/bin:$PATH" && \
         export LDFLAGS="-L/usr/lib/postgresql/16//lib" && \
