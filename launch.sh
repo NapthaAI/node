@@ -675,7 +675,7 @@ setup_poetry() {
         poetry install
     else
         export PATH="/usr/lib/postgresql/16/bin:$PATH" && \
-        export LDFLAGS="-L/usr/lib/postgresql/16//lib" && \
+        export LDFLAGS="-L/usr/lib/postgresql/16/lib" && \
         export CPPFLAGS="-I/usr/lib/postgresql/16/include" && \
         poetry install
     fi
