@@ -11,6 +11,10 @@ import psutil
 
 logger = get_logger(__name__)
 
+PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
+PRIVATE_KEY = os.path.abspath(PRIVATE_KEY)
+os.environ["PRIVATE_KEY_FULL_PATH"] = PRIVATE_KEY
+
 def log_system_limits():
     """Log current system limits and resource usage"""
     try:

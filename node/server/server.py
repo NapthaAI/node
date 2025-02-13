@@ -109,7 +109,7 @@ class NodeServer:
                 except Exception as e:
                     logger.error(f"Error during shutdown: {e}")
 
-        elif self.communication_protocol == "ws":
+        elif self.communication_protocol in ["ws", "wss"]:
             logger.info(f"Starting WebSocket server on port {self.port}...")
             self.server = WebSocketServer(
                 ip, 
@@ -259,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--communication-protocol",
         type=str,
-        choices=["http", "ws", "grpc"],
+        choices=["http", "ws", "wss", "grpc"],
         required=True,
         help="Type of server to run"
     )
