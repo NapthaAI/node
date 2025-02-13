@@ -127,7 +127,7 @@ Description=Ollama Service
 After=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/ollama serve
+ExecStart=/bin/bash -c 'exec $(which ollama) serve'
 Environment=OLLAMA_MODELS=/var/lib/ollama/models
 User=ollama
 Group=ollama
@@ -409,11 +409,15 @@ linux_clean_node() {
         rm -rf node/agents
     fi
 
-    sudo apt-get install -y make
+    if ! dpkg -l | grep -q "make"; then
+        echo "Make not found. Installing Make..."
+        sudo apt-get update
+        sudo apt-get install -y make
+    else
+        echo "Make is already installed. Skipping installation."
+    fi
 
-    # make pyproject-clean
     make pyproject-clean
-
 }
 
 darwin_clean_node() {
@@ -580,9 +584,14 @@ linux_start_rabbitmq() {
     source .env
     set +a
 
-    # Install RabbitMQ
-    sudo apt-get update
-    sudo apt-get install -y rabbitmq-server
+    # Check if RabbitMQ is already installed
+    if ! dpkg -l | grep -q "rabbitmq-server"; then
+        echo "RabbitMQ not found. Installing RabbitMQ..."
+        sudo apt-get update
+        sudo apt-get install -y rabbitmq-server
+    else
+        echo "RabbitMQ is already installed. Skipping installation."
+    fi
 
     # Enable the management plugin
     sudo rabbitmq-plugins enable rabbitmq_management
@@ -613,7 +622,12 @@ darwin_start_rabbitmq() {
     set +a
 
     # Install RabbitMQ using Homebrew
-    brew install rabbitmq
+    if ! brew list rabbitmq &>/dev/null; then
+        echo "RabbitMQ not found. Installing RabbitMQ..."
+        brew install rabbitmq
+    else
+        echo "RabbitMQ is already installed. Skipping installation."
+    fi
 
     # Enable the management plugin
     rabbitmq-plugins enable rabbitmq_management
