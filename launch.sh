@@ -2105,6 +2105,7 @@ main() {
             install_python312
             darwin_install_miniforge
             darwin_clean_node
+            darwin_setup_local_db
             setup_poetry
             install_surrealdb
             check_and_copy_env
@@ -2113,7 +2114,6 @@ main() {
             darwin_start_rabbitmq
             check_and_set_private_key
             start_hub_surrealdb
-            darwin_setup_local_db
             darwin_start_local_db
             darwin_start_servers
             darwin_start_celery_worker
@@ -2123,6 +2123,7 @@ main() {
             install_python312
             linux_install_miniforge
             linux_clean_node
+            linux_setup_local_db
             setup_poetry
             install_surrealdb
             check_and_copy_env
@@ -2131,7 +2132,6 @@ main() {
             linux_start_rabbitmq
             check_and_set_private_key
             start_hub_surrealdb
-            linux_setup_local_db
             linux_start_local_db
             linux_start_servers
             linux_start_celery_worker
