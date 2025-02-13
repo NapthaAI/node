@@ -2,9 +2,6 @@ name: Build and Publish Node Container
 
 on:
   push:
-    branches:
-      - main
-      - k-mistele/add-compose-configurations
     paths:
       - 'Dockerfile-node'
       - 'node/**'
