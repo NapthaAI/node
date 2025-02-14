@@ -45,6 +45,7 @@ from node.worker.docker_worker import execute_docker_agent
 from node.worker.package_worker import run_agent, run_tool, run_environment, run_orchestrator, run_kb, run_memory
 from node.client import Node as NodeClient
 from node.storage.server import router as storage_router
+from node.inference.server import router as inference_router
 import os
 
 logger = logging.getLogger(__name__)
@@ -291,35 +292,10 @@ class HTTPServer:
                 logger.error(f"Error getting server connection: {e}")
                 raise
 
-        ####### Inference endpoints #######
-        @router.post("/inference/chat")
-        async def chat_endpoint(request: ChatCompletionRequest):
-            """
-            Forward chat completion requests to litellm proxy
-            """
-            logger.info(f"Received chat request: {request}")
-            try:
-                async with httpx.AsyncClient(timeout=LITELLM_HTTP_TIMEOUT) as client:
-                    response = await client.post(
-                        f"{LITELLM_URL}/chat/completions",
-                        json=request.model_dump(exclude_none=True),
-                        headers={
-                            "Authorization": f"Bearer {LITELLM_MASTER_KEY}"
-                        }
-                    )
-                    logger.info(f"LiteLLM response: {response.json()}")
-                    return response.json()
-            except httpx.ReadTimeout:
-                logger.error("Request to LiteLLM timed out")
-                raise HTTPException(status_code=504, detail="Request to LiteLLM timed out")
-            except Exception as e:
-                logger.error(f"Error in chat endpoint: {str(e)}")
-                logger.error(f"Full traceback: {traceback.format_exc()}")
-                raise HTTPException(status_code=500, detail=str(e))
-
         # Include the router
         self.app.include_router(router)
         self.app.include_router(storage_router)
+        self.app.include_router(inference_router)
 
         self.app.add_middleware(
             CORSMiddleware,
