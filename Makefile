@@ -127,51 +127,46 @@ restart-celery:
 		sudo systemctl status --no-pager celeryworker.service) & \
 	fi
 
-check-local-hub:
+restart-hub:
 	@echo "Checking LOCAL_HUB setting..."
-	@if [ "$$(uname)" = "Darwin" ]; then \
-		grep -E '^LOCAL_HUB=' .env | cut -d'=' -f2 | tr -d '"' | tr -d ' ' > .hub_setting; \
+	@LOCAL_HUB=$$(if [ "$$(uname)" = "Darwin" ]; then \
+		grep -E '^LOCAL_HUB=' .env | cut -d'=' -f2 | tr -d '"' | tr -d ' '; \
 	else \
-		grep -oP 'LOCAL_HUB=\K.*' .env | tr -d '"' | tr -d ' ' > .hub_setting; \
+		grep -oP 'LOCAL_HUB=\K.*' .env | tr -d '"' | tr -d ' '; \
+	fi); \
+	echo "LOCAL_HUB is $$LOCAL_HUB"; \
+	if [ "$$LOCAL_HUB" = "true" ]; then \
+		echo "LOCAL_HUB is True, cleaning and restarting hub..."; \
+		port=$$(grep HUB_DB_SURREAL_PORT .env | cut -d'=' -f2 | tr -d '"' | tr -d ' '); \
+		echo "Port is $$port"; \
+		pids=$$(lsof -ti:$$port || true); \
+		if [ -n "$$pids" ]; then \
+			echo "Killing process(es): $$pids"; \
+			kill -9 $$pids || true; \
+		fi; \
+		echo "Waiting for port $$port to be free..."; \
+		for i in $$(seq 1 10); do \
+			if ! lsof -ti:$$port 2>/dev/null | grep -q .; then \
+				echo "Port $$port is now free"; \
+				break; \
+			fi; \
+			if [ $$i -eq 10 ]; then \
+				echo "Failed to free port $$port after 10 seconds"; \
+				exit 1; \
+			fi; \
+			echo "Still waiting... ($$i/10)"; \
+			sleep 1; \
+		done; \
+		if [ -d "node/storage/hub/hub.db" ]; then \
+			rm -rf node/storage/hub/hub.db; \
+			echo "Hub.db removed"; \
+		fi; \
+		PYTHONPATH="$$(pwd)" poetry run python node/storage/hub/init_hub.py; \
+		PYTHONPATH="$$(pwd)" poetry run python node/storage/hub/init_hub.py --user; \
+		echo "Hub restarted successfully."; \
+	else \
+		echo "LOCAL_HUB is False, skipping hub restart."; \
 	fi
-	@echo "LOCAL_HUB is $$(cat .hub_setting)"
-
-restart-hub: check-local-hub
-	@{ \
-	  if [ "$$(cat .hub_setting)" = "true" ]; then \
-	    echo "LOCAL_HUB is True, cleaning and restarting hub..."; \
-	    port=$$(grep HUB_DB_SURREAL_PORT .env | cut -d'=' -f2 | tr -d '"' | tr -d ' '); \
-	    echo "Port is $$port"; \
-	    pids=$$(lsof -ti:$$port || true); \
-	    if [ -n "$$pids" ]; then \
-	      echo "Killing process(es): $$pids"; \
-	      kill -9 $$pids || true; \
-	    fi; \
-	    echo "Waiting for port $$port to be free..."; \
-	    for i in $$(seq 1 10); do \
-	      if ! lsof -ti:$$port 2>/dev/null | grep -q .; then \
-	        echo "Port $$port is now free"; \
-	        break; \
-	      fi; \
-	      if [ $$i -eq 10 ]; then \
-	        echo "Failed to free port $$port after 10 seconds"; \
-	        exit 1; \
-	      fi; \
-	      echo "Still waiting... ($$i/10)"; \
-	      sleep 1; \
-	    done; \
-	    if [ -d "node/storage/hub/hub.db" ]; then \
-	      rm -rf node/storage/hub/hub.db; \
-		  echo "Hub.db removed"; \
-	    fi; \
-	    PYTHONPATH="$$(pwd)" poetry run python node/storage/hub/init_hub.py; \
-	    PYTHONPATH="$$(pwd)" poetry run python node/storage/hub/init_hub.py --user; \
-	    echo "Hub restarted successfully."; \
-	  else \
-	    echo "LOCAL_HUB is False, skipping hub restart."; \
-	  fi; \
-	}
-	@rm -f .hub_setting
 
 # Target to restart all node components in parallel
 restart-node:
