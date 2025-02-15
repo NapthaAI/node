@@ -29,3 +29,17 @@ DEFINE TABLE server SCHEMAFULL
 DEFINE FIELD communication_protocol ON TABLE server TYPE string;
 DEFINE FIELD port ON TABLE server TYPE number;
 DEFINE FIELD node_id ON TABLE server TYPE string;
+
+
+DEFINE TABLE model SCHEMAFULL;
+DEFINE FIELD name ON model TYPE string;
+DEFINE FIELD model_id ON model TYPE string ASSERT $value != NONE;
+DEFINE FIELD node_id ON model TYPE string;
+DEFINE FIELD communication_protocol ON model TYPE string;
+DEFINE FIELD endpoint ON model TYPE string;
+DEFINE FIELD model_type ON model TYPE string;
+DEFINE FIELD created_at ON model TYPE datetime DEFAULT time::now();
+DEFINE FIELD litellm_params ON model TYPE object; -- Parameters passed to litellm.
+
+-- Relationship:  A node 'hosts' a model.
+DEFINE EDGE hosts FROM node TO model;

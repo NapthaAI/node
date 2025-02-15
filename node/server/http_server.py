@@ -3,7 +3,7 @@ import httpx
 import logging
 import traceback
 from datetime import datetime
-from typing import Union, Any, Dict
+from typing import Union, Any, Dict, Optional
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Request
@@ -29,14 +29,14 @@ from node.schemas import (
     EnvironmentRunInput,
     DockerParams,
     ChatCompletionRequest,
-    AgentDeployment, 
-    OrchestratorDeployment, 
+    AgentDeployment,
+    OrchestratorDeployment,
     EnvironmentDeployment,
     KBDeployment,
     KBRunInput,
     KBRun,
     ModuleExecutionType,
-    ToolDeployment,
+    ToolDeployment, ModelRegistrationResponse, ModelRegistration,
 )
 from node.storage.db.db import LocalDBPostgres
 from node.storage.hub.hub import HubDBSurreal
@@ -133,6 +133,101 @@ class HTTPServer:
             :return: ToolDeployment
             """
             return await self.tool_create(tool_input)
+
+        @router.post("/model/register", response_model=ModelRegistrationResponse)
+        async def register_model_endpoint(model_reg: ModelRegistration, request: Request):
+            """Registers a model with the hub."""
+            node_server = request.app.state.node_server
+            if node_server.communication_protocol != "http":
+                raise HTTPException(status_code=400, detail="Model registration only allowed on HTTP server")
+
+            try:
+                model_data = model_reg.model_dump()
+                async with node_server.hub as hub:
+                    # Sign in
+                    success, user, user_id = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    if not success:
+                        logger.error('Failed to sign in to hub.')
+                        raise Exception("Failed to sign in to hub")
+
+                    # Create Model
+                    created_model = await hub.create_model(model_data)
+
+                    # Link model to the node
+                    await hub.query(
+                        f"RELATE node:{model_reg.node_id}->hosts->model:{created_model['id'].split(':')[1]} ")
+
+                return ModelRegistrationResponse(**created_model)  # Convert to response model
+            except Exception as e:
+                logger.error(f"Error registering model: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @router.get("/model/list", response_model=list[ModelRegistrationResponse])
+        async def list_models_endpoint(node_id: Optional[str] = None):
+            """Lists models, optionally filtered by node_id."""
+            try:
+                async with HubDBSurreal() as hub:
+                    # Sign In
+                    success, user, user_id = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    if not success:
+                        logger.error('Failed to sign in to hub.')
+                        raise Exception("Failed to sign in to hub")
+
+                    models = await hub.list_models(node_id=node_id)
+                    return [ModelRegistrationResponse(**model) for model in models]
+            except Exception as e:
+                logger.error(f"Error listing models: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @router.delete("/model/delete/{model_id}")
+        async def delete_model_endpoint(model_id: str, request: Request):
+            """Deletes a model by its ID."""
+            node_server = request.app.state.node_server
+            if node_server.communication_protocol != "http":
+                raise HTTPException(status_code=400, detail="Model deletion only allowed on HTTP server")
+
+            try:
+                async with node_server.hub as hub:
+                    # Sign In
+                    success, user, user_id = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    if not success:
+                        logger.error('Failed to sign in to hub.')
+                        raise Exception("Failed to sign in to hub")
+
+                    success = await hub.delete_model(model_id)
+                    if not success:
+                        raise HTTPException(status_code=404, detail="Model not found")
+                    return {"message": f"Model {model_id} deleted successfully"}
+            except Exception as e:
+                logger.error(f"Error deleting model: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @router.get("/model/get/{model_id}", response_model=ModelRegistrationResponse)
+        async def get_model_endpoint(model_id: str):
+            """Get a model by its ID."""
+            try:
+                async with HubDBSurreal() as hub:
+                    # Sign In
+                    success, user, user_id = await hub.signin(
+                        os.getenv("HUB_USERNAME"), os.getenv("HUB_PASSWORD")
+                    )
+                    if not success:
+                        logger.error('Failed to sign in to hub.')
+                        raise Exception("Failed to sign in to hub")
+
+                    model = await hub.get_model(model_id)
+                    if not model:
+                        raise HTTPException(status_code=404, detail="Model not found")
+                    return ModelRegistrationResponse(**model)
+            except Exception as e:
+                logger.error(f"Error deleting model: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
 
         @router.post("/tool/run")
         async def tool_run_endpoint(tool_run_input: ToolRunInput) -> ToolRun:

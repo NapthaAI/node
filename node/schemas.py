@@ -9,6 +9,14 @@ class NodeServer(BaseModel):
     port: int
     node_id: str
 
+class ModelConfig(BaseModel):
+    name: str
+    model_id: str
+    communication_protocol: str = "http"
+    endpoint: str
+    model_type: str
+    litellm_params: Dict[str, Any] = {}
+
 class NodeConfig(BaseModel):
     id: str
     owner: str
@@ -30,6 +38,7 @@ class NodeConfig(BaseModel):
     os: Optional[str] = Field(default=None)
     ram: Optional[int] = Field(default=None)
     vram: Optional[int] = Field(default=None)
+    models: List[ModelConfig] = []
 
 class NodeConfigInput(BaseModel):
     ip: str
@@ -491,4 +500,17 @@ class ChatCompletionRequest(BaseModel):
     tools: Optional[List] = None
     tool_choice: Optional[str] = None
     parallel_tool_calls: Optional[bool] = None
+
+class ModelRegistration(BaseModel):
+    name: str
+    model_id: str = Field(..., description="Unique ID for the model, e.g., 'mistralai/Mistral-7B-Instruct-v0.1'")
+    node_id: str
+    communication_protocol: str = Field("http", description="Communication protocol (http, ws, grpc)")
+    endpoint: str = Field(..., description="Endpoint for the model, e.g., /inference/chat")
+    model_type: str = Field(..., description="Type of model, e.g., 'LLM', 'embedding'")
+    litellm_params: Dict[str, Any] = Field(default_factory=dict, description="Parameters passed to litellm.")
+
+
+class ModelRegistrationResponse(ModelRegistration):
+    created_at: str
 

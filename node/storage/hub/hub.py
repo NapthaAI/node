@@ -251,6 +251,62 @@ class HubDBSurreal(AsyncMixin):
     async def create_agent(self, agent_config: Dict) -> Tuple[bool, Optional[Dict]]:
         return await self.surrealdb.create("agent", agent_config)
 
+    async def create_model(self, model_data: dict) -> dict:
+        """Creates a new model record in the hub."""
+        try:
+            model = await self.surrealdb.create("model", model_data)
+            return model[0]
+        except Exception as e:
+            logger.error(f"Error creating model: {e}")
+            raise
+
+    async def get_model(self, model_id: str) -> Optional[dict]:
+        """Retrieves a model record by its ID."""
+        try:
+            model = await self.surrealdb.select("model", model_id)
+            if model:
+                return model[0]
+            return None
+        except Exception as e:
+            logger.error(f"Error getting model {model_id}: {e}")
+            raise
+
+    async def list_models(self, node_id: Optional[str] = None) -> list[dict]:
+        """Lists all models, optionally filtering by node_id."""
+        try:
+            if node_id:
+                # Use the relationship to find models hosted by the node
+                models = await self.surrealdb.query(f"SELECT ->hosts->model.* FROM node:{node_id}")
+                # The SurrealDB query returns a list containing a dictionary.
+                # The dictionary has a 'result' key, which itself contains the list of models.
+                return models[0]['result']
+            else:
+                models = await self.surrealdb.select("model")
+                return models
+        except Exception as e:
+            logger.error(f"Error listing models: {e}")
+            raise
+
+    async def delete_model(self, model_id: str) -> bool:
+        """Deletes a model record by its ID."""
+        try:
+            await self.surrealdb.delete("model", model_id)
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting model {model_id}: {e}")
+            raise
+
+    async def update_model(self, model_id: str, model_data: dict) -> Optional[dict]:
+        """Updates an existing model record."""
+        try:
+            updated_model = await self.surrealdb.update(("model", model_id), model_data)
+            if updated_model:
+                return updated_model[0]
+            return None  # or raise an exception if not found
+        except Exception as e:
+            logger.error(f"Error updating model {model_id}: {e}")
+            raise
+
     async def close(self):
         """Close the database connection"""
         if self.is_authenticated:
