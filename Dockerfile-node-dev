@@ -10,17 +10,18 @@ SHELL ["/bin/bash", "-c"]
 
 # install deps
 RUN apt-get update
-RUN apt-get install curl gcc curl git -y
+RUN apt-get install gcc curl git libpq-dev -y
 
 # add conda install to path; use base environment
 ENV PATH="/opt/conda/bin:${PATH}"
 RUN conda create -y -n node python=3.12
 RUN echo "source activate node" > /root/.bashrc
 ENV PATH="/opt/conda/envs/node/bin:$PATH"
-RUN echo
 
 # install postgres (required for poetry to build psycopg2 from source)
 RUN conda install -y conda-forge::postgresql=17.2
+ENV LDFLAGS="-L/opt/conda/lib"
+ENV CPPFLAGS="-I/opt/conda/include"
 
 # set up poetry
 ENV PATH="/root/.local/share/pypoetry/venv/bin/:${PATH}"
