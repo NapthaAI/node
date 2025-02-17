@@ -13,32 +13,83 @@ on:
 jobs:
   build-only:
     runs-on: ubuntu-latest
-
+    env:
+      HUB_URL: wss://hub.naptha.ai/rpc
+      NODE_URL: http://localhost:7001
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
+      
+      - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Node Container
-        uses: docker/build-push-action@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          context: .
-          file: ./Dockerfile-node
-          push: false
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            napthaai/node:latest
-            napthaai/node:${{ github.sha }}
+          python-version: '3.12'
       
-      - name: Build Node Dev Container
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile-node-dev
-          push: false
-          platforms: linux/amd64,linux/arm64,darwin/arm64
-          tags: |
-            napthaai/node-dev:latest
-            napthaai/node-dev:${{ github.sha }}
+      - name: Set up env variables
+        env: 
+          NAPTHA_HUB_USERNAME: ${{ vars.NAPTHA_HUB_USERNAME }}
+          NAPTHA_HUB_PVT_KEY: ${{ secrets.NAPTHA_HUB_PVT_KEY }}
+          NAPTHA_HUB_PASSWORD: ${{ secrets.NAPTHA_HUB_PASSWORD }}
+        run: |
+          cp .env.example .env
+          
+          # override defaults for docker launch
+          echo -e "\n" >> .env
+          echo "LAUNCH_DOCKER=true" >> .env
+          echo "LOCAL_HUB=true" >> .env
+          
+          # avoid downloading large models
+          echo "OLLAMA_MODELS=" >> .env
+          echo "VLLM_MODELS=" >> .env
+          echo "OPENAI_MODELS=" >> .env
+          
+          # set credentials
+          echo "${NAPTHA_HUB_PVT_KEY}" > "${NAPTHA_HUB_USERNAME}.pem"
+          echo "PRIVATE_KEY=${NAPTHA_HUB_USERNAME}.pem" >> .env
+          echo "HUB_USERNAME=${NAPTHA_HUB_USERNAME}" >> .env
+          echo "HUB_PASSWORD=${NAPTHA_HUB_PASSWORD}" >> .env
+
+      - name: Install Naptha SDK
+        run: pip install naptha-sdk
+
+      - name: Launch node with Docker
+        run: bash launch.sh
+
+      - name: Check Docker containers
+        run: |
+          sleep 30  # Give containers time to start
+          docker ps
+          docker compose logs
+
+      - name: Test Naptha SDK
+        env:
+          HUB_USERNAME: ${{ vars.NAPTHA_HUB_USERNAME }}
+          HUB_PASSWORD: ${{ secrets.NAPTHA_HUB_PASSWORD }}
+          HUB_PRIVATE_KEY: ${{ secrets.NAPTHA_HUB_PVT_KEY }}
+        run: |
+          # Sign up with naptha
+          echo "Naptha signup" 
+          naptha signup
+          
+          # Check nodes - should show 1 node
+          echo "Checking nodes (should show 1 node):"
+          naptha nodes
+          
+          # Stop node container
+          docker stop node-app
+          
+          # Wait a moment for node to be unregistered
+          sleep 30
+          
+          # Check nodes again - should be empty
+          echo "Checking nodes (should be empty):"
+          naptha nodes
+
+      - name: Cleanup
+        if: always()
+        run: |
+          ./docker-ctl.sh down || true
+          docker system prune -f
