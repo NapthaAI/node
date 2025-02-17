@@ -492,3 +492,12 @@ class ChatCompletionRequest(BaseModel):
     tool_choice: Optional[str] = None
     parallel_tool_calls: Optional[bool] = None
 
+class CompletionRequest(BaseModel):
+    model: str
+    prompt: str
+    max_tokens: Optional[int] = 50
+    temperature: Optional[float] = 0.7
+
+class EmbeddingsRequest(BaseModel):
+    model: str
+    input: Union[str, List[str]]
