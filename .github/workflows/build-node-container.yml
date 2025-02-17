@@ -40,17 +40,22 @@ jobs:
           echo -e "\n" >> .env
           echo "LAUNCH_DOCKER=true" >> .env
           echo "LOCAL_HUB=true" >> .env
+          echo "REGISTER_NODE_WITH_HUB=true" >> .env
           
           # avoid downloading large models
           echo "OLLAMA_MODELS=" >> .env
           echo "VLLM_MODELS=" >> .env
           echo "OPENAI_MODELS=" >> .env
           
-          # set credentials
+          # Write private key to file and set environment variables
           echo "${NAPTHA_HUB_PVT_KEY}" > "${NAPTHA_HUB_USERNAME}.pem"
+          chmod 600 "${NAPTHA_HUB_USERNAME}.pem"
           echo "PRIVATE_KEY=${NAPTHA_HUB_USERNAME}.pem" >> .env
           echo "HUB_USERNAME=${NAPTHA_HUB_USERNAME}" >> .env
           echo "HUB_PASSWORD=${NAPTHA_HUB_PASSWORD}" >> .env
+          
+          # Replace HF_HOME placeholder
+          sed -i 's|/home/<youruser>/.cache/huggingface|/home/runner/.cache/huggingface|g' .env
 
       - name: Install Naptha SDK
         run: pip install naptha-sdk
@@ -71,8 +76,8 @@ jobs:
           HUB_PRIVATE_KEY: ${{ secrets.NAPTHA_HUB_PVT_KEY }}
         run: |
           # Sign up with naptha
-          echo "Naptha signup" 
-          naptha signup
+          echo "Signing up with Naptha..."
+          echo "$HUB_PASSWORD" | naptha signup "$HUB_USERNAME"
           
           # Check nodes - should show 1 node
           echo "Checking nodes (should show 1 node):"
