@@ -127,7 +127,7 @@ Description=Ollama Service
 After=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/ollama serve
+ExecStart=/bin/bash -c 'exec $(which ollama) serve'
 Environment=OLLAMA_MODELS=/var/lib/ollama/models
 User=ollama
 Group=ollama
@@ -409,11 +409,15 @@ linux_clean_node() {
         rm -rf node/agents
     fi
 
-    sudo apt-get install -y make
+    if ! dpkg -l | grep -q "make"; then
+        echo "Make not found. Installing Make..."
+        sudo apt-get update
+        sudo apt-get install -y make
+    else
+        echo "Make is already installed. Skipping installation."
+    fi
 
-    # make pyproject-clean
     make pyproject-clean
-
 }
 
 darwin_clean_node() {
@@ -580,9 +584,14 @@ linux_start_rabbitmq() {
     source .env
     set +a
 
-    # Install RabbitMQ
-    sudo apt-get update
-    sudo apt-get install -y rabbitmq-server
+    # Check if RabbitMQ is already installed
+    if ! dpkg -l | grep -q "rabbitmq-server"; then
+        echo "RabbitMQ not found. Installing RabbitMQ..."
+        sudo apt-get update
+        sudo apt-get install -y rabbitmq-server
+    else
+        echo "RabbitMQ is already installed. Skipping installation."
+    fi
 
     # Enable the management plugin
     sudo rabbitmq-plugins enable rabbitmq_management
@@ -613,7 +622,12 @@ darwin_start_rabbitmq() {
     set +a
 
     # Install RabbitMQ using Homebrew
-    brew install rabbitmq
+    if ! brew list rabbitmq &>/dev/null; then
+        echo "RabbitMQ not found. Installing RabbitMQ..."
+        brew install rabbitmq
+    else
+        echo "RabbitMQ is already installed. Skipping installation."
+    fi
 
     # Enable the management plugin
     rabbitmq-plugins enable rabbitmq_management
@@ -666,7 +680,19 @@ setup_poetry() {
     poetry lock
 
     # Install dependencies and create the virtual environment
-    poetry install
+    # pass env vars for as psycopg to build
+    # https://www.psycopg.org/docs/install.html#build-prerequisites
+    if [ "$os" = "Darwin" ]; then
+        PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH" && \
+        LDFLAGS="-L/opt/homebrew/opt/postgresql@17/lib" && \
+        CPPFLAGS="-I/opt/homebrew/opt/postgresql@17/include" && \
+        poetry install
+    else
+        export PATH="/usr/lib/postgresql/16/bin:$PATH" && \
+        export LDFLAGS="-L/usr/lib/postgresql/16/lib" && \
+        export CPPFLAGS="-I/usr/lib/postgresql/16/include" && \
+        poetry install
+    fi
 
     # Verify the presence of a .venv folder within the project directory
     if [ -d ".venv" ]; then
@@ -1780,6 +1806,7 @@ else:
 
     # Check LiteLLM
     services+=("LiteLLM")
+    sleep 2
     if curl -s http://localhost:4000/health > /dev/null; then
         statuses+=("✅")
         logs+=("")
@@ -2096,6 +2123,7 @@ main() {
             install_python312
             darwin_install_miniforge
             darwin_clean_node
+            darwin_setup_local_db
             setup_poetry
             install_surrealdb
             check_and_copy_env
@@ -2104,7 +2132,6 @@ main() {
             darwin_start_rabbitmq
             check_and_set_private_key
             start_hub_surrealdb
-            darwin_setup_local_db
             darwin_start_local_db
             darwin_start_servers
             darwin_start_celery_worker
@@ -2114,6 +2141,7 @@ main() {
             install_python312
             linux_install_miniforge
             linux_clean_node
+            linux_setup_local_db
             setup_poetry
             install_surrealdb
             check_and_copy_env
@@ -2122,7 +2150,6 @@ main() {
             linux_start_rabbitmq
             check_and_set_private_key
             start_hub_surrealdb
-            linux_setup_local_db
             linux_start_local_db
             linux_start_servers
             linux_start_celery_worker
